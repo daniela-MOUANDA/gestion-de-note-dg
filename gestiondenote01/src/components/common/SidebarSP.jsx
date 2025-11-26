@@ -3,23 +3,21 @@ import { Link, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faHome, 
-  faFileExcel,
-  faUserCheck,
+  faFileAlt,
+  faIdCard,
   faSignOutAlt,
   faBars,
-  faTimes,
-  faUserGraduate
+  faTimes
 } from '@fortawesome/free-solid-svg-icons'
 
-const SidebarScolarite = () => {
+const SidebarSP = () => {
   const location = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const menuItems = [
-    { path: '/scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
-    { path: '/scolarite/importer-candidats', icon: faFileExcel, label: 'Importer candidats admis' },
-    { path: '/scolarite/inscriptions', icon: faUserCheck, label: 'Gérer les inscriptions' },
-    { path: '/scolarite/etudiants', icon: faUserGraduate, label: 'Gérer les étudiants' },
+    { path: '/sp-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
+    { path: '/sp-scolarite/attestations', icon: faFileAlt, label: 'Attestations de scolarité' },
+    { path: '/sp-scolarite/matricules', icon: faIdCard, label: 'Format des matricules' },
   ]
 
   return (
@@ -56,7 +54,7 @@ const SidebarScolarite = () => {
               )
             })}
             <Link
-              to="/login-etudiant"
+              to="/login-sp"
               className="flex items-center px-6 py-3.5 mt-4 text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200"
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="mr-3 text-lg text-slate-400" />
@@ -66,7 +64,7 @@ const SidebarScolarite = () => {
         </div>
       </aside>
 
-      {/* Sidebar Mobile - Hamburger Menu */}
+      {/* Sidebar Mobile */}
       <div className="lg:hidden fixed top-0 left-0 z-50 w-full bg-gradient-to-b from-slate-800 to-slate-900 shadow-lg">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <img 
@@ -106,7 +104,7 @@ const SidebarScolarite = () => {
               )
             })}
             <Link
-              to="/login-etudiant"
+              to="/login-sp"
               className="flex items-center px-6 py-3.5 text-slate-300 hover:bg-slate-700"
               onClick={() => setIsMobileMenuOpen(false)}
             >
@@ -120,5 +118,5 @@ const SidebarScolarite = () => {
   )
 }
 
-export default SidebarScolarite
+export default SidebarSP
 

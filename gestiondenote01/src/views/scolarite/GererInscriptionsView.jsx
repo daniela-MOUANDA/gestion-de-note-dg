@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
   faIdCard, faMoneyBillWave, faImage, faUpload, faUser, faCalendar,
-  faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt
+  faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt, faBook
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
@@ -11,80 +11,111 @@ import { useAlert } from '../../contexts/AlertContext'
 
 const GererInscriptionsView = () => {
   const { showAlert } = useAlert()
+  const [typeInscription, setTypeInscription] = useState('inscription')
+  const [selectedFormation, setSelectedFormation] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   
-  const filieres = [
-    { id: 'GI', nom: 'Génie Informatique' },
-    { id: 'RT', nom: 'Réseau et Télécom' },
-    { id: 'MM', nom: 'Management et Multimédias' }
+  const formations = [
+    { id: 'initial1', nom: 'Initial 1', description: 'Formation initiale première année' },
+    { id: 'initial2', nom: 'Initial 2', description: 'Formation initiale deuxième cycle' }
   ]
   
-  const niveaux = ['L1', 'L2', 'L3']
+  const filieres = [
+    { id: 'RT', nom: 'Réseau et Télécom' },
+    { id: 'GI', nom: 'Génie Informatique' },
+    { id: 'MTIC', nom: 'Métiers des TIC' },
+    { id: 'AV', nom: 'Audiovisuel' }
+  ]
+  
+  // Les niveaux dépendent du type de formation et de la filière
+  const getNiveaux = () => {
+    if (selectedFormation === 'initial2') {
+      // Pour Initial 2, MTIC a tous les niveaux, les autres filières seulement L1
+      if (selectedFiliere === 'MTIC') {
+        return ['L1', 'L2', 'L3']
+      }
+      return ['L1']
+    }
+    // Initial 1 a tous les niveaux pour toutes les filières
+    return ['L1', 'L2', 'L3']
+  }
+  
+  const niveaux = getNiveaux()
 
   const [etudiantsData] = useState({
-    'GI': {
-      'L1': [
-        {
-          id: 1, nom: 'MBO', prenom: 'Lidvige', matricule: 'GI2025-L1-001',
-          email: 'lidvigembo@mail.com', telephone: '077 00 00 01',
-          dateNaissance: '2005-05-15', lieuNaissance: 'Libreville',
-          adresse: 'Quartier Nzeng-Ayong', filiere: 'GI', niveau: 'L1',
-          documents: { acteNaissance: null, photo: null, quittance: null, pieceIdentite: null }
-        },
-        {
-          id: 2, nom: 'OWONO', prenom: 'Pierre', matricule: 'GI2025-L1-002',
-          email: 'pierre.owono@mail.com', telephone: '077 00 00 02',
-          dateNaissance: '2005-03-20', lieuNaissance: 'Port-Gentil',
-          adresse: 'Quartier Lalala', filiere: 'GI', niveau: 'L1',
-          documents: {
-            acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-            photo: { nom: 'photo.jpg', uploaded: true },
-            quittance: null,
-            pieceIdentite: { nom: 'cni.pdf', uploaded: true }
+    'initial1': {
+      'GI': {
+        'L1': [
+          {
+            id: 1, nom: 'MBO', prenom: 'Lidvige', matricule: 'GI2025-L1-001',
+            email: 'lidvigembo@mail.com', telephone: '077 00 00 01',
+            dateNaissance: '2005-05-15', lieuNaissance: 'Libreville',
+            adresse: 'Quartier Nzeng-Ayong', filiere: 'GI', niveau: 'L1',
+            documents: { acteNaissance: null, photo: null, quittance: null, pieceIdentite: null }
+          },
+          {
+            id: 2, nom: 'OWONO', prenom: 'Pierre', matricule: 'GI2025-L1-002',
+            email: 'pierre.owono@mail.com', telephone: '077 00 00 02',
+            dateNaissance: '2005-03-20', lieuNaissance: 'Port-Gentil',
+            adresse: 'Quartier Lalala', filiere: 'GI', niveau: 'L1',
+            documents: {
+              acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
+              photo: { nom: 'photo.jpg', uploaded: true },
+              quittance: null,
+              pieceIdentite: { nom: 'cni.pdf', uploaded: true }
+            }
           }
-        }
-      ],
-      'L2': [
-        {
-          id: 3, nom: 'NGUEMA', prenom: 'Marie', matricule: 'GI2024-L2-001',
-          email: 'marie.nguema@mail.com', telephone: '077 00 00 03',
-          dateNaissance: '2004-08-10', lieuNaissance: 'Franceville',
-          adresse: 'Quartier Glass', filiere: 'GI', niveau: 'L2',
-          documents: {
-            acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-            photo: { nom: 'photo.jpg', uploaded: true },
-            quittance: { nom: 'quittance.pdf', uploaded: true },
-            pieceIdentite: { nom: 'cni.pdf', uploaded: true }
+        ],
+        'L2': [
+          {
+            id: 3, nom: 'NGUEMA', prenom: 'Marie', matricule: 'GI2024-L2-001',
+            email: 'marie.nguema@mail.com', telephone: '077 00 00 03',
+            dateNaissance: '2004-08-10', lieuNaissance: 'Franceville',
+            adresse: 'Quartier Glass', filiere: 'GI', niveau: 'L2',
+            documents: {
+              acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
+              photo: { nom: 'photo.jpg', uploaded: true },
+              quittance: { nom: 'quittance.pdf', uploaded: true },
+              pieceIdentite: { nom: 'cni.pdf', uploaded: true }
+            }
           }
-        }
-      ],
-      'L3': []
+        ],
+        'L3': []
+      },
+      'RT': {
+        'L1': [
+          {
+            id: 4, nom: 'NKOMO', prenom: 'Jean', matricule: 'RT2025-L1-001',
+            email: 'jean.nkomo@mail.com', telephone: '077 00 00 04',
+            dateNaissance: '2005-11-25', lieuNaissance: 'Oyem',
+            adresse: 'Quartier Sotega', filiere: 'RT', niveau: 'L1',
+            documents: {
+              acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
+              photo: null, quittance: null, pieceIdentite: null
+            }
+          }
+        ],
+        'L2': [], 'L3': []
+      },
+      'MTIC': { 'L1': [], 'L2': [], 'L3': [] },
+      'AV': { 'L1': [], 'L2': [], 'L3': [] }
     },
-    'RT': {
-      'L1': [
-        {
-          id: 4, nom: 'NKOMO', prenom: 'Jean', matricule: 'RT2025-L1-001',
-          email: 'jean.nkomo@mail.com', telephone: '077 00 00 04',
-          dateNaissance: '2005-11-25', lieuNaissance: 'Oyem',
-          adresse: 'Quartier Sotega', filiere: 'RT', niveau: 'L1',
-          documents: {
-            acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-            photo: null, quittance: null, pieceIdentite: null
-          }
-        }
-      ],
-      'L2': [], 'L3': []
-    },
-    'MM': { 'L1': [], 'L2': [], 'L3': [] }
+    'initial2': {
+      'GI': { 'L1': [] },
+      'RT': { 'L1': [] },
+      'MTIC': { 'L1': [], 'L2': [], 'L3': [] },
+      'AV': { 'L1': [] }
+    }
   })
 
   const handleBack = () => {
     if (selectedEtudiant) setSelectedEtudiant(null)
     else if (selectedNiveau) setSelectedNiveau('')
     else if (selectedFiliere) setSelectedFiliere('')
+    else if (selectedFormation) setSelectedFormation('')
   }
 
   const allDocumentsPresent = (documents) => {
@@ -105,15 +136,18 @@ const GererInscriptionsView = () => {
 
   const handleFinaliserInscription = () => {
     if (selectedEtudiant && allDocumentsPresent(selectedEtudiant.documents)) {
-      showAlert(`${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`, 'success')
+      const message = typeInscription === 'inscription' 
+        ? `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`
+        : `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été réinscrit avec succès!`
+      showAlert(message, 'success')
       setSelectedEtudiant(null)
     } else {
       showAlert('Veuillez uploader tous les documents requis', 'error')
     }
   }
 
-  // Vue 1: Sélection de la filière
-  if (!selectedFiliere) {
+  // Vue 0: Sélection du type de formation
+  if (!selectedFormation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
         <SidebarScolarite />
@@ -125,12 +159,75 @@ const GererInscriptionsView = () => {
                 Gérer les inscriptions
               </h1>
               <p className="text-sm sm:text-base text-slate-600">
+                Sélectionnez le type de formation pour commencer
+              </p>
+            </div>
+            
+            {/* Dropdown pour choisir entre Inscription et Réinscription */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-md p-6 border-2 border-blue-200 mb-6">
+              <label className="block text-lg font-bold text-slate-800 mb-3">
+                Type d'opération
+              </label>
+              <select 
+                value={typeInscription} 
+                onChange={(e) => setTypeInscription(e.target.value)}
+                className="w-full px-5 py-4 border-2 border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 font-semibold text-lg bg-white cursor-pointer transition-all hover:border-blue-400"
+              >
+                <option value="inscription">📝 Inscription</option>
+                <option value="reinscription">🔄 Réinscription</option>
+              </select>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez le type de formation</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                {formations.map((formation) => (
+                  <button key={formation.id} onClick={() => setSelectedFormation(formation.id)}
+                    className="p-8 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
+                    <div className="text-center">
+                      <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200">
+                        <FontAwesomeIcon icon={faBook} className="text-4xl text-blue-600" />
+                      </div>
+                      <div className="text-2xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{formation.nom}</div>
+                      <div className="text-sm text-slate-600">{formation.description}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  // Vue 1: Sélection de la filière
+  if (!selectedFiliere) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarScolarite />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderScolarite scolariteName="Service Scolarité" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+            <div className="mb-6">
+              <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
+                <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
+              </button>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800">
+                  {typeInscription === 'inscription' ? 'Inscription' : 'Réinscription'} - {formations.find(f => f.id === selectedFormation)?.nom}
+                </h1>
+              </div>
+              <p className="text-sm sm:text-base text-slate-600">
                 Sélectionnez la filière pour commencer
               </p>
             </div>
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-              <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez la filière</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              <h2 className="text-xl font-bold text-slate-800 mb-2 text-center">Choisissez la filière</h2>
+              <p className="text-slate-600 text-center mb-6">
+                Formation: <span className="font-medium text-blue-600">{formations.find(f => f.id === selectedFormation)?.nom}</span>
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
                 {filieres.map((filiere) => (
                   <button key={filiere.id} onClick={() => setSelectedFiliere(filiere.id)}
                     className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
@@ -164,7 +261,7 @@ const GererInscriptionsView = () => {
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
               </button>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-                Inscriptions - {selectedFiliere}
+                {typeInscription === 'inscription' ? 'Inscriptions' : 'Réinscriptions'} - {selectedFiliere}
               </h1>
               <p className="text-sm sm:text-base text-slate-600">Sélectionnez le niveau d'études</p>
             </div>
@@ -175,7 +272,7 @@ const GererInscriptionsView = () => {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
                 {niveaux.map((niveau) => {
-                  const count = etudiantsData[selectedFiliere]?.[niveau]?.length || 0
+                  const count = etudiantsData[selectedFormation]?.[selectedFiliere]?.[niveau]?.length || 0
                   return (
                     <button key={niveau} onClick={() => setSelectedNiveau(niveau)}
                       className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group">
@@ -214,8 +311,12 @@ const GererInscriptionsView = () => {
               </button>
               <div className="flex justify-between items-start">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">Dossier d'inscription</h1>
-                  <p className="text-sm sm:text-base text-slate-600">{selectedFiliere} • {selectedNiveau}</p>
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
+                    Dossier d'{typeInscription === 'inscription' ? 'inscription' : 'réinscription'}
+                  </h1>
+                  <p className="text-sm sm:text-base text-slate-600">
+                    {typeInscription === 'inscription' ? 'Inscription' : 'Réinscription'} • {selectedFiliere} • {selectedNiveau}
+                  </p>
                 </div>
                 <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${
                   documentsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
@@ -331,7 +432,10 @@ const GererInscriptionsView = () => {
                     documentsComplete ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                   }`}>
                   <FontAwesomeIcon icon={faCheckCircle} />
-                  {documentsComplete ? 'Finaliser l\'inscription' : 'Documents incomplets'}
+                  {documentsComplete 
+                    ? (typeInscription === 'inscription' ? 'Finaliser l\'inscription' : 'Finaliser la réinscription')
+                    : 'Documents incomplets'
+                  }
                 </button>
               </div>
             </div>
@@ -342,7 +446,7 @@ const GererInscriptionsView = () => {
   }
 
   // Vue 4: Liste des étudiants
-  const etudiants = (etudiantsData[selectedFiliere]?.[selectedNiveau] || []).filter(e =>
+  const etudiants = (etudiantsData[selectedFormation]?.[selectedFiliere]?.[selectedNiveau] || []).filter(e =>
     `${e.nom} ${e.prenom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.matricule.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -358,9 +462,11 @@ const GererInscriptionsView = () => {
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
             </button>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Candidats {selectedFiliere} - {selectedNiveau}
+              {typeInscription === 'inscription' ? 'Candidats' : 'Étudiants à réinscrire'} - {selectedFiliere} - {selectedNiveau}
             </h1>
-            <p className="text-sm sm:text-base text-slate-600">{etudiants.length} candidat{etudiants.length > 1 ? 's' : ''}</p>
+            <p className="text-sm sm:text-base text-slate-600">
+              {etudiants.length} {typeInscription === 'inscription' ? 'candidat' : 'étudiant'}{etudiants.length > 1 ? 's' : ''}
+            </p>
           </div>
 
           <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">

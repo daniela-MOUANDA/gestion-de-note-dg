@@ -7,7 +7,11 @@ import {
   faClock,
   faCheckCircle,
   faChartLine,
-  faArrowTrendUp
+  faArrowTrendUp,
+  faArchive,
+  faFileAlt,
+  faEnvelope,
+  faAward
 } from '@fortawesome/free-solid-svg-icons'
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
@@ -263,13 +267,53 @@ const DashboardScolariteView = () => {
                   </div>
                 </a>
                 <a
-                  href="/scolarite/etudiants"
+                  href="/scolarite/messagerie"
                   className="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
                 >
-                  <FontAwesomeIcon icon={faUsers} className="text-purple-600 mr-3 text-xl" />
+                  <FontAwesomeIcon icon={faEnvelope} className="text-purple-600 mr-3 text-xl" />
                   <div>
-                    <p className="font-medium text-slate-800">Gérer les étudiants</p>
-                    <p className="text-xs text-slate-600">Consultez et gérez tous les étudiants</p>
+                    <p className="font-medium text-slate-800">Messagerie</p>
+                    <p className="text-xs text-slate-600">Envoyez des messages aux étudiants</p>
+                  </div>
+                </a>
+                <a
+                  href="/scolarite/bulletins"
+                  className="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faFileAlt} className="text-blue-600 mr-3 text-xl" />
+                  <div>
+                    <p className="font-medium text-slate-800">Bulletins</p>
+                    <p className="text-xs text-slate-600">Gérez la remise des bulletins semestriels</p>
+                  </div>
+                </a>
+                <a
+                  href="/scolarite/diplomes"
+                  className="flex items-center p-4 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faAward} className="text-amber-600 mr-3 text-xl" />
+                  <div>
+                    <p className="font-medium text-slate-800">Diplômes</p>
+                    <p className="text-xs text-slate-600">Gérez la remise des diplômes DTS et Licence</p>
+                  </div>
+                </a>
+                <a
+                  href="/scolarite/proces-verbaux"
+                  className="flex items-center p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faFileAlt} className="text-indigo-600 mr-3 text-xl" />
+                  <div>
+                    <p className="font-medium text-slate-800">Procès-Verbaux</p>
+                    <p className="text-xs text-slate-600">Consultez les PV des résultats semestriels et annuels</p>
+                  </div>
+                </a>
+                <a
+                  href="/scolarite/archivage"
+                  className="flex items-center p-4 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faArchive} className="text-slate-600 mr-3 text-xl" />
+                  <div>
+                    <p className="font-medium text-slate-800">Archivage</p>
+                    <p className="text-xs text-slate-600">Consultez les promotions passées, diplômés et abandons</p>
                   </div>
                 </a>
               </div>

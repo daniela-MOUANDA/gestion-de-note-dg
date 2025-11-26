@@ -11,7 +11,9 @@ import {
   faEnvelope,
   faPhone,
   faMapMarkerAlt,
-  faBirthdayCake
+  faBirthdayCake,
+  faTimes,
+  faPaperPlane
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
@@ -29,6 +31,15 @@ const GererEtudiantsView = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+
+  // État pour le modal de messagerie
+  const [showMessageModal, setShowMessageModal] = useState(false)
+  const [selectedStudentForMessage, setSelectedStudentForMessage] = useState(null)
+  const [messageForm, setMessageForm] = useState({
+    sujet: '',
+    contenu: '',
+    priorite: 'normale'
+  })
 
   // Données statiques
   const filieres = ['GI', 'RT']
@@ -198,6 +209,40 @@ const GererEtudiantsView = () => {
     setSelectedStudent(student)
   }
 
+  const handleOpenMessageModal = (student) => {
+    setSelectedStudentForMessage(student)
+    setMessageForm({
+      sujet: '',
+      contenu: '',
+      priorite: 'normale'
+    })
+    setShowMessageModal(true)
+  }
+
+  const handleCloseMessageModal = () => {
+    setShowMessageModal(false)
+    setSelectedStudentForMessage(null)
+    setMessageForm({
+      sujet: '',
+      contenu: '',
+      priorite: 'normale'
+    })
+  }
+
+  const handleSendMessage = () => {
+    if (!messageForm.sujet || !messageForm.contenu) {
+      showAlert('Veuillez remplir tous les champs', 'error')
+      return
+    }
+    
+    // Logique d'envoi du message
+    console.log('Message envoyé à:', selectedStudentForMessage)
+    console.log('Message:', messageForm)
+    
+    showAlert(`Message envoyé avec succès à ${selectedStudentForMessage.nom} ${selectedStudentForMessage.prenom}`, 'success')
+    handleCloseMessageModal()
+  }
+
   // Obtenir les étudiants filtrés et paginés
   const getCurrentStudents = () => {
     if (!selectedFiliere || !selectedNiveau) return []
@@ -365,6 +410,13 @@ const GererEtudiantsView = () => {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleOpenMessageModal(selectedStudent)}
+                    className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                  >
+                    <FontAwesomeIcon icon={faEnvelope} className="mr-2" />
+                    Envoyer un message
+                  </button>
                   <button className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                     <FontAwesomeIcon icon={faDownload} className="mr-2" />
                     Télécharger PDF
@@ -610,13 +662,22 @@ const GererEtudiantsView = () => {
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => handleViewStudent(etudiant)}
-                          className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                          <FontAwesomeIcon icon={faEye} className="mr-1" />
-                          Voir
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleViewStudent(etudiant)}
+                            className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            <FontAwesomeIcon icon={faEye} className="mr-1" />
+                            Voir
+                          </button>
+                          <button
+                            onClick={() => handleOpenMessageModal(etudiant)}
+                            className="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                            title="Envoyer un message"
+                          >
+                            <FontAwesomeIcon icon={faEnvelope} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -651,6 +712,178 @@ const GererEtudiantsView = () => {
           </div>
         </main>
       </div>
+
+      {/* Modal de messagerie rapide */}
+      {showMessageModal && selectedStudentForMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* En-tête du modal */}
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-6 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-lg font-bold">
+                    {selectedStudentForMessage.nom.charAt(0)}{selectedStudentForMessage.prenom.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Envoyer un message</h2>
+                    <p className="text-indigo-100 text-sm">
+                      À: {selectedStudentForMessage.nom} {selectedStudentForMessage.prenom}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseMessageModal}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors"
+                >
+                  <FontAwesomeIcon icon={faTimes} className="text-xl" />
+                </button>
+              </div>
+            </div>
+
+            {/* Informations de l'étudiant */}
+            <div className="p-6 bg-indigo-50 border-b border-indigo-100">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faUserGraduate} className="text-indigo-600" />
+                  <div>
+                    <span className="text-slate-500">Matricule:</span>
+                    <span className="ml-2 font-medium text-slate-800">{selectedStudentForMessage.matricule}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faGraduationCap} className="text-indigo-600" />
+                  <div>
+                    <span className="text-slate-500">Classe:</span>
+                    <span className="ml-2 font-medium text-slate-800">{selectedStudentForMessage.classe}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faEnvelope} className="text-indigo-600" />
+                  <div>
+                    <span className="text-slate-500">Email:</span>
+                    <span className="ml-2 font-medium text-slate-800">{selectedStudentForMessage.email}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faPhone} className="text-indigo-600" />
+                  <div>
+                    <span className="text-slate-500">Téléphone:</span>
+                    <span className="ml-2 font-medium text-slate-800">{selectedStudentForMessage.telephone}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Formulaire */}
+            <div className="p-6 space-y-4">
+              {/* Priorité */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Priorité du message
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="priorite"
+                      value="normale"
+                      checked={messageForm.priorite === 'normale'}
+                      onChange={(e) => setMessageForm({ ...messageForm, priorite: e.target.value })}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-slate-700">Normale</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="priorite"
+                      value="urgente"
+                      checked={messageForm.priorite === 'urgente'}
+                      onChange={(e) => setMessageForm({ ...messageForm, priorite: e.target.value })}
+                      className="text-red-600 focus:ring-red-500"
+                    />
+                    <span className="text-sm text-slate-700 flex items-center gap-1">
+                      Urgente
+                      {messageForm.priorite === 'urgente' && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">!</span>
+                      )}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Sujet */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Sujet <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={messageForm.sujet}
+                  onChange={(e) => setMessageForm({ ...messageForm, sujet: e.target.value })}
+                  placeholder="Ex: Convocation pour entretien, Résultats d'examen..."
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Message */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Message <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={messageForm.contenu}
+                  onChange={(e) => setMessageForm({ ...messageForm, contenu: e.target.value })}
+                  placeholder={`Bonjour ${selectedStudentForMessage.prenom},\n\nVotre message ici...`}
+                  rows="8"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {messageForm.contenu.length} caractères
+                </p>
+              </div>
+
+              {/* Suggestions de messages rapides */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <p className="text-xs font-medium text-slate-600 mb-2">Messages rapides:</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'Convocation', text: `Bonjour ${selectedStudentForMessage.prenom},\n\nVous êtes convoqué(e) à mon bureau le [DATE] à [HEURE].\n\nCordialement,\nLe Chef de Département` },
+                    { label: 'Félicitations', text: `Bonjour ${selectedStudentForMessage.prenom},\n\nToutes mes félicitations pour vos excellents résultats!\n\nContinuez ainsi.\n\nCordialement,\nLe Chef de Département` },
+                    { label: 'Rappel', text: `Bonjour ${selectedStudentForMessage.prenom},\n\nJe vous rappelle que [VOTRE RAPPEL].\n\nCordialement,\nLe Chef de Département` }
+                  ].map((template, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setMessageForm({ ...messageForm, contenu: template.text })}
+                      className="text-xs px-3 py-1.5 bg-white border border-slate-300 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors"
+                    >
+                      {template.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Pied du modal */}
+            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-4 flex justify-end gap-3 rounded-b-xl">
+              <button
+                onClick={handleCloseMessageModal}
+                className="px-6 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors font-medium text-slate-700"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSendMessage}
+                disabled={!messageForm.sujet || !messageForm.contenu}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <FontAwesomeIcon icon={faPaperPlane} />
+                Envoyer le message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

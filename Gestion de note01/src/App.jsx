@@ -14,6 +14,7 @@ import AideView from './views/student/AideView'
 // Routes Chef de Département
 import LoginChefView from './views/chef/LoginChefView'
 import DashboardChefView from './views/chef/DashboardChefView'
+import MessagerieChefView from './views/chef/MessagerieChefView'
 import GererClassesView from './views/chef/GererClassesView'
 import GererEnseignantsView from './views/chef/GererEnseignantsView'
 import AjouterNotesView from './views/chef/AjouterNotesView'
@@ -52,6 +53,7 @@ function App() {
         
         {/* Routes Chef de Département */}
         <Route path="/chef/dashboard" element={<DashboardChefView />} />
+        <Route path="/chef/messagerie" element={<MessagerieChefView />} />
         <Route path="/chef/classes" element={<GererClassesView />} />
         <Route path="/chef/enseignants" element={<GererEnseignantsView />} />
         <Route path="/chef/notes/ajouter" element={<AjouterNotesView />} />

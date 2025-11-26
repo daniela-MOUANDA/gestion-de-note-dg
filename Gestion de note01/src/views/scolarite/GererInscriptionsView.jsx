@@ -1,516 +1,423 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
-  faUserCheck, 
-  faSearch, 
-  faCheckCircle, 
-  faTimes, 
-  faEye,
-  faFileAlt,
-  faIdCard,
-  faMoneyBillWave,
-  faImage,
-  faUpload,
-  faUser,
-  faCalendar,
-  faEnvelope,
-  faPhone,
-  faFilter
+  faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
+  faIdCard, faMoneyBillWave, faImage, faUpload, faUser, faCalendar,
+  faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import { useAlert } from '../../contexts/AlertContext'
 
 const GererInscriptionsView = () => {
-  const [filiereActive, setFiliereActive] = useState('Génie Informatique')
+  const { showAlert } = useAlert()
+  const [selectedFiliere, setSelectedFiliere] = useState('')
+  const [selectedNiveau, setSelectedNiveau] = useState('')
+  const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCandidat, setSelectedCandidat] = useState(null)
-  const [showDossier, setShowDossier] = useState(false)
   
-  const filieres = ['Génie Informatique', 'Réseau et Télécom', 'Management et Multimédias']
+  const filieres = [
+    { id: 'GI', nom: 'Génie Informatique' },
+    { id: 'RT', nom: 'Réseau et Télécom' },
+    { id: 'MM', nom: 'Management et Multimédias' }
+  ]
   
-  const [candidats] = useState([
-    {
-      id: 1,
-      nom: 'MBO',
-      prenom: 'Lidvige',
-      email: 'lidvigembo@mail.com',
-      telephone: '077 00 00 00',
-      dateNaissance: '2000-05-15',
-      lieuNaissance: 'Yaoundé',
-      filiere: 'Génie Informatique',
-      anneeAcademique: '2025',
-      documents: {
-        acteNaissance: null,
-        photo: null,
-        quittance: null,
-        pieceIdentite: null
-      },
-      statut: 'Candidat admis',
-      photo: null
-    },
-    {
-      id: 2,
-      nom: 'DUPONT',
-      prenom: 'Jean',
-      email: 'jean.dupont@mail.com',
-      telephone: '077 00 00 01',
-      dateNaissance: '2001-03-20',
-      lieuNaissance: 'Douala',
-      filiere: 'Réseau et Télécom',
-      anneeAcademique: '2025',
-      documents: {
-        acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-        photo: { nom: 'photo.jpg', uploaded: true },
-        quittance: null,
-        pieceIdentite: { nom: 'cni.pdf', uploaded: true }
-      },
-      statut: 'Candidat admis',
-      photo: null
-    },
-    {
-      id: 3,
-      nom: 'MARTIN',
-      prenom: 'Marie',
-      email: 'marie.martin@mail.com',
-      telephone: '077 00 00 02',
-      dateNaissance: '2000-08-10',
-      lieuNaissance: 'Bafoussam',
-      filiere: 'Management et Multimédias',
-      anneeAcademique: '2025',
-      documents: {
-        acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-        photo: { nom: 'photo.jpg', uploaded: true },
-        quittance: { nom: 'quittance.pdf', uploaded: true },
-        pieceIdentite: { nom: 'cni.pdf', uploaded: true }
-      },
-      statut: 'Candidat admis',
-      photo: null
-    },
-  ])
+  const niveaux = ['L1', 'L2', 'L3']
 
-  const filteredCandidats = candidats.filter(candidat =>
-    candidat.filiere === filiereActive &&
-    candidat.statut === 'Candidat admis' &&
-    (`${candidat.nom} ${candidat.prenom} ${candidat.email}`.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  const [etudiantsData] = useState({
+    'GI': {
+      'L1': [
+        {
+          id: 1, nom: 'MBO', prenom: 'Lidvige', matricule: 'GI2025-L1-001',
+          email: 'lidvigembo@mail.com', telephone: '077 00 00 01',
+          dateNaissance: '2005-05-15', lieuNaissance: 'Libreville',
+          adresse: 'Quartier Nzeng-Ayong', filiere: 'GI', niveau: 'L1',
+          documents: { acteNaissance: null, photo: null, quittance: null, pieceIdentite: null }
+        },
+        {
+          id: 2, nom: 'OWONO', prenom: 'Pierre', matricule: 'GI2025-L1-002',
+          email: 'pierre.owono@mail.com', telephone: '077 00 00 02',
+          dateNaissance: '2005-03-20', lieuNaissance: 'Port-Gentil',
+          adresse: 'Quartier Lalala', filiere: 'GI', niveau: 'L1',
+          documents: {
+            acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
+            photo: { nom: 'photo.jpg', uploaded: true },
+            quittance: null,
+            pieceIdentite: { nom: 'cni.pdf', uploaded: true }
+          }
+        }
+      ],
+      'L2': [
+        {
+          id: 3, nom: 'NGUEMA', prenom: 'Marie', matricule: 'GI2024-L2-001',
+          email: 'marie.nguema@mail.com', telephone: '077 00 00 03',
+          dateNaissance: '2004-08-10', lieuNaissance: 'Franceville',
+          adresse: 'Quartier Glass', filiere: 'GI', niveau: 'L2',
+          documents: {
+            acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
+            photo: { nom: 'photo.jpg', uploaded: true },
+            quittance: { nom: 'quittance.pdf', uploaded: true },
+            pieceIdentite: { nom: 'cni.pdf', uploaded: true }
+          }
+        }
+      ],
+      'L3': []
+    },
+    'RT': {
+      'L1': [
+        {
+          id: 4, nom: 'NKOMO', prenom: 'Jean', matricule: 'RT2025-L1-001',
+          email: 'jean.nkomo@mail.com', telephone: '077 00 00 04',
+          dateNaissance: '2005-11-25', lieuNaissance: 'Oyem',
+          adresse: 'Quartier Sotega', filiere: 'RT', niveau: 'L1',
+          documents: {
+            acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
+            photo: null, quittance: null, pieceIdentite: null
+          }
+        }
+      ],
+      'L2': [], 'L3': []
+    },
+    'MM': { 'L1': [], 'L2': [], 'L3': [] }
+  })
+
+  const handleBack = () => {
+    if (selectedEtudiant) setSelectedEtudiant(null)
+    else if (selectedNiveau) setSelectedNiveau('')
+    else if (selectedFiliere) setSelectedFiliere('')
+  }
 
   const allDocumentsPresent = (documents) => {
-    return documents.acteNaissance?.uploaded && 
-           documents.photo?.uploaded && 
-           documents.quittance?.uploaded && 
-           documents.pieceIdentite?.uploaded
+    return documents.acteNaissance?.uploaded && documents.photo?.uploaded && 
+           documents.quittance?.uploaded && documents.pieceIdentite?.uploaded
   }
 
-  const handleFileUpload = (candidatId, documentType, file) => {
-    console.log('Upload document:', candidatId, documentType, file)
-    // Ici, vous ajouteriez la logique pour uploader le fichier
-    alert(`Document ${documentType} uploadé avec succès pour ${candidatId}`)
+  const handleFileUpload = (documentType) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = documentType === 'photo' ? 'image/*' : '.pdf'
+    input.onchange = (e) => {
+      const file = e.target.files[0]
+      if (file) showAlert(`Document ${documentType} uploadé avec succès!`, 'success')
+    }
+    input.click()
   }
 
-  const handleInscrire = (candidatId) => {
-    const candidat = candidats.find(c => c.id === candidatId)
-    if (candidat && allDocumentsPresent(candidat.documents)) {
-      console.log('Inscrire candidat:', candidatId)
-      alert('Étudiant inscrit avec succès!')
-      // Ici, vous mettriez à jour le statut à 'Inscrit'
+  const handleFinaliserInscription = () => {
+    if (selectedEtudiant && allDocumentsPresent(selectedEtudiant.documents)) {
+      showAlert(`${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`, 'success')
+      setSelectedEtudiant(null)
     } else {
-      alert('Veuillez d\'abord uploader tous les documents requis')
+      showAlert('Veuillez uploader tous les documents requis', 'error')
     }
   }
 
-  const handleViewDossier = (candidat) => {
-    setSelectedCandidat(candidat)
-    setShowDossier(true)
+  // Vue 1: Sélection de la filière
+  if (!selectedFiliere) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarScolarite />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderScolarite scolariteName="Service Scolarité" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+            <div className="mb-6">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
+                Gérer les inscriptions
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600">
+                Sélectionnez la filière pour commencer
+              </p>
+            </div>
+            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez la filière</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                {filieres.map((filiere) => (
+                  <button key={filiere.id} onClick={() => setSelectedFiliere(filiere.id)}
+                    className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200">
+                        <FontAwesomeIcon icon={faGraduationCap} className="text-3xl text-blue-600" />
+                      </div>
+                      <div className="text-xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{filiere.id}</div>
+                      <div className="text-sm text-slate-600">{filiere.nom}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
   }
 
-  const getDocumentIcon = (present) => {
-    return present ? faCheckCircle : faTimes
+  // Vue 2: Sélection du niveau
+  if (selectedFiliere && !selectedNiveau) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarScolarite />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderScolarite scolariteName="Service Scolarité" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+            <div className="mb-6">
+              <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
+                <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
+              </button>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
+                Inscriptions - {selectedFiliere}
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600">Sélectionnez le niveau d'études</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-800 mb-2 text-center">Choisissez le niveau</h2>
+              <p className="text-slate-600 text-center mb-6">
+                Filière: <span className="font-medium text-blue-600">{filieres.find(f => f.id === selectedFiliere)?.nom}</span>
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+                {niveaux.map((niveau) => {
+                  const count = etudiantsData[selectedFiliere]?.[niveau]?.length || 0
+                  return (
+                    <button key={niveau} onClick={() => setSelectedNiveau(niveau)}
+                      className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group">
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{niveau}</div>
+                        <div className="text-sm text-slate-600 mb-2">
+                          {niveau === 'L1' ? 'Première année' : niveau === 'L2' ? 'Deuxième année' : 'Troisième année'}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-3 px-3 py-1 bg-slate-100 rounded-full inline-block">
+                          {count} candidat{count > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
   }
 
-  const getDocumentColor = (present) => {
-    return present ? 'text-green-600' : 'text-red-600'
+  // Vue 3: Profil détaillé avec documents
+  if (selectedEtudiant) {
+    const documentsComplete = allDocumentsPresent(selectedEtudiant.documents)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarScolarite />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderScolarite scolariteName="Service Scolarité" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+            <div className="mb-6">
+              <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
+                <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour à la liste
+              </button>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">Dossier d'inscription</h1>
+                  <p className="text-sm sm:text-base text-slate-600">{selectedFiliere} • {selectedNiveau}</p>
+                </div>
+                <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${
+                  documentsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {documentsComplete ? '✓ Dossier complet' : '⚠ Documents manquants'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+                <div className="text-center mb-4">
+                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold">
+                    {selectedEtudiant.prenom[0]}{selectedEtudiant.nom[0]}
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">{selectedEtudiant.prenom} {selectedEtudiant.nom}</h2>
+                  <p className="text-slate-600 text-sm">{selectedEtudiant.matricule}</p>
+                  <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium mt-2">
+                    {selectedEtudiant.filiere} - {selectedEtudiant.niveau}
+                  </span>
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4">Informations personnelles</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-start gap-3">
+                    <FontAwesomeIcon icon={faEnvelope} className="text-blue-600 mt-1" />
+                    <div>
+                      <p className="text-xs text-slate-500">Email</p>
+                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <FontAwesomeIcon icon={faPhone} className="text-green-600 mt-1" />
+                    <div>
+                      <p className="text-xs text-slate-500">Téléphone</p>
+                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.telephone}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <FontAwesomeIcon icon={faCalendar} className="text-purple-600 mt-1" />
+                    <div>
+                      <p className="text-xs text-slate-500">Date de naissance</p>
+                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.dateNaissance}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <FontAwesomeIcon icon={faMapMarkerAlt} className="text-red-600 mt-1" />
+                    <div>
+                      <p className="text-xs text-slate-500">Lieu de naissance</p>
+                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.lieuNaissance}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-100 to-slate-50 border-b">
+                <h3 className="text-lg font-bold text-slate-800">Documents requis</h3>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {['acteNaissance', 'photo', 'quittance', 'pieceIdentite'].map((docType) => {
+                    const doc = selectedEtudiant.documents[docType]
+                    const labels = {
+                      acteNaissance: { title: 'Acte de naissance', icon: faFileAlt, format: 'PDF' },
+                      photo: { title: 'Photo d\'identité', icon: faImage, format: 'JPG/PNG' },
+                      quittance: { title: 'Quittance de paiement', icon: faMoneyBillWave, format: 'PDF' },
+                      pieceIdentite: { title: 'Pièce d\'identité', icon: faIdCard, format: 'PDF' }
+                    }
+                    return (
+                      <div key={docType} className="border-2 border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <FontAwesomeIcon icon={labels[docType].icon}
+                              className={`text-2xl ${doc?.uploaded ? 'text-green-600' : 'text-slate-400'}`} />
+                            <div>
+                              <h4 className="font-semibold text-slate-800">{labels[docType].title}</h4>
+                              <p className="text-xs text-slate-500">Format {labels[docType].format}</p>
+                            </div>
+                          </div>
+                          <FontAwesomeIcon icon={doc?.uploaded ? faCheckCircle : faTimes}
+                            className={doc?.uploaded ? 'text-green-600' : 'text-red-600'} />
+                        </div>
+                        {doc?.uploaded ? (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <p className="text-sm text-green-800 font-medium mb-2">{doc.nom}</p>
+                            <div className="flex gap-2">
+                              <button className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+                                <FontAwesomeIcon icon={faEye} />Consulter
+                              </button>
+                              <button className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
+                                <FontAwesomeIcon icon={faDownload} />Télécharger
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => handleFileUpload(docType)}
+                            className="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+                            <FontAwesomeIcon icon={faUpload} />Uploader
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="px-6 py-4 bg-slate-50 border-t">
+                <button onClick={handleFinaliserInscription} disabled={!documentsComplete}
+                  className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${
+                    documentsComplete ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  }`}>
+                  <FontAwesomeIcon icon={faCheckCircle} />
+                  {documentsComplete ? 'Finaliser l\'inscription' : 'Documents incomplets'}
+                </button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
   }
+
+  // Vue 4: Liste des étudiants
+  const etudiants = (etudiantsData[selectedFiliere]?.[selectedNiveau] || []).filter(e =>
+    `${e.nom} ${e.prenom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.matricule.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <SidebarScolarite />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderScolarite scolariteName="Service Scolarité" />
-        
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
           <div className="mb-6">
+            <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
+              <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
+            </button>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Gérer les inscriptions
+              Candidats {selectedFiliere} - {selectedNiveau}
             </h1>
-            <p className="text-sm sm:text-base text-slate-600">
-              Vérifiez les documents et inscrivez les candidats admis
-            </p>
+            <p className="text-sm sm:text-base text-slate-600">{etudiants.length} candidat{etudiants.length > 1 ? 's' : ''}</p>
           </div>
 
-          {/* Sélection de la filière */}
-          <div className="bg-white rounded-xl shadow-md border border-slate-200 mb-6 p-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="text-sm font-semibold text-slate-700">Filière:</label>
-              <div className="flex gap-2">
-                {filieres.map(filiere => (
-                  <button
-                    key={filiere}
-                    onClick={() => setFiliereActive(filiere)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      filiereActive === filiere
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {filiere}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Barre de recherche */}
           <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
             <div className="relative">
-              <FontAwesomeIcon 
-                icon={faSearch} 
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"
-              />
-              <input
-                type="text"
-                placeholder="Rechercher un candidat..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800"
-              />
+              <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
-          {/* Liste des candidats */}
-          <div className="space-y-4">
-            {filteredCandidats.map((candidat) => {
-              const canInscrire = allDocumentsPresent(candidat.documents)
-              return (
-                <div key={candidat.id} className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 hover:shadow-lg transition-shadow">
-                  <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                          {candidat.prenom[0]}{candidat.nom[0]}
+          {etudiants.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
+              <FontAwesomeIcon icon={faUserCheck} className="text-6xl text-slate-300 mb-4" />
+              <p className="text-slate-500 text-lg">Aucun candidat trouvé</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {etudiants.map((etudiant) => {
+                const docsComplete = allDocumentsPresent(etudiant.documents)
+                return (
+                  <div key={etudiant.id} className="bg-white rounded-xl shadow-md border border-slate-200 hover:shadow-lg transition-shadow overflow-hidden">
+                    <div className="p-6">
+                      <div className="flex items-start gap-4 mb-4">
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                          {etudiant.prenom[0]}{etudiant.nom[0]}
                         </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-800">
-                            {candidat.prenom} {candidat.nom}
-                          </h3>
-                          <p className="text-sm text-slate-600">{candidat.email}</p>
-                          <p className="text-sm text-slate-600">{candidat.telephone}</p>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-bold text-slate-800">{etudiant.prenom} {etudiant.nom}</h3>
+                          <p className="text-sm text-slate-600">{etudiant.matricule}</p>
+                          <p className="text-sm text-slate-600">{etudiant.email}</p>
                         </div>
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                          canInscrire 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-amber-100 text-amber-700'
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                          docsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {canInscrire ? 'Prêt à inscrire' : 'Documents incomplets'}
+                          {docsComplete ? '✓ Complet' : '⚠ Incomplet'}
                         </span>
                       </div>
-                      
-                      {/* Documents avec upload */}
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <p className="text-sm font-medium text-slate-700 mb-3">Documents requis:</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          {/* Acte de naissance */}
-                          <div className="border-2 border-dashed border-slate-300 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <FontAwesomeIcon 
-                                  icon={faFileAlt} 
-                                  className={getDocumentColor(candidat.documents.acteNaissance?.uploaded)}
-                                />
-                                <span className="text-xs font-medium text-slate-700">Acte de naissance</span>
-                              </div>
-                              <FontAwesomeIcon 
-                                icon={getDocumentIcon(candidat.documents.acteNaissance?.uploaded)} 
-                                className={getDocumentColor(candidat.documents.acteNaissance?.uploaded) + ' text-xs'}
-                              />
-                            </div>
-                            {candidat.documents.acteNaissance?.uploaded ? (
-                              <p className="text-xs text-green-600">{candidat.documents.acteNaissance.nom}</p>
-                            ) : (
-                              <label className="cursor-pointer">
-                                <input
-                                  type="file"
-                                  accept=".pdf"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files[0]
-                                    if (file) handleFileUpload(candidat.id, 'acteNaissance', file)
-                                  }}
-                                />
-                                <span className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                  <FontAwesomeIcon icon={faUpload} className="text-xs" />
-                                  Uploader
-                                </span>
-                              </label>
-                            )}
-                          </div>
-
-                          {/* Photo */}
-                          <div className="border-2 border-dashed border-slate-300 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <FontAwesomeIcon 
-                                  icon={faImage} 
-                                  className={getDocumentColor(candidat.documents.photo?.uploaded)}
-                                />
-                                <span className="text-xs font-medium text-slate-700">Photo</span>
-                              </div>
-                              <FontAwesomeIcon 
-                                icon={getDocumentIcon(candidat.documents.photo?.uploaded)} 
-                                className={getDocumentColor(candidat.documents.photo?.uploaded) + ' text-xs'}
-                              />
-                            </div>
-                            {candidat.documents.photo?.uploaded ? (
-                              <p className="text-xs text-green-600">{candidat.documents.photo.nom}</p>
-                            ) : (
-                              <label className="cursor-pointer">
-                                <input
-                                  type="file"
-                                  accept=".jpg,.jpeg,.png"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files[0]
-                                    if (file) handleFileUpload(candidat.id, 'photo', file)
-                                  }}
-                                />
-                                <span className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                  <FontAwesomeIcon icon={faUpload} className="text-xs" />
-                                  Uploader
-                                </span>
-                              </label>
-                            )}
-                          </div>
-
-                          {/* Quittance */}
-                          <div className="border-2 border-dashed border-slate-300 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <FontAwesomeIcon 
-                                  icon={faMoneyBillWave} 
-                                  className={getDocumentColor(candidat.documents.quittance?.uploaded)}
-                                />
-                                <span className="text-xs font-medium text-slate-700">Quittance</span>
-                              </div>
-                              <FontAwesomeIcon 
-                                icon={getDocumentIcon(candidat.documents.quittance?.uploaded)} 
-                                className={getDocumentColor(candidat.documents.quittance?.uploaded) + ' text-xs'}
-                              />
-                            </div>
-                            {candidat.documents.quittance?.uploaded ? (
-                              <p className="text-xs text-green-600">{candidat.documents.quittance.nom}</p>
-                            ) : (
-                              <label className="cursor-pointer">
-                                <input
-                                  type="file"
-                                  accept=".pdf"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files[0]
-                                    if (file) handleFileUpload(candidat.id, 'quittance', file)
-                                  }}
-                                />
-                                <span className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                  <FontAwesomeIcon icon={faUpload} className="text-xs" />
-                                  Uploader
-                                </span>
-                              </label>
-                            )}
-                          </div>
-
-                          {/* Pièce d'identité */}
-                          <div className="border-2 border-dashed border-slate-300 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <FontAwesomeIcon 
-                                  icon={faIdCard} 
-                                  className={getDocumentColor(candidat.documents.pieceIdentite?.uploaded)}
-                                />
-                                <span className="text-xs font-medium text-slate-700">Pièce d'identité</span>
-                              </div>
-                              <FontAwesomeIcon 
-                                icon={getDocumentIcon(candidat.documents.pieceIdentite?.uploaded)} 
-                                className={getDocumentColor(candidat.documents.pieceIdentite?.uploaded) + ' text-xs'}
-                              />
-                            </div>
-                            {candidat.documents.pieceIdentite?.uploaded ? (
-                              <p className="text-xs text-green-600">{candidat.documents.pieceIdentite.nom}</p>
-                            ) : (
-                              <label className="cursor-pointer">
-                                <input
-                                  type="file"
-                                  accept=".pdf"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files[0]
-                                    if (file) handleFileUpload(candidat.id, 'pieceIdentite', file)
-                                  }}
-                                />
-                                <span className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                  <FontAwesomeIcon icon={faUpload} className="text-xs" />
-                                  Uploader
-                                </span>
-                              </label>
-                            )}
-                          </div>
+                      <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                        <p className="text-xs font-medium text-slate-700 mb-2">Documents:</p>
+                        <div className="flex gap-2 flex-wrap">
+                          {['acteNaissance', 'photo', 'quittance', 'pieceIdentite'].map(doc => (
+                            <span key={doc} className={`text-xs px-2 py-1 rounded ${
+                              etudiant.documents[doc]?.uploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {doc === 'acteNaissance' ? 'Acte' : doc === 'pieceIdentite' ? 'CNI' : doc.charAt(0).toUpperCase() + doc.slice(1)}
+                            </span>
+                          ))}
                         </div>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleViewDossier(candidat)}
-                        className="flex items-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors"
-                      >
-                        <FontAwesomeIcon icon={faEye} className="mr-2" />
-                        Voir dossier
+                      <button onClick={() => setSelectedEtudiant(etudiant)}
+                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
+                        <FontAwesomeIcon icon={faEye} />Voir le dossier
                       </button>
-                      {canInscrire && (
-                        <button
-                          onClick={() => handleInscrire(candidat.id)}
-                          className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-                        >
-                          <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
-                          Inscrire
-                        </button>
-                      )}
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Modal Dossier complet */}
-          {showDossier && selectedCandidat && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-slate-800">Dossier complet</h2>
-                  <button
-                    onClick={() => setShowDossier(false)}
-                    className="text-slate-500 hover:text-slate-700"
-                  >
-                    <FontAwesomeIcon icon={faTimes} className="text-xl" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Photo et infos principales */}
-                  <div className="md:col-span-1">
-                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white text-center">
-                      <div className="w-32 h-32 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 text-4xl font-bold">
-                        {selectedCandidat.prenom[0]}{selectedCandidat.nom[0]}
-                      </div>
-                      <h3 className="text-xl font-bold mb-1">{selectedCandidat.prenom} {selectedCandidat.nom}</h3>
-                      <p className="text-blue-100 text-sm">{selectedCandidat.filiere}</p>
-                    </div>
-                  </div>
-
-                  {/* Informations détaillées */}
-                  <div className="md:col-span-2 space-y-4">
-                    <div className="bg-slate-50 rounded-lg p-4">
-                      <h4 className="font-semibold text-slate-800 mb-3">Informations personnelles</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faEnvelope} className="text-slate-400" />
-                          <span className="text-slate-600">{selectedCandidat.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faPhone} className="text-slate-400" />
-                          <span className="text-slate-600">{selectedCandidat.telephone}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faCalendar} className="text-slate-400" />
-                          <span className="text-slate-600">{selectedCandidat.dateNaissance}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faUser} className="text-slate-400" />
-                          <span className="text-slate-600">{selectedCandidat.lieuNaissance}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50 rounded-lg p-4">
-                      <h4 className="font-semibold text-slate-800 mb-3">Documents</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Acte de naissance</span>
-                          {selectedCandidat.documents.acteNaissance?.uploaded ? (
-                            <span className="text-green-600 flex items-center gap-2">
-                              <FontAwesomeIcon icon={faCheckCircle} />
-                              {selectedCandidat.documents.acteNaissance.nom}
-                            </span>
-                          ) : (
-                            <span className="text-red-600">Manquant</span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Photo</span>
-                          {selectedCandidat.documents.photo?.uploaded ? (
-                            <span className="text-green-600 flex items-center gap-2">
-                              <FontAwesomeIcon icon={faCheckCircle} />
-                              {selectedCandidat.documents.photo.nom}
-                            </span>
-                          ) : (
-                            <span className="text-red-600">Manquant</span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Quittance de paiement</span>
-                          {selectedCandidat.documents.quittance?.uploaded ? (
-                            <span className="text-green-600 flex items-center gap-2">
-                              <FontAwesomeIcon icon={faCheckCircle} />
-                              {selectedCandidat.documents.quittance.nom}
-                            </span>
-                          ) : (
-                            <span className="text-red-600">Manquant</span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">Pièce d'identité</span>
-                          {selectedCandidat.documents.pieceIdentite?.uploaded ? (
-                            <span className="text-green-600 flex items-center gap-2">
-                              <FontAwesomeIcon icon={faCheckCircle} />
-                              {selectedCandidat.documents.pieceIdentite.nom}
-                            </span>
-                          ) : (
-                            <span className="text-red-600">Manquant</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    onClick={() => setShowDossier(false)}
-                    className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors"
-                  >
-                    Fermer
-                  </button>
-                  {allDocumentsPresent(selectedCandidat.documents) && (
-                    <button
-                      onClick={() => {
-                        handleInscrire(selectedCandidat.id)
-                        setShowDossier(false)
-                      }}
-                      className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-                    >
-                      <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
-                      Inscrire l'étudiant
-                    </button>
-                  )}
-                </div>
-              </div>
+                )
+              })}
             </div>
           )}
         </main>
@@ -520,3 +427,7 @@ const GererInscriptionsView = () => {
 }
 
 export default GererInscriptionsView
+
+
+
+

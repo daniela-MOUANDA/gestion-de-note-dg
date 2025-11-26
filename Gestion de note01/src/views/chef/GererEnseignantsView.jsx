@@ -8,7 +8,11 @@ import {
   faSearch, 
   faEnvelope, 
   faPhone,
-  faTimes
+  faTimes,
+  faUsers,
+  faUserTie,
+  faUserClock,
+  faCheckCircle
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
@@ -24,11 +28,21 @@ const GererEnseignantsView = () => {
   const [enseignantToDelete, setEnseignantToDelete] = useState(null)
   
   const [enseignants, setEnseignants] = useState([
-    { id: 1, nom: 'DUPONT', prenom: 'Pierre', email: 'pierre.dupont@inptic.edu', telephone: '077 00 00 01', specialite: 'Informatique', statut: 'Actif' },
-    { id: 2, nom: 'MARTIN', prenom: 'Marie', email: 'marie.martin@inptic.edu', telephone: '077 00 00 02', specialite: 'Mathématiques', statut: 'Actif' },
-    { id: 3, nom: 'BERNARD', prenom: 'Jean', email: 'jean.bernard@inptic.edu', telephone: '077 00 00 03', specialite: 'Réseaux', statut: 'Actif' },
-    { id: 4, nom: 'DUBOIS', prenom: 'Sophie', email: 'sophie.dubois@inptic.edu', telephone: '077 00 00 04', specialite: 'Base de données', statut: 'Actif' },
+    { id: 1, nom: 'DUPONT', prenom: 'Pierre', email: 'pierre.dupont@inptic.edu', telephone: '077 00 00 01', specialite: 'Informatique', statut: 'Actif', type: 'Permanent' },
+    { id: 2, nom: 'MARTIN', prenom: 'Marie', email: 'marie.martin@inptic.edu', telephone: '077 00 00 02', specialite: 'Mathématiques', statut: 'Actif', type: 'Permanent' },
+    { id: 3, nom: 'BERNARD', prenom: 'Jean', email: 'jean.bernard@inptic.edu', telephone: '077 00 00 03', specialite: 'Réseaux', statut: 'Actif', type: 'Vacataire' },
+    { id: 4, nom: 'DUBOIS', prenom: 'Sophie', email: 'sophie.dubois@inptic.edu', telephone: '077 00 00 04', specialite: 'Base de données', statut: 'Actif', type: 'Permanent' },
+    { id: 5, nom: 'PETIT', prenom: 'Thomas', email: 'thomas.petit@inptic.edu', telephone: '077 00 00 05', specialite: 'Programmation', statut: 'Actif', type: 'Vacataire' },
+    { id: 6, nom: 'LEROY', prenom: 'Julie', email: 'julie.leroy@inptic.edu', telephone: '077 00 00 06', specialite: 'Sécurité informatique', statut: 'Actif', type: 'Permanent' },
   ])
+
+  // Calcul des statistiques
+  const stats = {
+    total: enseignants.length,
+    permanents: enseignants.filter(e => e.type === 'Permanent').length,
+    vacataires: enseignants.filter(e => e.type === 'Vacataire').length,
+    actifs: enseignants.filter(e => e.statut === 'Actif').length
+  }
 
   const [newEnseignant, setNewEnseignant] = useState({
     nom: '',
@@ -36,7 +50,8 @@ const GererEnseignantsView = () => {
     email: '',
     telephone: '',
     specialite: '',
-    statut: 'Actif'
+    statut: 'Actif',
+    type: 'Permanent'
   })
 
   const specialites = [
@@ -79,7 +94,8 @@ const GererEnseignantsView = () => {
       email: '',
       telephone: '',
       specialite: '',
-      statut: 'Actif'
+      statut: 'Actif',
+      type: 'Permanent'
     })
     setShowAddModal(false)
     showAlert('Enseignant ajouté avec succès !', 'success')
@@ -141,6 +157,60 @@ const GererEnseignantsView = () => {
             </button>
           </div>
 
+          {/* Statistiques des enseignants */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
+            <div className="bg-white rounded-lg border-l-4 border-indigo-500 shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Total Enseignants</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.total}</p>
+                </div>
+                <div className="bg-indigo-50 rounded-lg p-3">
+                  <FontAwesomeIcon icon={faUsers} className="text-indigo-600 text-xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Permanents</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.permanents}</p>
+                  <p className="text-xs text-slate-400 mt-1">{((stats.permanents / stats.total) * 100).toFixed(0)}% du total</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <FontAwesomeIcon icon={faUserTie} className="text-blue-600 text-xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border-l-4 border-amber-500 shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Vacataires</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.vacataires}</p>
+                  <p className="text-xs text-slate-400 mt-1">{((stats.vacataires / stats.total) * 100).toFixed(0)}% du total</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3">
+                  <FontAwesomeIcon icon={faUserClock} className="text-amber-600 text-xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Actifs</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.actifs}</p>
+                  <p className="text-xs text-slate-400 mt-1">{((stats.actifs / stats.total) * 100).toFixed(0)}% du total</p>
+                </div>
+                <div className="bg-emerald-50 rounded-lg p-3">
+                  <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-600 text-xl" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Barre de recherche */}
           <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
             <div className="relative">
@@ -177,7 +247,14 @@ const GererEnseignantsView = () => {
                 <h3 className="text-lg font-bold text-slate-800 mb-1">
                   {enseignant.prenom} {enseignant.nom}
                 </h3>
-                <p className="text-sm text-slate-600 mb-4">{enseignant.specialite}</p>
+                <p className="text-sm text-slate-600 mb-2">{enseignant.specialite}</p>
+                <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                  enseignant.type === 'Permanent' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {enseignant.type}
+                </span>
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-xs text-slate-600">
                     <FontAwesomeIcon icon={faEnvelope} className="mr-2 text-slate-400" />
@@ -220,7 +297,8 @@ const GererEnseignantsView = () => {
                       email: '',
                       telephone: '',
                       specialite: '',
-                      statut: 'Actif'
+                      statut: 'Actif',
+                      type: 'Permanent'
                     })
                   }}
                   className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
@@ -290,6 +368,18 @@ const GererEnseignantsView = () => {
                     </select>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Type *</label>
+                    <select
+                      name="type"
+                      value={newEnseignant.type}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Permanent">Permanent</option>
+                      <option value="Vacataire">Vacataire</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Statut</label>
                     <select
                       name="statut"
@@ -313,7 +403,8 @@ const GererEnseignantsView = () => {
                         email: '',
                         telephone: '',
                         specialite: '',
-                        statut: 'Actif'
+                        statut: 'Actif',
+                        type: 'Permanent'
                       })
                     }}
                     className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors"
@@ -395,6 +486,17 @@ const GererEnseignantsView = () => {
                       {specialites.map(spec => (
                         <option key={spec} value={spec}>{spec}</option>
                       ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Type</label>
+                    <select
+                      value={editingEnseignant.type}
+                      onChange={(e) => setEditingEnseignant({ ...editingEnseignant, type: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Permanent">Permanent</option>
+                      <option value="Vacataire">Vacataire</option>
                     </select>
                   </div>
                   <div>

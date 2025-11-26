@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBell, faUser, faSignOutAlt, faUserCircle } from '@fortawesome/free-solid-svg-icons'
+import { faBell, faUser, faSignOutAlt, faUserCircle, faEnvelope } from '@fortawesome/free-solid-svg-icons'
 
 const HeaderChef = ({ chefName = 'Chef de Département' }) => {
   const initials = chefName.split(' ').map(n => n[0]).join('').toUpperCase()
   const [showMenu, setShowMenu] = useState(false)
   const navigate = useNavigate()
+  
+  // Nombre de messages non lus (à connecter avec le backend plus tard)
+  const unreadMessages = 2
 
   const handleLogout = () => {
     localStorage.removeItem('chef')
@@ -21,6 +24,18 @@ const HeaderChef = ({ chefName = 'Chef de Département' }) => {
             Espace Chef de Département
           </h2>
           <div className="flex items-center space-x-3 sm:space-x-4">
+            <Link
+              to="/chef/messagerie"
+              className="relative p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-all duration-200"
+              aria-label="Messagerie"
+            >
+              <FontAwesomeIcon icon={faEnvelope} className="text-lg" />
+              {unreadMessages > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadMessages}
+                </span>
+              )}
+            </Link>
             <button 
               className="relative p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-all duration-200"
               aria-label="Notifications"

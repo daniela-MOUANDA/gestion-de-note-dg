@@ -15,7 +15,8 @@ import {
   faCalendarAlt,
   faSignOutAlt,
   faBars,
-  faTimes
+  faTimes,
+  faEnvelope
 } from '@fortawesome/free-solid-svg-icons'
 
 const SidebarChef = () => {
@@ -24,6 +25,7 @@ const SidebarChef = () => {
 
   const menuItems = [
     { path: '/chef/dashboard', icon: faHome, label: 'Tableau de bord' },
+    { path: '/chef/messagerie', icon: faEnvelope, label: 'Messagerie' },
     { path: '/chef/classes', icon: faUsers, label: 'Gérer les classes' },
     { path: '/chef/enseignants', icon: faChalkboardTeacher, label: 'Gérer les enseignants' },
     { path: '/chef/notes/ajouter', icon: faGraduationCap, label: 'Ajouter des notes' },

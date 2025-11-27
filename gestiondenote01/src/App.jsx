@@ -41,7 +41,18 @@ import ArchivageView from './views/scolarite/ArchivageView'
 import LoginSPView from './views/sp-scolarite/LoginSPView'
 import DashboardSPView from './views/sp-scolarite/DashboardSPView'
 import AttestationsView from './views/sp-scolarite/AttestationsView'
-import MatriculesView from './views/sp-scolarite/MatriculesView'
+import ArchivesAttestationsView from './views/sp-scolarite/ArchivesAttestationsView'
+import MessagerieSPView from './views/sp-scolarite/MessagerieSPView'
+import AttestationsScolariteView from './views/scolarite/AttestationsScolariteView'
+import ArchivesAttestationsScolariteView from './views/scolarite/ArchivesAttestationsScolariteView'
+
+// Routes Chef de Scolarité
+import LoginChefScolariteView from './views/chef-scolarite/LoginChefView'
+import DashboardChefScolariteView from './views/chef-scolarite/DashboardChefView'
+import GestionComptesView from './views/chef-scolarite/GestionComptesView'
+import AuditView from './views/chef-scolarite/AuditView'
+import StatistiquesView from './views/chef-scolarite/StatistiquesView'
+import MessagerieChefScolariteView from './views/chef-scolarite/MessagerieChefView'
 
 function App() {
   return (
@@ -52,6 +63,7 @@ function App() {
         <Route path="/login-chef" element={<LoginChefView />} />
         <Route path="/login-scolarite" element={<LoginScolariteView />} />
         <Route path="/login-sp" element={<LoginSPView />} />
+        <Route path="/login-chef-scolarite" element={<LoginChefScolariteView />} />
         
         {/* Routes Étudiant */}
         <Route path="/dashboard" element={<DashboardView />} />
@@ -86,11 +98,31 @@ function App() {
         <Route path="/scolarite/diplomes" element={<DiplomesView />} />
         <Route path="/scolarite/proces-verbaux" element={<ProcesVerbauxView />} />
         <Route path="/scolarite/archivage" element={<ArchivageView />} />
+        <Route path="/scolarite/attestations" element={<AttestationsScolariteView />} />
+        <Route path="/scolarite/archives-attestations" element={<ArchivesAttestationsScolariteView />} />
         
         {/* Routes SP-Scolarité */}
         <Route path="/sp-scolarite/dashboard" element={<DashboardSPView />} />
         <Route path="/sp-scolarite/attestations" element={<AttestationsView />} />
-        <Route path="/sp-scolarite/matricules" element={<MatriculesView />} />
+        <Route path="/sp-scolarite/archives" element={<ArchivesAttestationsView />} />
+        <Route path="/sp-scolarite/messagerie" element={<MessagerieSPView />} />
+        
+        {/* Routes Chef de Scolarité */}
+        <Route path="/chef-scolarite/dashboard" element={<DashboardChefScolariteView />} />
+        <Route path="/chef-scolarite/gestion-comptes" element={<GestionComptesView />} />
+        <Route path="/chef-scolarite/audit" element={<AuditView />} />
+        <Route path="/chef-scolarite/statistiques" element={<StatistiquesView />} />
+        <Route path="/chef-scolarite/messagerie" element={<MessagerieChefScolariteView />} />
+        
+        {/* Routes Chef de Scolarité - Actions délé guées (même interface mais avec layout Chef) */}
+        <Route path="/chef-scolarite/importer-candidats" element={<ImporterCandidatsView />} />
+        <Route path="/chef-scolarite/inscriptions" element={<GererInscriptionsView />} />
+        <Route path="/chef-scolarite/attestations" element={<AttestationsScolariteView />} />
+        <Route path="/chef-scolarite/archives-attestations" element={<ArchivesAttestationsScolariteView />} />
+        <Route path="/chef-scolarite/bulletins" element={<BulletinsView />} />
+        <Route path="/chef-scolarite/diplomes" element={<DiplomesView />} />
+        <Route path="/chef-scolarite/proces-verbaux" element={<ProcesVerbauxView />} />
+        <Route path="/chef-scolarite/archivage" element={<ArchivageView />} />
         
         <Route path="/" element={<Navigate to="/login-etudiant" replace />} />
         <Route path="/login" element={<Navigate to="/login-etudiant" replace />} />

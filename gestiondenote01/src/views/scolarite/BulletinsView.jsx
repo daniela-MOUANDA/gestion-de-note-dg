@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faFileAlt, faArrowLeft, faCalendar, faGraduationCap, faCheckCircle,
@@ -6,8 +7,14 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import SidebarChef from '../../components/common/SidebarChef'
+import HeaderChef from '../../components/common/HeaderChef'
 
 const BulletinsView = () => {
+  const location = useLocation()
+  const isChefView = location.pathname.startsWith('/chef-scolarite')
+  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
+  const Header = isChefView ? HeaderChef : HeaderScolarite
   const [selectedPromotion, setSelectedPromotion] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
@@ -150,7 +157,7 @@ const BulletinsView = () => {
   if (!selectedPromotion) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderScolarite scolariteName="Service Scolarité" />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
@@ -209,7 +216,7 @@ const BulletinsView = () => {
   if (!selectedFiliere) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderScolarite scolariteName="Service Scolarité" />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
@@ -254,7 +261,7 @@ const BulletinsView = () => {
   if (!selectedNiveau) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderScolarite scolariteName="Service Scolarité" />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
@@ -300,7 +307,7 @@ const BulletinsView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderScolarite scolariteName="Service Scolarité" />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
@@ -347,7 +354,7 @@ const BulletinsView = () => {
   if (!selectedSemestre) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderScolarite scolariteName="Service Scolarité" />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
@@ -394,7 +401,7 @@ const BulletinsView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarScolarite />
+      <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderScolarite scolariteName="Service Scolarité" />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faFileAlt, faCalendar, faArrowLeft, faGraduationCap, faBook,
@@ -6,8 +7,14 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import SidebarChef from '../../components/common/SidebarChef'
+import HeaderChef from '../../components/common/HeaderChef'
 
 const ProcesVerbauxView = () => {
+  const location = useLocation()
+  const isChefView = location.pathname.startsWith('/chef-scolarite')
+  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
+  const Header = isChefView ? HeaderChef : HeaderScolarite
   const [selectedPromotion, setSelectedPromotion] = useState('') // '2024-2025', '2023-2024', etc.
   const [selectedFiliere, setSelectedFiliere] = useState('') // 'RT', 'GI', 'MTIC', 'AV'
   const [selectedNiveau, setSelectedNiveau] = useState('') // 'L1', 'L2', 'L3'
@@ -535,9 +542,9 @@ const ProcesVerbauxView = () => {
   if (!selectedPromotion) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             {/* Notification des nouveaux PV */}
             {nouveauxPV > 0 && (
@@ -626,9 +633,9 @@ const ProcesVerbauxView = () => {
     const promo = promotions.find(p => p.id === selectedPromotion)
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -669,9 +676,9 @@ const ProcesVerbauxView = () => {
   if (!selectedNiveau) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -713,9 +720,9 @@ const ProcesVerbauxView = () => {
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -761,9 +768,9 @@ const ProcesVerbauxView = () => {
   if (!selectedTypeRattrapage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -814,9 +821,9 @@ const ProcesVerbauxView = () => {
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -893,9 +900,9 @@ const ProcesVerbauxView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-      <SidebarScolarite />
+      <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderScolarite scolariteName="Service Scolarité" />
+        <Header />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">

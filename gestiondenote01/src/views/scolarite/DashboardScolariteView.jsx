@@ -267,6 +267,26 @@ const DashboardScolariteView = () => {
                   </div>
                 </a>
                 <a
+                  href="/scolarite/attestations"
+                  className="flex items-center p-4 bg-cyan-50 hover:bg-cyan-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faFileAlt} className="text-cyan-600 mr-3 text-xl" />
+                  <div>
+                    <p className="font-medium text-slate-800">Attestations de scolarité</p>
+                    <p className="text-xs text-slate-600">Gérez la distribution des attestations</p>
+                  </div>
+                </a>
+                <a
+                  href="/scolarite/archives-attestations"
+                  className="flex items-center p-4 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors"
+                >
+                  <FontAwesomeIcon icon={faArchive} className="text-teal-600 mr-3 text-xl" />
+                  <div>
+                    <p className="font-medium text-slate-800">Archives des attestations</p>
+                    <p className="text-xs text-slate-600">Consultez et téléchargez les duplicatas</p>
+                  </div>
+                </a>
+                <a
                   href="/scolarite/messagerie"
                   className="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
                 >

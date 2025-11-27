@@ -12,7 +12,8 @@ import {
   faArchive,
   faFileAlt,
   faEnvelope,
-  faAward
+  faAward,
+  faFileInvoice
 } from '@fortawesome/free-solid-svg-icons'
 
 const SidebarScolarite = () => {
@@ -24,6 +25,8 @@ const SidebarScolarite = () => {
     { path: '/scolarite/importer-candidats', icon: faFileExcel, label: 'Importer candidats admis' },
     { path: '/scolarite/inscriptions', icon: faUserCheck, label: 'Gérer les inscriptions' },
     // { path: '/scolarite/etudiants', icon: faUserGraduate, label: 'Gérer les étudiants' },
+    { path: '/scolarite/attestations', icon: faFileAlt, label: 'Attestations de scolarité' },
+    { path: '/scolarite/archives-attestations', icon: faFileInvoice, label: 'Archives des attestations' },
     { path: '/scolarite/messagerie', icon: faEnvelope, label: 'Messagerie' },
     { path: '/scolarite/bulletins', icon: faFileAlt, label: 'Bulletins' },
     { path: '/scolarite/diplomes', icon: faAward, label: 'Diplômes' },

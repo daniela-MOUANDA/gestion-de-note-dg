@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
@@ -7,32 +7,62 @@ import {
   faSignInAlt,
   faUserShield
 } from '@fortawesome/free-solid-svg-icons'
+import { useAuth } from '../../contexts/AuthContext'
 
 const LoginScolariteView = () => {
   const navigate = useNavigate()
+  const { login, isAuthenticated, user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Rediriger si déjà connecté avec le bon rôle
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const allowedRoles = ['AGENT_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
+      if (allowedRoles.includes(user.role)) {
+        if (user.role === 'CHEF_SERVICE_SCOLARITE') {
+          navigate('/chef-scolarite/dashboard')
+        } else {
+          navigate('/scolarite/dashboard')
+        }
+      }
+    }
+  }, [isAuthenticated, user, navigate])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
     
-    // Simulation de connexion
-    setTimeout(() => {
-      const scolariteData = {
-        id: 1,
-        nom: 'Service',
-        prenom: 'Scolarité',
-        email: email,
-        role: 'scolarite'
+    try {
+      const result = await login(email, password)
+      
+      if (result.success) {
+        // Vérifier le rôle de l'utilisateur
+        const allowedRoles = ['AGENT_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
+        
+        if (!allowedRoles.includes(result.user.role)) {
+          setError('Vous n\'avez pas accès à cette page de connexion')
+          setIsLoading(false)
+          return
+        }
+
+        // Rediriger selon le rôle
+        if (result.user.role === 'CHEF_SERVICE_SCOLARITE') {
+          navigate('/chef-scolarite/dashboard')
+        } else {
+          navigate('/scolarite/dashboard')
+        }
+      } else {
+        setError(result.error || 'Erreur lors de la connexion')
+        setIsLoading(false)
       }
-      localStorage.setItem('scolarite', JSON.stringify(scolariteData))
+    } catch (err) {
+      setError(err.message || 'Une erreur est survenue')
       setIsLoading(false)
-      navigate('/scolarite/dashboard')
-    }, 1000)
+    }
   }
 
   return (

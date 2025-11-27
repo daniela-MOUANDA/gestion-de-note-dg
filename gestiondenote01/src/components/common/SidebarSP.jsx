@@ -4,7 +4,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faHome, 
   faFileAlt,
-  faIdCard,
+  faArchive,
+  faEnvelope,
   faSignOutAlt,
   faBars,
   faTimes
@@ -17,7 +18,8 @@ const SidebarSP = () => {
   const menuItems = [
     { path: '/sp-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
     { path: '/sp-scolarite/attestations', icon: faFileAlt, label: 'Attestations de scolarité' },
-    { path: '/sp-scolarite/matricules', icon: faIdCard, label: 'Format des matricules' },
+    { path: '/sp-scolarite/archives', icon: faArchive, label: 'Archives des attestations' },
+    { path: '/sp-scolarite/messagerie', icon: faEnvelope, label: 'Messagerie interne' },
   ]
 
   return (

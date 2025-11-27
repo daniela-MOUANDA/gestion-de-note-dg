@@ -1,0 +1,432 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MODÈLES UTILISATEURS ET AUTHENTIFICATION
+// ============================================
+
+model Utilisateur {
+  id            String   @id @default(uuid())
+  nom           String
+  prenom        String
+  email         String   @unique
+  username      String   @unique
+  password      String   // Hashé avec bcrypt
+  role          RoleUtilisateur
+  actif         Boolean  @default(true)
+  dateCreation  DateTime @default(now())
+  derniereConnexion DateTime?
+  
+  // Relations
+  actionsAudit  ActionAudit[]
+  messagesEnvoyes Message[] @relation("MessagesEnvoyes")
+  messagesRecus Message[] @relation("MessagesRecus")
+  
+  @@map("utilisateurs")
+}
+
+enum RoleUtilisateur {
+  AGENT_SCOLARITE
+  SP_SCOLARITE
+  CHEF_SERVICE_SCOLARITE
+  CHEF_DEPARTEMENT
+  ETUDIANT
+  ENSEIGNANT
+  ADMIN
+}
+
+// ============================================
+// MODÈLES ACADÉMIQUES
+// ============================================
+
+model Promotion {
+  id          String   @id @default(uuid())
+  annee       String   @unique // "2024-2025"
+  statut      StatutPromotion @default(EN_COURS)
+  dateDebut   DateTime
+  dateFin     DateTime?
+  
+  // Relations
+  inscriptions Inscription[]
+  attestations Attestation[]
+  bulletins    Bulletin[]
+  diplomes     Diplome[]
+  abandons     Abandon[]
+  procesVerbaux ProcesVerbal[]
+  
+  @@map("promotions")
+}
+
+enum StatutPromotion {
+  EN_COURS
+  ARCHIVE
+}
+
+model Formation {
+  id          String   @id @default(uuid())
+  code        String   @unique // "INITIAL_1", "INITIAL_2"
+  nom         String   // "Formation Initiale 1", "Formation Initiale 2"
+  
+  // Relations
+  inscriptions Inscription[]
+  
+  @@map("formations")
+}
+
+model Filiere {
+  id          String   @id @default(uuid())
+  code        String   @unique // "RT", "GI", "MTIC", "AV"
+  nom         String   // "Réseau et Télécom", "Génie Informatique", etc.
+  
+  // Relations
+  inscriptions Inscription[]
+  classes      Classe[]
+  procesVerbaux ProcesVerbal[]
+  abandons     Abandon[]
+  
+  @@map("filieres")
+}
+
+model Niveau {
+  id          String   @id @default(uuid())
+  code        String   @unique // "L1", "L2", "L3"
+  nom         String   // "1ère année", "2ème année", "3ème année"
+  ordinal     String   // "1ère", "2ème", "3ème"
+  
+  // Relations
+  inscriptions Inscription[]
+  classes      Classe[]
+  abandons     Abandon[]
+  procesVerbaux ProcesVerbal[]
+  
+  @@map("niveaux")
+}
+
+model Classe {
+  id          String   @id @default(uuid())
+  code        String   // "RT-1A", "GI-2B", etc.
+  nom         String
+  filiereId   String
+  niveauId    String
+  effectif    Int      @default(0)
+  
+  // Relations
+  filiere     Filiere  @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  niveau      Niveau   @relation(fields: [niveauId], references: [id], onDelete: Cascade)
+  inscriptions Inscription[]
+  bulletins   Bulletin[]
+  diplomes    Diplome[]
+  procesVerbaux ProcesVerbal[]
+  messages    Message[]
+  
+  @@unique([code, filiereId, niveauId])
+  @@map("classes")
+}
+
+// ============================================
+// MODÈLES ÉTUDIANTS ET INSCRIPTIONS
+// ============================================
+
+model Etudiant {
+  id              String   @id @default(uuid())
+  matricule       String   @unique
+  nom             String
+  prenom          String
+  dateNaissance   DateTime?
+  lieuNaissance   String?
+  nationalite     String?
+  email           String?  @unique
+  telephone       String?
+  adresse         String?
+  photo           String?  // URL de la photo
+  
+  // Relations
+  inscriptions    Inscription[]
+  attestations    Attestation[]
+  bulletins       Bulletin[]
+  diplomes        Diplome[]
+  abandons        Abandon[]
+  
+  @@map("etudiants")
+}
+
+model Inscription {
+  id                String   @id @default(uuid())
+  etudiantId        String
+  promotionId       String
+  formationId       String
+  filiereId         String
+  niveauId          String
+  classeId          String
+  typeInscription   TypeInscription // INSCRIPTION ou REINSCRIPTION
+  statut            StatutInscription @default(EN_ATTENTE)
+  dateInscription   DateTime @default(now())
+  dateValidation    DateTime?
+  agentValideurId   String?  // ID de l'agent qui a validé
+  
+  // Documents
+  copieReleve       String?  // URL du document
+  copieDiplome      String?  // URL du document
+  copieActeNaissance String? // URL du document
+  photoIdentite     String?  // URL du document
+  quittance         String?  // URL du document
+  
+  // Relations
+  etudiant          Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  promotion         Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  formation         Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+  filiere           Filiere @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  niveau            Niveau @relation(fields: [niveauId], references: [id], onDelete: Cascade)
+  classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  
+  @@map("inscriptions")
+}
+
+enum TypeInscription {
+  INSCRIPTION
+  REINSCRIPTION
+}
+
+enum StatutInscription {
+  EN_ATTENTE
+  VALIDEE
+  REJETEE
+  INSCRIT // Finalisé et scolarité soldée
+}
+
+// ============================================
+// MODÈLES ATTESTATIONS
+// ============================================
+
+model Attestation {
+  id                String   @id @default(uuid())
+  numero            String   @unique // "N°0460/INPTIC/DG/DSE/2024"
+  etudiantId        String
+  promotionId       String
+  dateGeneration    DateTime @default(now())
+  anneeAcademique   String
+  lieu              String   @default("Libreville")
+  archivee          Boolean  @default(false)
+  dateArchivage     DateTime?
+  
+  // Relations
+  etudiant          Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  promotion         Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  
+  @@map("attestations")
+}
+
+// ============================================
+// MODÈLES BULLETINS ET DIPLÔMES
+// ============================================
+
+model Bulletin {
+  id                String   @id @default(uuid())
+  etudiantId        String
+  promotionId       String
+  classeId          String
+  semestre          Semestre
+  anneeAcademique   String
+  statut            StatutRecuperation @default(NON_RECUPERE)
+  dateRecuperation  DateTime?
+  agentRecuperation String?  // ID de l'agent qui a marqué comme récupéré
+  
+  // Relations
+  etudiant          Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  promotion         Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  
+  @@map("bulletins")
+}
+
+enum Semestre {
+  S1
+  S2
+}
+
+enum StatutRecuperation {
+  NON_RECUPERE
+  RECUPERE
+}
+
+model Diplome {
+  id                String   @id @default(uuid())
+  etudiantId        String
+  promotionId       String
+  classeId          String
+  typeDiplome       TypeDiplome
+  anneeAcademique   String
+  statut            StatutRecuperation @default(NON_RECUPERE)
+  dateRecuperation  DateTime?
+  agentRecuperation String?  // ID de l'agent qui a marqué comme récupéré
+  
+  // Relations
+  etudiant          Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  promotion         Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  
+  @@map("diplomes")
+}
+
+enum TypeDiplome {
+  DTS
+  LICENCE
+}
+
+// ============================================
+// MODÈLES PROCÈS-VERBAUX
+// ============================================
+
+model ProcesVerbal {
+  id                String   @id @default(uuid())
+  promotionId       String
+  filiereId         String
+  niveauId          String
+  classeId          String
+  typePV            TypeProcesVerbal
+  periode           PeriodePV
+  anneeAcademique   String
+  statut            StatutPV @default(NOUVEAU)
+  dateReception     DateTime? // Date de réception par la scolarité
+  dateArchivage     DateTime?
+  fichierPV         String?  // URL du fichier PDF
+  
+  // Relations
+  promotion         Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  filiere           Filiere @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  niveau            Niveau @relation(fields: [niveauId], references: [id], onDelete: Cascade)
+  classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  
+  @@map("proces_verbaux")
+}
+
+enum TypeProcesVerbal {
+  AVANT_RATTRAPAGES
+  APRES_RATTRAPAGES
+  ANNUEL
+}
+
+enum PeriodePV {
+  S1
+  S2
+  ANNUEL
+}
+
+enum StatutPV {
+  NOUVEAU
+  VU
+  ARCHIVE
+}
+
+// ============================================
+// MODÈLES ARCHIVAGE
+// ============================================
+
+model Abandon {
+  id                String   @id @default(uuid())
+  etudiantId        String
+  promotionId       String
+  niveauId          String
+  filiereId         String
+  dateAbandon       DateTime @default(now())
+  raison            String?
+  
+  // Relations
+  etudiant          Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  promotion         Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  niveau            Niveau @relation(fields: [niveauId], references: [id], onDelete: Cascade)
+  filiere           Filiere @relation(fields: [filiereId], references: [id], onDelete: Cascade)
+  
+  @@map("abandons")
+}
+
+// ============================================
+// MODÈLES MESSAGERIE
+// ============================================
+
+model Message {
+  id                String   @id @default(uuid())
+  expediteurId      String
+  destinataireId    String?  // Null si message collectif
+  classeId          String?  // Null si message individuel
+  typeDestinataire  TypeDestinataire
+  sujet             String
+  contenu           String
+  lu                Boolean   @default(false)
+  dateEnvoi         DateTime  @default(now())
+  
+  // Relations
+  expediteur        Utilisateur @relation("MessagesEnvoyes", fields: [expediteurId], references: [id], onDelete: Cascade)
+  destinataire      Utilisateur? @relation("MessagesRecus", fields: [destinataireId], references: [id], onDelete: Cascade)
+  classe            Classe? @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  
+  @@map("messages")
+}
+
+enum TypeDestinataire {
+  INDIVIDUEL
+  CLASSE
+  COLLECTIF
+}
+
+// ============================================
+// MODÈLES AUDIT
+// ============================================
+
+model ActionAudit {
+  id                String   @id @default(uuid())
+  utilisateurId     String
+  action            String   // "Connexion", "Inscription validée", etc.
+  details           String?  // Détails de l'action
+  typeAction        TypeAction
+  dateAction        DateTime @default(now())
+  ipAddress         String?
+  userAgent         String?
+  
+  // Relations
+  utilisateur       Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  
+  @@map("actions_audit")
+}
+
+enum TypeAction {
+  CONNEXION
+  DECONNEXION
+  INSCRIPTION
+  ATTESTATION
+  BULLETIN
+  DIPLOME
+  MESSAGE
+  PV
+  ARCHIVAGE
+  ERROR
+}
+
+// ============================================
+// MODÈLES CANDIDATS ADMIS (Import Excel)
+// ============================================
+
+model CandidatAdmis {
+  id                String   @id @default(uuid())
+  nom               String
+  prenom            String
+  email             String?
+  telephone         String?
+  filiere           String   // Code de la filière
+  anneeAcademique   String
+  dateImport        DateTime @default(now())
+  importePar        String?  // ID de l'utilisateur qui a importé
+  inscrit           Boolean  @default(false) // Si l'inscription a été finalisée
+  
+  @@map("candidats_admis")
+}
+

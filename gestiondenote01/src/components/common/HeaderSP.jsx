@@ -8,7 +8,6 @@ const HeaderSP = ({ spName = "Secrétaire Particulière" }) => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-slate-800">{spName}</h2>
-            <p className="text-xs sm:text-sm text-slate-600">Direction de la Scolarité et des Examens</p>
           </div>
           <div className="flex items-center gap-4">
             <button className="relative p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">

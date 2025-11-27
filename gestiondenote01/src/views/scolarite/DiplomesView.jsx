@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faAward, faArrowLeft, faCalendar, faGraduationCap, faCheckCircle,
@@ -6,8 +7,14 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import SidebarChef from '../../components/common/SidebarChef'
+import HeaderChef from '../../components/common/HeaderChef'
 
 const DiplomesView = () => {
+  const location = useLocation()
+  const isChefView = location.pathname.startsWith('/chef-scolarite')
+  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
+  const Header = isChefView ? HeaderChef : HeaderScolarite
   const [selectedPromotion, setSelectedPromotion] = useState('')
   const [selectedTypeDiplome, setSelectedTypeDiplome] = useState('') // 'DTS' ou 'Licence'
   const [selectedFiliere, setSelectedFiliere] = useState('')
@@ -178,9 +185,9 @@ const DiplomesView = () => {
   if (!selectedPromotion) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
@@ -223,9 +230,9 @@ const DiplomesView = () => {
   if (!selectedTypeDiplome) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -276,9 +283,9 @@ const DiplomesView = () => {
     
     return (
       <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-${color}-50 to-slate-50`}>
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -323,9 +330,9 @@ const DiplomesView = () => {
     
     return (
       <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-${color}-50 to-slate-50`}>
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -370,9 +377,9 @@ const DiplomesView = () => {
     
     return (
       <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-${color}-50 to-slate-50`}>
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -421,9 +428,9 @@ const DiplomesView = () => {
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-${color}-50 to-slate-50`}>
-      <SidebarScolarite />
+      <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderScolarite scolariteName="Service Scolarité" />
+        <Header />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">

@@ -1,10 +1,18 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faFileExcel, faUpload, faDownload, faCheckCircle, faInfoCircle } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import SidebarChef from '../../components/common/SidebarChef'
+import HeaderChef from '../../components/common/HeaderChef'
 
 const ImporterCandidatsView = () => {
+  const location = useLocation()
+  const isChefView = location.pathname.startsWith('/chef-scolarite')
+  
+  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
+  const Header = isChefView ? HeaderChef : HeaderScolarite
   const [selectedFile, setSelectedFile] = useState(null)
   const [anneeAcademique, setAnneeAcademique] = useState('2025')
   const [filiere, setFiliere] = useState('')
@@ -59,9 +67,9 @@ const ImporterCandidatsView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarScolarite />
+      <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderScolarite scolariteName="Service Scolarité" />
+        <Header />
         
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
           <div className="mb-6">

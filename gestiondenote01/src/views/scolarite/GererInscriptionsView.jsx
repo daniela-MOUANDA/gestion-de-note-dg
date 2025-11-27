@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
@@ -7,109 +8,130 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import SidebarChef from '../../components/common/SidebarChef'
+import HeaderChef from '../../components/common/HeaderChef'
 import { useAlert } from '../../contexts/AlertContext'
+import {
+  getFormations,
+  getFilieres,
+  getNiveauxDisponibles,
+  getClasses,
+  getEtudiantsParClasse,
+  getPromotions,
+  finaliserInscription
+} from '../../api/scolarite'
 
 const GererInscriptionsView = () => {
+  const location = useLocation()
+  const isChefView = location.pathname.startsWith('/chef-scolarite')
+  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
+  const Header = isChefView ? HeaderChef : HeaderScolarite
+  
   const { showAlert } = useAlert()
   const [typeInscription, setTypeInscription] = useState('inscription')
+  const [selectedPromotion, setSelectedPromotion] = useState('')
   const [selectedFormation, setSelectedFormation] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
+  const [selectedClasse, setSelectedClasse] = useState('')
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   
-  const formations = [
-    { id: 'initial1', nom: 'Initial 1', description: 'Formation initiale première année' },
-    { id: 'initial2', nom: 'Initial 2', description: 'Formation initiale deuxième cycle' }
-  ]
+  // États pour les données de la base
+  const [formations, setFormations] = useState([])
+  const [filieres, setFilieres] = useState([])
+  const [niveaux, setNiveaux] = useState([])
+  const [classes, setClasses] = useState([])
+  const [promotions, setPromotions] = useState([])
+  const [etudiants, setEtudiants] = useState([])
+  const [loading, setLoading] = useState(false)
   
-  const filieres = [
-    { id: 'RT', nom: 'Réseau et Télécom' },
-    { id: 'GI', nom: 'Génie Informatique' },
-    { id: 'MTIC', nom: 'Métiers des TIC' },
-    { id: 'AV', nom: 'Audiovisuel' }
-  ]
-  
-  // Les niveaux dépendent du type de formation et de la filière
-  const getNiveaux = () => {
-    if (selectedFormation === 'initial2') {
-      // Pour Initial 2, MTIC a tous les niveaux, les autres filières seulement L1
-      if (selectedFiliere === 'MTIC') {
-        return ['L1', 'L2', 'L3']
+  // Charger les formations et filières au montage
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const [formationsData, filieresData, promotionsData] = await Promise.all([
+          getFormations(),
+          getFilieres(),
+          getPromotions()
+        ])
+        setFormations(formationsData)
+        setFilieres(filieresData)
+        setPromotions(promotionsData)
+        // Sélectionner la promotion en cours par défaut
+        const promoEnCours = promotionsData.find(p => p.statut === 'EN_COURS')
+        if (promoEnCours) {
+          setSelectedPromotion(promoEnCours.id)
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement:', error)
+        showAlert('Erreur lors du chargement des données', 'error')
+      } finally {
+        setLoading(false)
       }
-      return ['L1']
     }
-    // Initial 1 a tous les niveaux pour toutes les filières
-    return ['L1', 'L2', 'L3']
-  }
+    loadData()
+  }, [])
   
-  const niveaux = getNiveaux()
-
-  const [etudiantsData] = useState({
-    'initial1': {
-      'GI': {
-        'L1': [
-          {
-            id: 1, nom: 'MBO', prenom: 'Lidvige', matricule: 'GI2025-L1-001',
-            email: 'lidvigembo@mail.com', telephone: '077 00 00 01',
-            dateNaissance: '2005-05-15', lieuNaissance: 'Libreville',
-            adresse: 'Quartier Nzeng-Ayong', filiere: 'GI', niveau: 'L1',
-            documents: { acteNaissance: null, photo: null, quittance: null, pieceIdentite: null }
-          },
-          {
-            id: 2, nom: 'OWONO', prenom: 'Pierre', matricule: 'GI2025-L1-002',
-            email: 'pierre.owono@mail.com', telephone: '077 00 00 02',
-            dateNaissance: '2005-03-20', lieuNaissance: 'Port-Gentil',
-            adresse: 'Quartier Lalala', filiere: 'GI', niveau: 'L1',
-            documents: {
-              acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-              photo: { nom: 'photo.jpg', uploaded: true },
-              quittance: null,
-              pieceIdentite: { nom: 'cni.pdf', uploaded: true }
-            }
-          }
-        ],
-        'L2': [
-          {
-            id: 3, nom: 'NGUEMA', prenom: 'Marie', matricule: 'GI2024-L2-001',
-            email: 'marie.nguema@mail.com', telephone: '077 00 00 03',
-            dateNaissance: '2004-08-10', lieuNaissance: 'Franceville',
-            adresse: 'Quartier Glass', filiere: 'GI', niveau: 'L2',
-            documents: {
-              acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-              photo: { nom: 'photo.jpg', uploaded: true },
-              quittance: { nom: 'quittance.pdf', uploaded: true },
-              pieceIdentite: { nom: 'cni.pdf', uploaded: true }
-            }
-          }
-        ],
-        'L3': []
-      },
-      'RT': {
-        'L1': [
-          {
-            id: 4, nom: 'NKOMO', prenom: 'Jean', matricule: 'RT2025-L1-001',
-            email: 'jean.nkomo@mail.com', telephone: '077 00 00 04',
-            dateNaissance: '2005-11-25', lieuNaissance: 'Oyem',
-            adresse: 'Quartier Sotega', filiere: 'RT', niveau: 'L1',
-            documents: {
-              acteNaissance: { nom: 'acte_naissance.pdf', uploaded: true },
-              photo: null, quittance: null, pieceIdentite: null
-            }
-          }
-        ],
-        'L2': [], 'L3': []
-      },
-      'MTIC': { 'L1': [], 'L2': [], 'L3': [] },
-      'AV': { 'L1': [], 'L2': [], 'L3': [] }
-    },
-    'initial2': {
-      'GI': { 'L1': [] },
-      'RT': { 'L1': [] },
-      'MTIC': { 'L1': [], 'L2': [], 'L3': [] },
-      'AV': { 'L1': [] }
+  // Charger les niveaux quand formation et filière sont sélectionnés
+  useEffect(() => {
+    if (selectedFormation && selectedFiliere) {
+      const loadNiveaux = async () => {
+        try {
+          const niveauxData = await getNiveauxDisponibles(selectedFormation, selectedFiliere)
+          setNiveaux(niveauxData)
+        } catch (error) {
+          console.error('Erreur lors du chargement des niveaux:', error)
+        }
+      }
+      loadNiveaux()
+    } else {
+      setNiveaux([])
     }
-  })
+  }, [selectedFormation, selectedFiliere])
+  
+  // Charger les classes quand filière et niveau sont sélectionnés
+  useEffect(() => {
+    if (selectedFiliere && selectedNiveau) {
+      const loadClasses = async () => {
+        try {
+          const classesData = await getClasses(selectedFiliere, selectedNiveau)
+          setClasses(classesData)
+        } catch (error) {
+          console.error('Erreur lors du chargement des classes:', error)
+        }
+      }
+      loadClasses()
+    } else {
+      setClasses([])
+    }
+  }, [selectedFiliere, selectedNiveau])
+  
+  // Charger les étudiants quand classe est sélectionnée
+  useEffect(() => {
+    if (selectedClasse && selectedPromotion) {
+      const loadEtudiants = async () => {
+        try {
+          setLoading(true)
+          const etudiantsData = await getEtudiantsParClasse(
+            selectedClasse,
+            selectedPromotion,
+            typeInscription
+          )
+          setEtudiants(etudiantsData)
+        } catch (error) {
+          console.error('Erreur lors du chargement des étudiants:', error)
+          showAlert('Erreur lors du chargement des étudiants', 'error')
+        } finally {
+          setLoading(false)
+        }
+      }
+      loadEtudiants()
+    } else {
+      setEtudiants([])
+    }
+  }, [selectedClasse, selectedPromotion, typeInscription])
 
   const handleBack = () => {
     if (selectedEtudiant) setSelectedEtudiant(null)
@@ -150,9 +172,9 @@ const GererInscriptionsView = () => {
   if (!selectedFormation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
@@ -205,9 +227,9 @@ const GererInscriptionsView = () => {
   if (!selectedFiliere) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -252,9 +274,9 @@ const GererInscriptionsView = () => {
   if (selectedFiliere && !selectedNiveau) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -272,17 +294,14 @@ const GererInscriptionsView = () => {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
                 {niveaux.map((niveau) => {
-                  const count = etudiantsData[selectedFormation]?.[selectedFiliere]?.[niveau]?.length || 0
+                  const niveauObj = niveaux.find(n => n.code === niveau)
                   return (
-                    <button key={niveau} onClick={() => setSelectedNiveau(niveau)}
+                    <button key={niveau.code || niveau} onClick={() => setSelectedNiveau(niveau.id || niveau)}
                       className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group">
                       <div className="text-center">
-                        <div className="text-3xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{niveau}</div>
+                        <div className="text-3xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{niveau.code || niveau}</div>
                         <div className="text-sm text-slate-600 mb-2">
-                          {niveau === 'L1' ? 'Première année' : niveau === 'L2' ? 'Deuxième année' : 'Troisième année'}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-3 px-3 py-1 bg-slate-100 rounded-full inline-block">
-                          {count} candidat{count > 1 ? 's' : ''}
+                          {niveauObj?.nom || (niveau === 'L1' ? 'Première année' : niveau === 'L2' ? 'Deuxième année' : 'Troisième année')}
                         </div>
                       </div>
                     </button>
@@ -301,9 +320,9 @@ const GererInscriptionsView = () => {
     const documentsComplete = allDocumentsPresent(selectedEtudiant.documents)
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
+          <Header />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -446,16 +465,16 @@ const GererInscriptionsView = () => {
   }
 
   // Vue 4: Liste des étudiants
-  const etudiants = (etudiantsData[selectedFormation]?.[selectedFiliere]?.[selectedNiveau] || []).filter(e =>
+  const etudiantsFiltres = etudiants.filter(e =>
     `${e.nom} ${e.prenom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
     e.matricule.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarScolarite />
+      <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderScolarite scolariteName="Service Scolarité" />
+        <Header />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
@@ -477,14 +496,16 @@ const GererInscriptionsView = () => {
             </div>
           </div>
 
-          {etudiants.length === 0 ? (
+          {etudiantsFiltres.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
               <FontAwesomeIcon icon={faUserCheck} className="text-6xl text-slate-300 mb-4" />
-              <p className="text-slate-500 text-lg">Aucun candidat trouvé</p>
+              <p className="text-slate-500 text-lg">
+                {searchQuery ? 'Aucun candidat ne correspond à votre recherche' : 'Aucun candidat trouvé'}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {etudiants.map((etudiant) => {
+              {etudiantsFiltres.map((etudiant) => {
                 const docsComplete = allDocumentsPresent(etudiant.documents)
                 return (
                   <div key={etudiant.id} className="bg-white rounded-xl shadow-md border border-slate-200 hover:shadow-lg transition-shadow overflow-hidden">

@@ -69,12 +69,14 @@ const DashboardView = () => {
         <Header studentName={student.fullName} />
         
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
-          {/* En-tête de bienvenue */}
+          {/* Message de bienvenue */}
           <div className="mb-6 sm:mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
-              Bienvenu, {student.fullName}
+              Bienvenue, {student.fullName} !
             </h1>
-            <h2 className="text-xl sm:text-2xl font-semibold text-slate-600">Tableau de bord</h2>
+            <p className="text-sm sm:text-base text-slate-600">
+              Nous sommes ravis de vous revoir. Voici un aperçu de votre tableau de bord.
+            </p>
           </div>
 
           {/* Carte étudiant et dernière connexion */}

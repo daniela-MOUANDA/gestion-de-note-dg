@@ -5,24 +5,53 @@ import {
   faEnvelope, 
   faLock, 
   faSignInAlt,
-  faUserTie
+  faUser,
+  faSpinner
 } from '@fortawesome/free-solid-svg-icons'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
+import { useAlert } from '../contexts/AlertContext'
+import Modal from '../components/common/Modal'
+import LoadingSpinner from '../components/common/LoadingSpinner'
 
-const LoginChefView = () => {
+const LoginView = () => {
   const navigate = useNavigate()
   const { login, isAuthenticated, user } = useAuth()
+  const { success, error: showError } = useAlert()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
-  // Rediriger si déjà connecté avec le bon rôle
-  useEffect(() => {
-    if (isAuthenticated && user?.role === 'CHEF_SERVICE_SCOLARITE') {
-      navigate('/chef-scolarite/dashboard')
+  // Fonction pour rediriger selon le rôle
+  const redirectByRole = (role) => {
+    console.log('Redirection pour le rôle:', role)
+    switch (role) {
+      case 'ETUDIANT':
+        navigate('/dashboard')
+        break
+      case 'CHEF_SERVICE_SCOLARITE':
+        navigate('/chef-scolarite/dashboard')
+        break
+      case 'AGENT_SCOLARITE':
+        navigate('/scolarite/dashboard')
+        break
+      case 'SP_SCOLARITE':
+        console.log('Redirection vers /sp-scolarite/dashboard')
+        navigate('/sp-scolarite/dashboard')
+        break
+      case 'CHEF_DEPARTEMENT':
+        navigate('/chef/dashboard')
+        break
+      default:
+        console.warn('Rôle non reconnu:', role)
     }
-  }, [isAuthenticated, user, navigate])
+  }
+
+  // Ne pas rediriger automatiquement - permettre à un autre utilisateur de se connecter
+  // Chaque connexion écrasera le token précédent, ce qui est normal
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -31,22 +60,35 @@ const LoginChefView = () => {
     
     try {
       const result = await login(email, password)
+      console.log('Résultat de la connexion:', result)
       
-      if (result.success) {
-        // Vérifier le rôle
-        if (result.user.role !== 'CHEF_SERVICE_SCOLARITE') {
-          setError('Vous n\'avez pas accès à cette page de connexion')
-          setIsLoading(false)
-          return
-        }
-
-        navigate('/chef-scolarite/dashboard')
+      if (result.success && result.user) {
+        console.log('Utilisateur connecté:', result.user)
+        console.log('Rôle de l\'utilisateur:', result.user.role)
+        
+        // Afficher le modal de succès
+        const userName = `${result.user.prenom} ${result.user.nom}`
+        setSuccessMessage(`Bienvenue ${userName} ! Connexion réussie.`)
+        setShowSuccessModal(true)
+        success(`Connexion réussie ! Bienvenue ${userName}`)
+        
+        // Rediriger après un court délai pour voir le modal
+        setTimeout(() => {
+          redirectByRole(result.user.role)
+        }, 1500)
       } else {
-        setError(result.error || 'Erreur lors de la connexion')
+        const errorMsg = result.error || 'Erreur lors de la connexion'
+        setError(errorMsg)
+        setShowErrorModal(true)
+        showError(errorMsg)
         setIsLoading(false)
       }
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue')
+      console.error('Erreur lors de la connexion:', err)
+      const errorMsg = err.message || 'Une erreur est survenue'
+      setError(errorMsg)
+      setShowErrorModal(true)
+      showError(errorMsg)
       setIsLoading(false)
     }
   }
@@ -65,13 +107,13 @@ const LoginChefView = () => {
           {/* Logo et titre */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg mb-3 shadow-lg">
-              <FontAwesomeIcon icon={faUserTie} className="text-2xl text-white" />
+              <FontAwesomeIcon icon={faUser} className="text-2xl text-white" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1">
               Connexion
             </h1>
             <p className="text-slate-600 text-xs sm:text-sm">
-              Chef de service scolarite
+              Administration
             </p>
           </div>
 
@@ -134,18 +176,48 @@ const LoginChefView = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-sm"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2 text-sm relative overflow-hidden"
             >
-              <FontAwesomeIcon icon={faSignInAlt} className="text-sm" />
-              {isLoading ? 'Connexion en cours...' : 'Se connecter'}
+              {isLoading ? (
+                <>
+                  <FontAwesomeIcon icon={faSpinner} className="text-sm animate-spin" />
+                  <span>Connexion en cours...</span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 animate-shimmer"></div>
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faSignInAlt} className="text-sm" />
+                  <span>Se connecter</span>
+                </>
+              )}
             </button>
           </form>
         </div>
       </div>
+
+      {/* Modal de succès */}
+      <Modal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        type="success"
+        title="Connexion réussie !"
+        message={successMessage}
+      />
+
+      {/* Modal d'erreur */}
+      <Modal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        type="error"
+        title="Erreur de connexion"
+        message={error}
+      />
+
+      {/* Loading overlay */}
+      {isLoading && <LoadingSpinner fullScreen text="Connexion en cours..." />}
     </div>
   )
 }
 
-export default LoginChefView
-
+export default LoginView
 

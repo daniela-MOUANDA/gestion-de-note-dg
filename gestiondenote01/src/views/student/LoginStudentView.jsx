@@ -3,33 +3,47 @@ import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faEnvelope, 
+  faIdCard,
   faLock, 
   faSignInAlt,
-  faUserShield
+  faGraduationCap
 } from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../../contexts/AuthContext'
 
-const LoginScolariteView = () => {
+const LoginStudentView = () => {
   const navigate = useNavigate()
   const { login, isAuthenticated, user } = useAuth()
   const [email, setEmail] = useState('')
+  const [matricule, setMatricule] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Rediriger si déjà connecté avec le bon rôle
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const allowedRoles = ['AGENT_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
-      if (allowedRoles.includes(user.role)) {
-        if (user.role === 'CHEF_SERVICE_SCOLARITE') {
-          navigate('/chef-scolarite/dashboard')
-        } else {
-          navigate('/scolarite/dashboard')
-        }
-      }
+  // Fonction pour rediriger selon le rôle
+  const redirectByRole = (role) => {
+    switch (role) {
+      case 'ETUDIANT':
+        navigate('/dashboard')
+        break
+      case 'CHEF_SERVICE_SCOLARITE':
+        navigate('/chef-scolarite/dashboard')
+        break
+      case 'AGENT_SCOLARITE':
+        navigate('/scolarite/dashboard')
+        break
+      case 'SP_SCOLARITE':
+        navigate('/sp-scolarite/dashboard')
+        break
+      case 'CHEF_DEPARTEMENT':
+        navigate('/chef/dashboard')
+        break
+      default:
+        console.warn('Rôle non reconnu:', role)
     }
-  }, [isAuthenticated, user, navigate])
+  }
+
+  // Ne pas rediriger automatiquement - permettre à un autre utilisateur de se connecter
+  // Chaque connexion écrasera le token précédent, ce qui est normal
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -37,24 +51,13 @@ const LoginScolariteView = () => {
     setIsLoading(true)
     
     try {
-      const result = await login(email, password)
+      // Pour les étudiants, on envoie le matricule en plus
+      // L'API va vérifier l'email et le mot de passe, et optionnellement le matricule
+      const result = await login(email, password, matricule)
       
-      if (result.success) {
-        // Vérifier le rôle de l'utilisateur
-        const allowedRoles = ['AGENT_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
-        
-        if (!allowedRoles.includes(result.user.role)) {
-          setError('Vous n\'avez pas accès à cette page de connexion')
-          setIsLoading(false)
-          return
-        }
-
+      if (result.success && result.user) {
         // Rediriger selon le rôle
-        if (result.user.role === 'CHEF_SERVICE_SCOLARITE') {
-          navigate('/chef-scolarite/dashboard')
-        } else {
-          navigate('/scolarite/dashboard')
-        }
+        redirectByRole(result.user.role)
       } else {
         setError(result.error || 'Erreur lors de la connexion')
         setIsLoading(false)
@@ -79,13 +82,13 @@ const LoginScolariteView = () => {
           {/* Logo et titre */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg mb-3 shadow-lg">
-              <FontAwesomeIcon icon={faUserShield} className="text-2xl text-white" />
+              <FontAwesomeIcon icon={faGraduationCap} className="text-2xl text-white" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1">
               Connexion
             </h1>
             <p className="text-slate-600 text-xs sm:text-sm">
-              Service Scolarité
+              Accédez à votre espace étudiant
             </p>
           </div>
 
@@ -108,6 +111,29 @@ const LoginScolariteView = () => {
                 />
                 <FontAwesomeIcon 
                   icon={faEnvelope} 
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Matricule */}
+            <div>
+              <label htmlFor="matricule" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <FontAwesomeIcon icon={faIdCard} className="mr-1.5 text-blue-600 text-xs" />
+                Matricule
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  id="matricule"
+                  value={matricule}
+                  onChange={(e) => setMatricule(e.target.value)}
+                  placeholder="Votre numéro de matricule"
+                  required
+                  className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-800 placeholder-slate-400 text-sm"
+                />
+                <FontAwesomeIcon 
+                  icon={faIdCard} 
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
                 />
               </div>
@@ -160,5 +186,5 @@ const LoginScolariteView = () => {
   )
 }
 
-export default LoginScolariteView
+export default LoginStudentView
 

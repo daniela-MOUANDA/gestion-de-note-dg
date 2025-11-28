@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import Modal from './Modal'
+import LoadingSpinner from './LoadingSpinner'
 import { 
   faHome, 
   faUsers,
@@ -15,13 +19,35 @@ import {
   faFileAlt,
   faFileInvoice,
   faAward,
-  faArchive
+  faArchive,
+  faUser,
+  faCog
 } from '@fortawesome/free-solid-svg-icons'
 
 const SidebarChef = () => {
   const location = useLocation()
   const navigate = useNavigate()
+  const { logout, user } = useAuth()
+  const { success } = useAlert()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await logout()
+      success('Déconnexion réussie. À bientôt !')
+      setTimeout(() => {
+        navigate('/login')
+      }, 1000)
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion:', error)
+    } finally {
+      setIsLoggingOut(false)
+      setShowLogoutModal(false)
+    }
+  }
 
   const menuItems = [
     { path: '/chef-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
@@ -37,11 +63,9 @@ const SidebarChef = () => {
     { path: '/chef-scolarite/proces-verbaux', icon: faFileAlt, label: 'Procès-Verbaux' },
     { path: '/chef-scolarite/archivage', icon: faArchive, label: 'Archivage' },
     { path: '/chef-scolarite/messagerie', icon: faEnvelope, label: 'Messagerie' },
+    { path: '/admin/profil', icon: faUser, label: 'Profil' },
+    { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
   ]
-
-  const handleLogout = () => {
-    navigate('/login-chef-scolarite')
-  }
 
   return (
     <>
@@ -77,7 +101,7 @@ const SidebarChef = () => {
           </nav>
           <div className="absolute bottom-0 w-64 border-t border-slate-700 bg-slate-900">
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
               className="flex items-center w-full px-6 py-4 text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="mr-3 text-lg" />
@@ -133,7 +157,7 @@ const SidebarChef = () => {
             </nav>
             <div className="absolute bottom-0 w-64 border-t border-slate-700 bg-slate-900">
               <button
-                onClick={handleLogout}
+                onClick={() => setShowLogoutModal(true)}
                 className="flex items-center w-full px-6 py-4 text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
               >
                 <FontAwesomeIcon icon={faSignOutAlt} className="mr-3 text-lg" />
@@ -143,6 +167,45 @@ const SidebarChef = () => {
           </aside>
         </>
       )}
+
+      {/* Modal de déconnexion */}
+      <Modal
+        isOpen={showLogoutModal}
+        onClose={() => !isLoggingOut && setShowLogoutModal(false)}
+        type="warning"
+        title="Confirmer la déconnexion"
+        message={`Êtes-vous sûr de vouloir vous déconnecter${user ? `, ${user.prenom} ${user.nom}` : ''} ?`}
+      >
+        <div className="flex gap-3 justify-end mt-4">
+          <button
+            onClick={() => setShowLogoutModal(false)}
+            disabled={isLoggingOut}
+            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isLoggingOut ? (
+              <>
+                <FontAwesomeIcon icon={faSignOutAlt} className="animate-spin" />
+                <span>Déconnexion...</span>
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon icon={faSignOutAlt} />
+                <span>Se déconnecter</span>
+              </>
+            )}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Loading overlay pour la déconnexion */}
+      {isLoggingOut && <LoadingSpinner fullScreen text="Déconnexion en cours..." />}
     </>
   )
 }

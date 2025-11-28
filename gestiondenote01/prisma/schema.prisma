@@ -21,6 +21,9 @@ model Utilisateur {
   email         String   @unique
   username      String   @unique
   password      String   // Hashé avec bcrypt
+  photo         String?  // URL de la photo de profil
+  telephone     String?  // Numéro de téléphone
+  adresse       String?  // Adresse
   role          RoleUtilisateur
   actif         Boolean  @default(true)
   dateCreation  DateTime @default(now())

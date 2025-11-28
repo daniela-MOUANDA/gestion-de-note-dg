@@ -1,7 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 
+// Formulaires de connexion
+import LoginView from './views/LoginView'
+import LoginStudentView from './views/student/LoginStudentView'
+
 // Routes Étudiant
-import LoginView from './views/student/LoginView'
 import DashboardView from './views/student/DashboardView'
 import EmploiDuTempsView from './views/student/EmploiDuTempsView'
 import NotesView from './views/student/NotesView'
@@ -12,7 +15,6 @@ import ReclamationsView from './views/student/ReclamationsView'
 import AideView from './views/student/AideView'
 
 // Routes Chef de Département
-import LoginChefView from './views/chef/LoginChefView'
 import DashboardChefView from './views/chef/DashboardChefView'
 import MessagerieChefView from './views/chef/MessagerieChefView'
 import GererClassesView from './views/chef/GererClassesView'
@@ -26,7 +28,6 @@ import PublierBulletinsView from './views/chef/PublierBulletinsView'
 import GererEmploisTempsView from './views/chef/GererEmploisTempsView'
 
 // Routes Service Scolarité
-import LoginScolariteView from './views/scolarite/LoginScolariteView'
 import DashboardScolariteView from './views/scolarite/DashboardScolariteView'
 import ImporterCandidatsView from './views/scolarite/ImporterCandidatsView'
 import GererInscriptionsView from './views/scolarite/GererInscriptionsView'
@@ -38,7 +39,6 @@ import ProcesVerbauxView from './views/scolarite/ProcesVerbauxView'
 import ArchivageView from './views/scolarite/ArchivageView'
 
 // Routes SP-Scolarité (Secrétaire Particulière)
-import LoginSPView from './views/sp-scolarite/LoginSPView'
 import DashboardSPView from './views/sp-scolarite/DashboardSPView'
 import AttestationsView from './views/sp-scolarite/AttestationsView'
 import ArchivesAttestationsView from './views/sp-scolarite/ArchivesAttestationsView'
@@ -46,8 +46,11 @@ import MessagerieSPView from './views/sp-scolarite/MessagerieSPView'
 import AttestationsScolariteView from './views/scolarite/AttestationsScolariteView'
 import ArchivesAttestationsScolariteView from './views/scolarite/ArchivesAttestationsScolariteView'
 
+// Routes communes Administration
+import ProfilAdminView from './views/admin/ProfilAdminView'
+import ParametresAdminView from './views/admin/ParametresAdminView'
+
 // Routes Chef de Scolarité
-import LoginChefScolariteView from './views/chef-scolarite/LoginChefView'
 import DashboardChefScolariteView from './views/chef-scolarite/DashboardChefView'
 import GestionComptesView from './views/chef-scolarite/GestionComptesView'
 import AuditView from './views/chef-scolarite/AuditView'
@@ -59,11 +62,8 @@ function App() {
     <Router>
       <Routes>
         {/* Pages de connexion */}
-        <Route path="/login-etudiant" element={<LoginView />} />
-        <Route path="/login-chef" element={<LoginChefView />} />
-        <Route path="/login-scolarite" element={<LoginScolariteView />} />
-        <Route path="/login-sp" element={<LoginSPView />} />
-        <Route path="/login-chef-scolarite" element={<LoginChefScolariteView />} />
+        <Route path="/login" element={<LoginView />} />
+        <Route path="/login-etudiant" element={<LoginStudentView />} />
         
         {/* Routes Étudiant */}
         <Route path="/dashboard" element={<DashboardView />} />
@@ -107,6 +107,10 @@ function App() {
         <Route path="/sp-scolarite/archives" element={<ArchivesAttestationsView />} />
         <Route path="/sp-scolarite/messagerie" element={<MessagerieSPView />} />
         
+        {/* Routes communes Administration - Profil et Paramètres */}
+        <Route path="/admin/profil" element={<ProfilAdminView />} />
+        <Route path="/admin/parametres" element={<ParametresAdminView />} />
+        
         {/* Routes Chef de Scolarité */}
         <Route path="/chef-scolarite/dashboard" element={<DashboardChefScolariteView />} />
         <Route path="/chef-scolarite/gestion-comptes" element={<GestionComptesView />} />
@@ -124,8 +128,8 @@ function App() {
         <Route path="/chef-scolarite/proces-verbaux" element={<ProcesVerbauxView />} />
         <Route path="/chef-scolarite/archivage" element={<ArchivageView />} />
         
-        <Route path="/" element={<Navigate to="/login-etudiant" replace />} />
-        <Route path="/login" element={<Navigate to="/login-etudiant" replace />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login-admin" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   )

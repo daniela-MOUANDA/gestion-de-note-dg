@@ -16,8 +16,11 @@ import {
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
+import { useAuth } from '../../contexts/AuthContext'
 
 const DashboardChefView = () => {
+  const { user } = useAuth()
+  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Chef de Département'
   const [stats] = useState({
     totalClasses: 12,
     totalEnseignants: 45,
@@ -90,13 +93,13 @@ const DashboardChefView = () => {
         <HeaderChef chefName="Dr. Jean KAMDEM" />
         
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
-          {/* Titre */}
+          {/* Message de bienvenue */}
           <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Tableau de bord
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
+              Bienvenue, {nomComplet} !
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              Vue d'ensemble de votre département
+              Nous sommes ravis de vous revoir. Voici un aperçu de votre tableau de bord.
             </p>
           </div>
 

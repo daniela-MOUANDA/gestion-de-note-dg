@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
 
@@ -170,50 +171,64 @@ async function main() {
 
   console.log('✅ Classes créées')
 
-  // Créer des utilisateurs de test
+  // Hasher les mots de passe
+  const passwordChef = await bcrypt.hash('qwerty01', 10)
+  const passwordSP = await bcrypt.hash('qwerty02', 10)
+  const passwordAgent = await bcrypt.hash('Jeparle@1', 10)
+
+  // Créer des utilisateurs
   const chefService = await prisma.utilisateur.upsert({
-    where: { username: 'chef' },
-    update: {},
+    where: { email: 'juniorabdallah@gmail.com' },
+    update: {
+      password: passwordChef
+    },
     create: {
       nom: 'ABDALLAH',
       prenom: 'Junior',
-      email: 'chef.scolarite@inptic.ga',
-      username: 'chef',
-      password: '$2b$10$rK8X8X8X8X8X8X8X8X8X8u8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X', // chef123
+      email: 'juniorabdallah@gmail.com',
+      username: 'junior.abdallah',
+      password: passwordChef,
       role: 'CHEF_SERVICE_SCOLARITE',
       actif: true
     }
   })
 
   const sp = await prisma.utilisateur.upsert({
-    where: { username: 'sp' },
-    update: {},
+    where: { email: 'dominique@gmail.com' },
+    update: {
+      password: passwordSP
+    },
     create: {
-      nom: 'OBIANG',
-      prenom: 'Jeanne',
-      email: 'sp.scolarite@inptic.ga',
-      username: 'sp',
-      password: '$2b$10$rK8X8X8X8X8X8X8X8X8u8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X', // sp123
+      nom: 'DOMINIQUE',
+      prenom: 'Dominique',
+      email: 'dominique@gmail.com',
+      username: 'dominique',
+      password: passwordSP,
       role: 'SP_SCOLARITE',
       actif: true
     }
   })
 
   const agent1 = await prisma.utilisateur.upsert({
-    where: { username: 'agent1' },
-    update: {},
+    where: { email: 'daniel@gmail.com' },
+    update: {
+      password: passwordAgent
+    },
     create: {
-      nom: 'NZAMBA',
-      prenom: 'Marie',
-      email: 'marie.nzamba@inptic.ga',
-      username: 'agent1',
-      password: '$2b$10$rK8X8X8X8X8X8X8X8X8u8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X', // agent123
+      nom: 'DANIEL',
+      prenom: 'Daniel',
+      email: 'daniel@gmail.com',
+      username: 'daniel',
+      password: passwordAgent,
       role: 'AGENT_SCOLARITE',
       actif: true
     }
   })
 
   console.log('✅ Utilisateurs créés')
+  console.log('   - Chef de Service: juniorabdallah@gmail.com')
+  console.log('   - Secrétaire Principale: dominique@gmail.com')
+  console.log('   - Agent Scolarité: daniel@gmail.com')
 
   console.log('🎉 Seeding terminé avec succès!')
 }

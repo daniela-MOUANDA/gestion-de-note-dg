@@ -80,7 +80,12 @@ export const authenticateUser = async (email, password) => {
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
         role: userWithoutPassword.role,
-        actif: userWithoutPassword.actif
+        actif: userWithoutPassword.actif,
+        photo: userWithoutPassword.photo || null,
+        telephone: userWithoutPassword.telephone || null,
+        adresse: userWithoutPassword.adresse || null,
+        dateCreation: userWithoutPassword.dateCreation,
+        derniereConnexion: userWithoutPassword.derniereConnexion || null
       }
     }
   } catch (error) {
@@ -98,18 +103,33 @@ export const verifyToken = async (token) => {
     const decoded = jwt.verify(token, JWT_SECRET)
     
     // Vérifier que l'utilisateur existe toujours et est actif
+    // Note: Si photo, telephone, adresse ne sont pas encore dans la DB, on les récupère quand même
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: decoded.id },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        username: true,
-        role: true,
-        actif: true
-      }
+      where: { id: decoded.id }
     })
+    
+    if (!utilisateur) {
+      return {
+        valid: false,
+        error: 'Utilisateur introuvable'
+      }
+    }
+    
+    // Extraire uniquement les champs nécessaires (en gérant les champs optionnels qui pourraient ne pas exister)
+    const userData = {
+      id: utilisateur.id,
+      nom: utilisateur.nom,
+      prenom: utilisateur.prenom,
+      email: utilisateur.email,
+      username: utilisateur.username,
+      role: utilisateur.role,
+      actif: utilisateur.actif,
+      photo: utilisateur.photo || null,
+      telephone: utilisateur.telephone || null,
+      adresse: utilisateur.adresse || null,
+      dateCreation: utilisateur.dateCreation,
+      derniereConnexion: utilisateur.derniereConnexion || null
+    }
 
     if (!utilisateur || !utilisateur.actif) {
       return {
@@ -120,18 +140,25 @@ export const verifyToken = async (token) => {
 
     return {
       valid: true,
-      user: utilisateur
+      user: userData
     }
   } catch (error) {
+    console.error('Erreur lors de la vérification du token:', error.name, error.message)
     if (error.name === 'TokenExpiredError') {
       return {
         valid: false,
-        error: 'Token expiré'
+        error: 'Token expiré. Veuillez vous reconnecter.'
+      }
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return {
+        valid: false,
+        error: 'Token invalide. Veuillez vous reconnecter.'
       }
     }
     return {
       valid: false,
-      error: 'Token invalide'
+      error: error.message || 'Token invalide'
     }
   }
 }
@@ -164,25 +191,182 @@ export const logoutUser = async (userId) => {
 // Obtenir les informations d'un utilisateur par ID
 export const getUserById = async (userId) => {
   try {
+    // Récupérer tous les champs (sans select pour éviter les erreurs si des champs n'existent pas encore)
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        username: true,
-        role: true,
-        actif: true,
-        dateCreation: true,
-        derniereConnexion: true
-      }
+      where: { id: userId }
     })
 
-    return utilisateur
+    if (!utilisateur) {
+      return null
+    }
+
+    // Extraire uniquement les champs nécessaires (en gérant les champs optionnels)
+    return {
+      id: utilisateur.id,
+      nom: utilisateur.nom,
+      prenom: utilisateur.prenom,
+      email: utilisateur.email,
+      username: utilisateur.username,
+      role: utilisateur.role,
+      actif: utilisateur.actif,
+      photo: utilisateur.photo || null,
+      telephone: utilisateur.telephone || null,
+      adresse: utilisateur.adresse || null,
+      dateCreation: utilisateur.dateCreation,
+      derniereConnexion: utilisateur.derniereConnexion || null
+    }
   } catch (error) {
     console.error('Erreur lors de la récupération de l\'utilisateur:', error)
     return null
+  }
+}
+
+// Changer le mot de passe d'un utilisateur
+export const changePassword = async (userId, currentPassword, newPassword) => {
+  try {
+    // Récupérer l'utilisateur
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { id: userId }
+    })
+
+    if (!utilisateur) {
+      return {
+        success: false,
+        error: 'Utilisateur introuvable'
+      }
+    }
+
+    // Vérifier le mot de passe actuel
+    const passwordValid = await bcrypt.compare(currentPassword, utilisateur.password)
+    
+    if (!passwordValid) {
+      return {
+        success: false,
+        error: 'Mot de passe actuel incorrect'
+      }
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+
+    // Mettre à jour le mot de passe
+    await prisma.utilisateur.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    })
+
+    // Enregistrer l'action dans l'audit
+    await prisma.actionAudit.create({
+      data: {
+        utilisateurId: utilisateur.id,
+        action: 'Changement de mot de passe',
+        details: 'Mot de passe modifié avec succès',
+        typeAction: 'CONNEXION',
+        dateAction: new Date()
+      }
+    })
+
+    return {
+      success: true,
+      message: 'Mot de passe modifié avec succès'
+    }
+  } catch (error) {
+    console.error('Erreur lors du changement de mot de passe:', error)
+    return {
+      success: false,
+      error: 'Une erreur est survenue lors du changement de mot de passe'
+    }
+  }
+}
+
+// Mettre à jour la photo de profil d'un utilisateur
+export const updateUserPhoto = async (userId, photoUrl) => {
+  try {
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { id: userId }
+    })
+
+    if (!utilisateur) {
+      return {
+        success: false,
+        error: 'Utilisateur introuvable'
+      }
+    }
+
+    // Supprimer l'ancienne photo si elle existe
+    if (utilisateur.photo && !utilisateur.photo.startsWith('http')) {
+      try {
+        const fs = await import('fs')
+        const path = await import('path')
+        const { fileURLToPath } = await import('url')
+        const { dirname } = await import('path')
+        const __filename = fileURLToPath(import.meta.url)
+        const __dirname = dirname(__filename)
+        // Le chemin de la photo est relatif comme /uploads/profiles/filename.jpg
+        const photoFileName = utilisateur.photo.split('/').pop()
+        const oldPhotoPath = path.join(__dirname, '..', '..', 'uploads', 'profiles', photoFileName)
+        if (fs.existsSync(oldPhotoPath)) {
+          fs.unlinkSync(oldPhotoPath)
+        }
+      } catch (error) {
+        console.error('Erreur lors de la suppression de l\'ancienne photo:', error)
+        // Ne pas bloquer la mise à jour si la suppression échoue
+      }
+    }
+
+    // Mettre à jour la photo
+    try {
+      await prisma.utilisateur.update({
+        where: { id: userId },
+        data: { photo: photoUrl }
+      })
+    } catch (dbError) {
+      console.error('Erreur SQL lors de la mise à jour de la photo:', dbError)
+      // Si le champ photo n'existe pas, retourner une erreur explicite
+      const errorMessage = dbError.message || ''
+      const errorCode = dbError.code || ''
+      
+      if (errorCode === 'P2025' || 
+          errorMessage.includes('Unknown column') || 
+          errorMessage.includes('column') && errorMessage.includes('does not exist') ||
+          errorMessage.includes('photo') && (errorMessage.includes('unknown') || errorMessage.includes('not exist'))) {
+        return {
+          success: false,
+          error: 'Le champ photo n\'existe pas dans la base de données. Veuillez exécuter la migration Prisma ou le script SQL (voir AJOUT_CHAMPS_UTILISATEUR.md).'
+        }
+      }
+      throw dbError
+    }
+
+    // Enregistrer l'action dans l'audit
+    await prisma.actionAudit.create({
+      data: {
+        utilisateurId: utilisateur.id,
+        action: 'Mise à jour photo de profil',
+        details: 'Photo de profil modifiée',
+        typeAction: 'CONNEXION',
+        dateAction: new Date()
+      }
+    })
+
+    return {
+      success: true,
+      message: 'Photo de profil mise à jour avec succès'
+    }
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de la photo:', error)
+    // Vérifier si c'est une erreur de champ manquant
+    const errorMessage = error.message || ''
+    if (errorMessage.includes('photo') && (errorMessage.includes('n\'existe pas') || errorMessage.includes('does not exist'))) {
+      return {
+        success: false,
+        error: errorMessage
+      }
+    }
+    return {
+      success: false,
+      error: error.message || 'Une erreur est survenue lors de la mise à jour de la photo'
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useAuth } from '../../contexts/AuthContext'
 import { 
   faHome, 
   faFileAlt, 
@@ -17,6 +18,8 @@ import {
 
 const Sidebar = () => {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const menuItems = [
@@ -63,13 +66,16 @@ const Sidebar = () => {
                 </Link>
               )
             })}
-            <Link
-              to="/login"
-              className="flex items-center px-6 py-3.5 mt-4 text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200"
+            <button
+              onClick={async () => {
+                await logout()
+                navigate('/login-etudiant')
+              }}
+              className="w-full flex items-center px-6 py-3.5 mt-4 text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200"
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="mr-3 text-lg text-slate-400" />
               <span className="font-medium text-sm">Déconnexion</span>
-            </Link>
+            </button>
           </nav>
         </div>
       </aside>
@@ -113,14 +119,17 @@ const Sidebar = () => {
                 </Link>
               )
             })}
-            <Link
-              to="/login"
-              className="flex items-center px-6 py-3.5 text-slate-300 hover:bg-slate-700"
-              onClick={() => setIsMobileMenuOpen(false)}
+            <button
+              onClick={async () => {
+                await logout()
+                navigate('/login-etudiant')
+                setIsMobileMenuOpen(false)
+              }}
+              className="w-full flex items-center px-6 py-3.5 text-slate-300 hover:bg-slate-700"
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="mr-3 text-lg" />
               <span className="font-medium">Déconnexion</span>
-            </Link>
+            </button>
           </nav>
         )}
       </div>

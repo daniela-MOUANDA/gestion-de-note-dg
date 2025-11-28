@@ -2,15 +2,34 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell, faUser, faSignOutAlt, faUserCircle } from '@fortawesome/free-solid-svg-icons'
+import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import Modal from './Modal'
+import LoadingSpinner from './LoadingSpinner'
 
 const Header = ({ studentName = 'Daniel MOMBO' }) => {
   const initials = studentName.split(' ').map(n => n[0]).join('').toUpperCase()
   const [showMenu, setShowMenu] = useState(false)
   const navigate = useNavigate()
+  const { logout } = useAuth()
+  const { success } = useAlert()
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const handleLogout = () => {
-    localStorage.removeItem('student')
-    navigate('/login')
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await logout()
+      success('Déconnexion réussie. À bientôt !')
+      setTimeout(() => {
+        navigate('/login-etudiant')
+      }, 1000)
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion:', error)
+    } finally {
+      setIsLoggingOut(false)
+      setShowLogoutModal(false)
+    }
   }
 
   return (
@@ -55,7 +74,7 @@ const Header = ({ studentName = 'Daniel MOMBO' }) => {
                     Profil
                   </Link>
                   <button
-                    onClick={handleLogout}
+                    onClick={() => setShowLogoutModal(true)}
                     className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                   >
                     <FontAwesomeIcon icon={faSignOutAlt} className="mr-3" />
@@ -67,6 +86,45 @@ const Header = ({ studentName = 'Daniel MOMBO' }) => {
           </div>
         </div>
       </div>
+
+      {/* Modal de déconnexion */}
+      <Modal
+        isOpen={showLogoutModal}
+        onClose={() => !isLoggingOut && setShowLogoutModal(false)}
+        type="warning"
+        title="Confirmer la déconnexion"
+        message={`Êtes-vous sûr de vouloir vous déconnecter, ${studentName} ?`}
+      >
+        <div className="flex gap-3 justify-end mt-4">
+          <button
+            onClick={() => setShowLogoutModal(false)}
+            disabled={isLoggingOut}
+            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isLoggingOut ? (
+              <>
+                <FontAwesomeIcon icon={faSignOutAlt} className="animate-spin" />
+                <span>Déconnexion...</span>
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon icon={faSignOutAlt} />
+                <span>Se déconnecter</span>
+              </>
+            )}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Loading overlay pour la déconnexion */}
+      {isLoggingOut && <LoadingSpinner fullScreen text="Déconnexion en cours..." />}
     </header>
   )
 }

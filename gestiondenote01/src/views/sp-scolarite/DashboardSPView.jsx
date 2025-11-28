@@ -7,8 +7,11 @@ import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import SidebarSP from '../../components/common/SidebarSP'
 import HeaderSP from '../../components/common/HeaderSP'
+import { useAuth } from '../../contexts/AuthContext'
 
 const DashboardSPView = () => {
+  const { user } = useAuth()
+  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Secrétaire Particulière'
   // Données statistiques
   const [stats] = useState({
     attestationsGenerees: 145,
@@ -47,56 +50,64 @@ const DashboardSPView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
-          {/* En-tête */}
-          <div className="mb-8">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Tableau de bord
+          {/* Message de bienvenue */}
+          <div className="mb-6">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
+              Bienvenue, {nomComplet} !
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              Vue d'ensemble des attestations de scolarité - Année 2024-2025
+              Nous sommes ravis de vous revoir. Voici un aperçu de votre tableau de bord.
             </p>
           </div>
 
           {/* Cartes statistiques */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-              <div className="flex items-center justify-between mb-2">
-                <FontAwesomeIcon icon={faFileAlt} className="text-blue-500 text-3xl" />
-                <FontAwesomeIcon icon={faChartLine} className="text-green-500" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
+            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm px-5 py-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Attestations générées</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.attestationsGenerees}</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-2.5">
+                  <FontAwesomeIcon icon={faFileAlt} className="text-blue-600 text-xl" />
+                </div>
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.attestationsGenerees}</h3>
-              <p className="text-sm text-slate-600">Attestations générées</p>
-              <p className="text-xs text-slate-500 mt-1">Depuis le début de l'année</p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
-              <div className="flex items-center justify-between mb-2">
-                <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-500 text-3xl" />
-                <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-semibold">Disponible</span>
+            <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm px-5 py-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Attestations disponibles</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.attestationsDisponibles}</p>
+                </div>
+                <div className="bg-emerald-50 rounded-lg p-2.5">
+                  <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-600 text-xl" />
+                </div>
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.attestationsDisponibles}</h3>
-              <p className="text-sm text-slate-600">Attestations disponibles</p>
-              <p className="text-xs text-slate-500 mt-1">Étudiants à jour</p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-indigo-500">
-              <div className="flex items-center justify-between mb-2">
-                <FontAwesomeIcon icon={faFileAlt} className="text-indigo-500 text-3xl" />
-                <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs font-semibold">Ce mois</span>
+            <div className="bg-white rounded-lg border-l-4 border-indigo-500 shadow-sm px-5 py-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">Générées ce mois</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.attestationsCeMois}</p>
+                </div>
+                <div className="bg-indigo-50 rounded-lg p-2.5">
+                  <FontAwesomeIcon icon={faFileAlt} className="text-indigo-600 text-xl" />
+                </div>
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.attestationsCeMois}</h3>
-              <p className="text-sm text-slate-600">Générées ce mois</p>
-              <p className="text-xs text-slate-500 mt-1">Novembre 2024</p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-amber-500">
-              <div className="flex items-center justify-between mb-2">
-                <FontAwesomeIcon icon={faBell} className="text-amber-500 text-3xl" />
-                <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-full text-xs font-semibold">Alerte</span>
+            <div className="bg-white rounded-lg border-l-4 border-amber-500 shadow-sm px-5 py-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm text-slate-500 mb-1">En attente</p>
+                  <p className="text-3xl font-bold text-slate-800">{stats.enAttente}</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-2.5">
+                  <FontAwesomeIcon icon={faBell} className="text-amber-600 text-xl" />
+                </div>
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.enAttente}</h3>
-              <p className="text-sm text-slate-600">En attente</p>
-              <p className="text-xs text-slate-500 mt-1">À traiter</p>
             </div>
           </div>
 

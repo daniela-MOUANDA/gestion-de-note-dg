@@ -2,15 +2,17 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell, faUser, faSignOutAlt, faUserCircle } from '@fortawesome/free-solid-svg-icons'
+import { useAuth } from '../../contexts/AuthContext'
 
 const HeaderScolarite = ({ scolariteName = 'Service Scolarité' }) => {
   const initials = scolariteName.split(' ').map(n => n[0]).join('').toUpperCase()
   const [showMenu, setShowMenu] = useState(false)
   const navigate = useNavigate()
+  const { logout } = useAuth()
 
-  const handleLogout = () => {
-    localStorage.removeItem('scolarite')
-    navigate('/login-scolarite')
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login')
   }
 
   return (

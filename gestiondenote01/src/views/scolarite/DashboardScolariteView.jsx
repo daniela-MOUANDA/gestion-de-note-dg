@@ -16,8 +16,11 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
+import { useAuth } from '../../contexts/AuthContext'
 
 const DashboardScolariteView = () => {
+  const { user } = useAuth()
+  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Agent Scolarité'
   const [stats] = useState({
     candidatsAdmis: 250,
     etudiantsInscrits: 180,
@@ -70,13 +73,13 @@ const DashboardScolariteView = () => {
         <HeaderScolarite scolariteName="Service Scolarité" />
         
         <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
-          {/* Titre */}
+          {/* Message de bienvenue */}
           <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Tableau de bord
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
+              Bienvenue, {nomComplet} !
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              Service Scolarité - Gestion des inscriptions
+              Nous sommes ravis de vous revoir. Voici un aperçu de votre tableau de bord.
             </p>
           </div>
 

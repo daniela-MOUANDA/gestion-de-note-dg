@@ -6,7 +6,6 @@ import {
   faEnvelope,
   faPhone,
   faCheckCircle,
-  faBriefcase,
   faCamera,
   faSpinner
 } from '@fortawesome/free-solid-svg-icons'
@@ -66,10 +65,11 @@ const ProfilAdminView = () => {
         
         // Utiliser d'abord les données du contexte (toujours disponibles)
         const role = user.role || ''
+        const userEmail = user.email || ''
         const initialData = {
           nom: user.nom || '',
           prenom: user.prenom || '',
-          email: user.email || '',
+          email: userEmail,
           role: role,
           telephone: user.telephone || 'N/A',
           adresse: user.adresse || 'N/A',
@@ -85,9 +85,11 @@ const ProfilAdminView = () => {
         setLoading(false)
         
         // Ensuite, essayer de récupérer les données complètes depuis l'API en arrière-plan
+        // MAIS seulement si l'email correspond à celui de l'utilisateur connecté
         try {
           const currentUser = await getCurrentUser()
-          if (currentUser) {
+          // Vérifier que les données de l'API correspondent bien à l'utilisateur connecté
+          if (currentUser && currentUser.email === userEmail) {
             const role = currentUser.role || ''
             setUserData({
               nom: currentUser.nom || '',
@@ -102,6 +104,9 @@ const ProfilAdminView = () => {
               service: getServiceLabel(role),
               poste: getRoleLabel(role)
             })
+          } else if (currentUser && currentUser.email !== userEmail) {
+            // Si l'API retourne un autre utilisateur, ne pas mettre à jour
+            console.warn('Les données de l\'API ne correspondent pas à l\'utilisateur connecté. Conservation des données du contexte.')
           }
         } catch (apiError) {
           console.warn('Impossible de récupérer les données depuis l\'API, utilisation des données du contexte:', apiError)
@@ -230,88 +235,78 @@ const ProfilAdminView = () => {
         </h1>
       </div>
 
-      {/* Carte de résumé du profil */}
-      <div className="bg-gradient-to-br from-slate-100 to-blue-100 rounded-xl shadow-lg p-4 sm:p-6 border border-slate-200 mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 lg:justify-between">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
-            <div className="relative flex-shrink-0">
-              <div 
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg cursor-pointer hover:opacity-90 transition-opacity overflow-hidden relative"
-                onClick={handlePhotoClick}
-                title="Cliquer pour changer la photo"
-              >
-                {photoUrl ? (
-                  <img 
-                    src={photoUrl} 
-                    alt={nomComplet}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.style.display = 'none'
-                    }}
-                  />
-                ) : null}
-                {!photoUrl && (
-                  <FontAwesomeIcon icon={faUser} className="text-2xl sm:text-3xl" />
-                )}
-              </div>
-              <div className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 sm:p-2 cursor-pointer hover:bg-blue-700 transition-colors shadow-lg border-2 border-white">
+      {/* Carte de la photo de profil */}
+      <div className="flex justify-center mb-6">
+        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200 w-80 h-80 flex flex-col items-center justify-center">
+          <div className="relative group mb-3">
+            <div 
+              className="w-40 h-40 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-all duration-300 overflow-hidden relative border-4 border-white"
+              onClick={handlePhotoClick}
+              title="Cliquer pour changer la photo"
+            >
+              {photoUrl ? (
+                <img 
+                  src={photoUrl} 
+                  alt={nomComplet}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                  }}
+                />
+              ) : null}
+              {!photoUrl && (
+                <FontAwesomeIcon icon={faUser} className="text-4xl" />
+              )}
+              {/* Overlay avec icône caméra au survol */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
                 {isUploading ? (
-                  <FontAwesomeIcon icon={faSpinner} className="text-white text-xs animate-spin" />
+                  <FontAwesomeIcon icon={faSpinner} className="text-white text-2xl animate-spin" />
                 ) : (
-                  <FontAwesomeIcon icon={faCamera} className="text-white text-xs" />
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoChange}
-                className="hidden"
-              />
-            </div>
-            {(uploadError || uploadSuccess) && (
-              <div className={`text-xs sm:text-sm mt-2 ${uploadError ? 'text-red-600' : 'text-green-600'}`}>
-                {uploadError || uploadSuccess}
-              </div>
-            )}
-            <div className="flex-1 w-full">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">
-                {nomComplet}
-              </h2>
-              <p className="text-sm sm:text-base text-slate-600 mb-3">
-                {userData.poste} - {userData.service}
-              </p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 shadow-sm">
-                  <FontAwesomeIcon icon={faCheckCircle} className="mr-1.5 text-xs" />
-                  Utilisateur actif
-                </span>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
-                  {userData.role ? userData.role.replace(/_/g, ' ') : 'Utilisateur'}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-4 text-xs sm:text-sm text-slate-600">
-                <div className="flex items-center">
-                  <FontAwesomeIcon icon={faEnvelope} className="mr-2 text-blue-600" />
-                  {userData.email}
-                </div>
-                {userData.telephone && (
-                  <div className="flex items-center">
-                    <FontAwesomeIcon icon={faPhone} className="mr-2 text-blue-600" />
-                    {userData.telephone}
-                  </div>
+                  <FontAwesomeIcon icon={faCamera} className="text-white text-2xl" />
                 )}
               </div>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              className="hidden"
+            />
           </div>
-          
-          {/* Informations professionnelles à droite */}
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg p-4 sm:p-6 flex-shrink-0 w-full sm:w-48 lg:w-56 relative">
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="text-xs sm:text-sm font-medium text-blue-100">Service</h3>
-              <FontAwesomeIcon icon={faBriefcase} className="text-xl sm:text-2xl text-white opacity-90" />
+          {(uploadError || uploadSuccess) && (
+            <div className={`text-xs mb-2 ${uploadError ? 'text-red-600' : 'text-green-600'}`}>
+              {uploadError || uploadSuccess}
             </div>
-            <p className="text-sm sm:text-base font-semibold text-white">{userData.service}</p>
+          )}
+          <div className="text-center">
+            <h2 className="text-lg font-bold text-slate-800 mb-1">
+              {nomComplet}
+            </h2>
+            <p className="text-xs text-slate-600 mb-2">
+              {userData.poste} - {userData.service}
+            </p>
+            <div className="flex flex-wrap justify-center gap-1.5 mb-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 shadow-sm">
+                <FontAwesomeIcon icon={faCheckCircle} className="mr-1 text-xs" />
+                Utilisateur actif
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
+                {userData.role ? userData.role.replace(/_/g, ' ') : 'Utilisateur'}
+              </span>
+            </div>
+            <div className="flex flex-col items-center gap-1 text-xs text-slate-600">
+              <div className="flex items-center">
+                <FontAwesomeIcon icon={faEnvelope} className="mr-1.5 text-blue-600 text-xs" />
+                <span className="truncate max-w-[200px]">{userData.email}</span>
+              </div>
+              {userData.telephone && userData.telephone !== 'N/A' && (
+                <div className="flex items-center">
+                  <FontAwesomeIcon icon={faPhone} className="mr-1.5 text-blue-600 text-xs" />
+                  {userData.telephone}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

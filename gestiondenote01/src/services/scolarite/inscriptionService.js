@@ -81,7 +81,62 @@ export const getClasses = async (filiereId, niveauId) => {
   }
 }
 
-// Récupérer les étudiants d'une classe avec leur statut d'inscription
+// Récupérer les étudiants par filière et niveau (sans classe)
+export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotionId, formationId, typeInscription) => {
+  try {
+    const inscriptions = await prisma.inscription.findMany({
+      where: {
+        filiereId,
+        niveauId,
+        promotionId,
+        formationId,
+        typeInscription: typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION'
+      },
+      include: {
+        etudiant: true,
+        formation: true,
+        filiere: true,
+        niveau: true
+      },
+      orderBy: {
+        etudiant: {
+          nom: 'asc'
+        }
+      }
+    })
+    
+    return inscriptions.map(inscription => ({
+      id: inscription.etudiant.id,
+      inscriptionId: inscription.id,
+      matricule: inscription.etudiant.matricule,
+      nom: inscription.etudiant.nom,
+      prenom: inscription.etudiant.prenom,
+      email: inscription.etudiant.email,
+      telephone: inscription.etudiant.telephone,
+      dateNaissance: inscription.etudiant.dateNaissance ? 
+        inscription.etudiant.dateNaissance.toISOString().split('T')[0] : null,
+      lieuNaissance: inscription.etudiant.lieuNaissance || null,
+      adresse: inscription.etudiant.adresse || null,
+      formation: inscription.formation.nom,
+      filiere: inscription.filiere.nom,
+      niveau: inscription.niveau.nom,
+      inscrit: inscription.statut === 'INSCRIT',
+      statut: inscription.statut,
+      dateInscription: inscription.dateInscription,
+      documents: {
+        acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copieActeNaissance } : null,
+        photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photoIdentite } : null,
+        quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true, url: inscription.quittance } : null,
+        pieceIdentite: inscription.copieReleve ? { nom: 'cni.pdf', uploaded: true, url: inscription.copieReleve } : null
+      }
+    }))
+  } catch (error) {
+    console.error('Erreur lors de la récupération des étudiants:', error)
+    throw error
+  }
+}
+
+// Récupérer les étudiants d'une classe avec leur statut d'inscription (gardé pour compatibilité)
 export const getEtudiantsParClasse = async (classeId, promotionId, typeInscription) => {
   try {
     const inscriptions = await prisma.inscription.findMany({
@@ -105,6 +160,7 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
     
     return inscriptions.map(inscription => ({
       id: inscription.etudiant.id,
+      inscriptionId: inscription.id,
       matricule: inscription.etudiant.matricule,
       nom: inscription.etudiant.nom,
       prenom: inscription.etudiant.prenom,
@@ -121,10 +177,10 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
       statut: inscription.statut,
       dateInscription: inscription.dateInscription,
       documents: {
-        acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true } : null,
-        photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true } : null,
-        quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true } : null,
-        pieceIdentite: inscription.photoIdentite ? { nom: 'cni.pdf', uploaded: true } : null
+        acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copieActeNaissance } : null,
+        photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photoIdentite } : null,
+        quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true, url: inscription.quittance } : null,
+        pieceIdentite: inscription.copieReleve ? { nom: 'cni.pdf', uploaded: true, url: inscription.copieReleve } : null
       }
     }))
   } catch (error) {

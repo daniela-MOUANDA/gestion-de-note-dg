@@ -42,7 +42,9 @@ export const creerAttestation = async (etudiantId, promotionId, anneeAcademique)
         etudiantId,
         promotionId,
         anneeAcademique,
-        lieu: 'Libreville'
+        lieu: 'Libreville',
+        archivee: true,
+        dateArchivage: new Date()
       },
       include: {
         etudiant: true,
@@ -51,6 +53,84 @@ export const creerAttestation = async (etudiantId, promotionId, anneeAcademique)
     })
   } catch (error) {
     console.error('Erreur lors de la création de l\'attestation:', error)
+    throw error
+  }
+}
+
+// Récupérer les étudiants inscrits par filière et niveau (sans classe)
+export const getEtudiantsInscritsParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId) => {
+  try {
+    const inscriptions = await prisma.inscription.findMany({
+      where: {
+        promotionId,
+        filiereId,
+        niveauId,
+        formationId,
+        statut: 'INSCRIT' // Seulement les étudiants inscrits
+      },
+      include: {
+        etudiant: true,
+        formation: true,
+        filiere: true,
+        niveau: true
+      },
+      orderBy: {
+        etudiant: {
+          nom: 'asc'
+        }
+      }
+    })
+    
+    const etudiantIds = inscriptions.map(inscription => inscription.etudiantId)
+    const attestations = etudiantIds.length
+      ? await prisma.attestation.findMany({
+          where: {
+            promotionId,
+            etudiantId: {
+              in: etudiantIds
+            }
+          },
+          select: {
+            id: true,
+            etudiantId: true,
+            promotionId: true,
+            numero: true,
+            archivee: true,
+            dateGeneration: true,
+            dateArchivage: true
+          }
+        })
+      : []
+
+    const attestationMap = new Map()
+    attestations.forEach(attestation => {
+      attestationMap.set(`${attestation.etudiantId}-${attestation.promotionId}`, attestation)
+    })
+    
+    return inscriptions.map(inscription => {
+      const key = `${inscription.etudiantId}-${inscription.promotionId}`
+      const attestation = attestationMap.get(key)
+      return {
+        id: inscription.etudiant.id,
+        inscriptionId: inscription.id,
+        nom: inscription.etudiant.nom,
+        prenom: inscription.etudiant.prenom,
+        matricule: inscription.etudiant.matricule,
+        formation: inscription.formation.nom,
+        filiere: inscription.filiere.nom,
+        niveau: inscription.niveau.nom,
+        niveauCode: inscription.niveau.code,
+        niveauOrdinal: inscription.niveau.ordinal,
+        estInscrit: inscription.statut === 'INSCRIT',
+        attestationExiste: !!attestation,
+        attestationId: attestation?.id || null,
+        attestationNumero: attestation?.numero || null,
+        attestationArchivee: attestation?.archivee || false,
+        attestationDate: attestation?.dateGeneration || null
+      }
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération des étudiants inscrits:', error)
     throw error
   }
 }
@@ -120,20 +200,32 @@ export const archiverAttestation = async (attestationId) => {
   }
 }
 
-// Récupérer les attestations archivées
-export const getAttestationsArchivees = async (promotionId, filiereId, niveauId, classeId) => {
+// Récupérer les attestations archivées par filière et niveau (sans classe)
+export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId) => {
   try {
+    console.log('Recherche des inscriptions avec les paramètres:', { promotionId, filiereId, niveauId, formationId });
+    
     const inscriptions = await prisma.inscription.findMany({
       where: {
         promotionId,
-        classeId,
+        filiereId,
+        niveauId,
+        formationId,
         statut: 'INSCRIT'
       },
       include: {
         etudiant: true,
-        formation: true
+        formation: true,
+        filiere: true,
+        niveau: true
       }
     })
+    
+    console.log('Inscriptions trouvées:', inscriptions.length);
+    if (inscriptions.length === 0) {
+      console.log('Aucune inscription trouvée avec ces critères');
+      return [];
+    }
     
     const attestations = await prisma.attestation.findMany({
       where: {
@@ -158,8 +250,13 @@ export const getAttestationsArchivees = async (promotionId, filiereId, niveauId,
         etudiant: `${attestation.etudiant.nom} ${attestation.etudiant.prenom}`,
         matricule: attestation.etudiant.matricule,
         formation: inscription?.formation.nom || '',
+        filiere: inscription?.filiere.nom || '',
+        niveau: inscription?.niveau.ordinal || '',
+        niveauFull: inscription?.niveau.nom || '',
         dateGeneration: attestation.dateGeneration.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
-        numero: attestation.numero
+        dateGenerationISO: attestation.dateGeneration.toISOString(),
+        numero: attestation.numero,
+        anneeAcademique: attestation.anneeAcademique
       }
     })
   } catch (error) {
@@ -167,4 +264,3 @@ export const getAttestationsArchivees = async (promotionId, filiereId, niveauId,
     throw error
   }
 }
-

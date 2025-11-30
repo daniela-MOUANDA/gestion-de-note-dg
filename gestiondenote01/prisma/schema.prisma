@@ -21,6 +21,7 @@ model Utilisateur {
   email         String   @unique
   username      String   @unique
   password      String   // Hashé avec bcrypt
+  token         String?  // Token JWT de session
   photo         String?  // URL de la photo de profil
   telephone     String?  // Numéro de téléphone
   adresse       String?  // Adresse
@@ -158,8 +159,33 @@ model Etudiant {
   bulletins       Bulletin[]
   diplomes        Diplome[]
   abandons        Abandon[]
+  parents         Parent[]
   
   @@map("etudiants")
+}
+
+model Parent {
+  id              String   @id @default(uuid())
+  etudiantId      String
+  type            TypeParent // PERE, MERE, TUTEUR
+  nom             String
+  prenom          String
+  telephone       String?
+  email           String?
+  profession      String?
+  adresse         String?
+  dateCreation    DateTime @default(now())
+  
+  // Relations
+  etudiant        Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  
+  @@map("parents")
+}
+
+enum TypeParent {
+  PERE
+  MERE
+  TUTEUR
 }
 
 model Inscription {

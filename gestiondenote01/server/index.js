@@ -14,11 +14,20 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// Configuration CORS
+const corsOptions = {
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}
+
 // Middleware
-app.use(cors())
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions)) // Pré-requête OPTIONS
 app.use(express.json())
 
-// Servir les fichiers statiques (photos de profil)
+// Servir les fichiers statiques (photos de profil et documents d'inscription)
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 // Routes publiques

@@ -23,10 +23,9 @@ export const login = async (email, password, matricule = null) => {
       throw new Error(data.error || 'Erreur lors de la connexion')
     }
 
-    // Stocker le token dans localStorage
+    // Stocker uniquement le token dans localStorage
     if (data.token) {
       localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
     }
 
     return data
@@ -36,29 +35,76 @@ export const login = async (email, password, matricule = null) => {
   }
 }
 
-// Vérifier le token
-export const verifyToken = async () => {
+// Vérifier le token (avec renouvellement automatique si l'utilisateur est actif)
+export const verifyToken = async (shouldRefresh = false) => {
   try {
     const token = localStorage.getItem('token')
     
     if (!token) {
-      return { valid: false }
+      return { valid: false, error: 'Token manquant' }
     }
 
-    const response = await fetch(`${API_URL}/verify`, {
+    // Vérifier si le token est proche de l'expiration (moins de 10 secondes)
+    try {
+      const tokenParts = token.split('.')
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]))
+        if (payload.exp) {
+          const currentTime = Math.floor(Date.now() / 1000)
+          const timeUntilExpiry = payload.exp - currentTime
+          
+          // Si le token expire dans moins de 10 secondes, demander un renouvellement
+          if (timeUntilExpiry < 10) {
+            shouldRefresh = true
+          }
+        }
+      }
+    } catch (e) {
+      // Ignorer les erreurs de décodage
+    }
+
+    const url = shouldRefresh ? `${API_URL}/verify?refresh=true` : `${API_URL}/verify`
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`
       }
     })
 
+    // Vérifier si la réponse est valide avant de parser
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Erreur serveur' }))
+      
+      // Ne supprimer le localStorage que si c'est vraiment une erreur d'authentification (401)
+      if (response.status === 401) {
+        // Vérifier si c'est une expiration ou une erreur de token
+        if (errorData.error && (errorData.error.includes('expiré') || errorData.error.includes('Token expiré'))) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          return { valid: false, error: errorData.error || 'Token expiré' }
+        }
+        // Pour les autres erreurs 401, ne pas supprimer immédiatement
+        return { valid: false, error: errorData.error || 'Token invalide' }
+      }
+      
+      // Pour les autres erreurs (500, timeout, etc.), ne pas supprimer le localStorage
+      return { valid: false, error: errorData.error || 'Erreur serveur' }
+    }
+
     const data = await response.json()
     
-    if (!response.ok || !data.valid) {
-      // Token invalide, supprimer du localStorage
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      return { valid: false }
+    if (!data.valid) {
+      // Token invalide mais ne pas supprimer si c'est une erreur réseau
+      if (data.error && data.error.includes('expiré')) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+      }
+      return { valid: false, error: data.error || 'Token invalide' }
+    }
+
+    // Si un nouveau token a été renvoyé, le mettre à jour
+    if (data.token) {
+      localStorage.setItem('token', data.token)
     }
 
     // Mettre à jour les informations utilisateur
@@ -68,10 +114,10 @@ export const verifyToken = async () => {
 
     return data
   } catch (error) {
-    console.error('Erreur lors de la vérification du token:', error)
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    return { valid: false }
+    console.error('Erreur réseau lors de la vérification du token:', error)
+    // En cas d'erreur réseau, ne pas supprimer le localStorage
+    // L'utilisateur pourra continuer à utiliser l'application
+    return { valid: false, error: 'Erreur réseau. Vérification impossible.' }
   }
 }
 
@@ -136,16 +182,6 @@ export const getToken = () => {
   return localStorage.getItem('token')
 }
 
-// Obtenir l'utilisateur depuis localStorage
-export const getUserFromStorage = () => {
-  const userStr = localStorage.getItem('user')
-  if (!userStr) return null
-  try {
-    return JSON.parse(userStr)
-  } catch {
-    return null
-  }
-}
 
 // Uploader la photo de profil
 export const uploadProfilePhoto = async (file) => {

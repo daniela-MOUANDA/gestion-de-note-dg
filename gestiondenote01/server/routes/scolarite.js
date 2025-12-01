@@ -1,10 +1,13 @@
 import express from 'express'
+import multer from 'multer'
+import prisma from '../../src/lib/prisma.js'
 import {
   getFormations,
   getFilieres,
   getNiveauxDisponibles,
   getClasses,
   getEtudiantsParClasse,
+  getEtudiantsParFiliereNiveau,
   validerInscription,
   finaliserInscription,
   getPromotions
@@ -12,9 +15,11 @@ import {
 import {
   creerAttestation,
   getAttestationsParClasse,
+  getEtudiantsInscritsParFiliereNiveau,
   archiverAttestation,
-  getAttestationsArchivees
+  getAttestationsArchiveesParFiliereNiveau
 } from '../../src/services/scolarite/attestationService.js'
+import { getSPDashboardStats } from '../../src/services/scolarite/dashboardService.js'
 import {
   getBulletinsParClasse,
   marquerBulletinRecupere
@@ -23,8 +28,38 @@ import {
   getDiplomesParClasse,
   marquerDiplomeRecupere
 } from '../../src/services/scolarite/diplomeService.js'
+import { parseExcelFile, importEtudiants } from '../../src/services/scolarite/importService.js'
+import { 
+  saveDocument, 
+  updateInscriptionDocument, 
+  updateEtudiantInfo, 
+  upsertParent, 
+  getParents,
+  getDossierEtudiant
+} from '../../src/services/scolarite/inscriptionDocumentsService.js'
+import { verifyToken } from '../../src/services/authService.js'
+import { authenticate } from '../middleware/auth.js'
 
 const router = express.Router()
+
+// Configuration de multer pour l'upload de fichiers Excel
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /xlsx|xls/
+    const extname = allowedTypes.test(file.originalname.toLowerCase().split('.').pop())
+    const mimetype = allowedTypes.test(file.mimetype) || 
+                    file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                    file.mimetype === 'application/vnd.ms-excel'
+    
+    if (mimetype && extname) {
+      return cb(null, true)
+    } else {
+      cb(new Error('Seuls les fichiers Excel (.xlsx, .xls) sont autorisés'))
+    }
+  }
+})
 
 // Routes Inscriptions
 router.get('/formations', async (req, res) => {
@@ -44,6 +79,16 @@ router.get('/filieres', async (req, res) => {
   } catch (error) {
     console.error('Erreur:', error)
     res.status(500).json({ error: error.message })
+  }
+})
+
+router.get('/dashboard/sp', authenticate, async (req, res) => {
+  try {
+    const stats = await getSPDashboardStats()
+    res.json(stats)
+  } catch (error) {
+    console.error('Erreur lors de la récupération du dashboard SP:', error)
+    res.status(500).json({ error: error.message || 'Erreur serveur' })
   }
 })
 
@@ -87,12 +132,21 @@ router.get('/promotions', async (req, res) => {
 
 router.get('/etudiants', async (req, res) => {
   try {
-    const { classeId, promotionId, typeInscription } = req.query
-    if (!classeId || !promotionId || !typeInscription) {
-      return res.status(400).json({ error: 'classeId, promotionId et typeInscription sont requis' })
+    const { classeId, filiereId, niveauId, promotionId, formationId, typeInscription } = req.query
+    
+    // Si filiereId et niveauId sont fournis, utiliser la nouvelle méthode
+    if (filiereId && niveauId && promotionId && formationId && typeInscription) {
+      const etudiants = await getEtudiantsParFiliereNiveau(filiereId, niveauId, promotionId, formationId, typeInscription)
+      return res.json(etudiants)
     }
-    const etudiants = await getEtudiantsParClasse(classeId, promotionId, typeInscription)
-    res.json(etudiants)
+    
+    // Sinon, utiliser l'ancienne méthode avec classeId (pour compatibilité)
+    if (classeId && promotionId && typeInscription) {
+      const etudiants = await getEtudiantsParClasse(classeId, promotionId, typeInscription)
+      return res.json(etudiants)
+    }
+    
+    return res.status(400).json({ error: 'Paramètres requis manquants' })
   } catch (error) {
     console.error('Erreur:', error)
     res.status(500).json({ error: error.message })
@@ -135,6 +189,21 @@ router.post('/attestations', async (req, res) => {
   }
 })
 
+// Route pour récupérer les étudiants inscrits par filière et niveau (pour SP)
+router.get('/etudiants-inscrits', authenticate, async (req, res) => {
+  try {
+    const { promotionId, filiereId, niveauId, formationId } = req.query
+    if (!promotionId || !filiereId || !niveauId || !formationId) {
+      return res.status(400).json({ error: 'Tous les paramètres sont requis' })
+    }
+    const etudiants = await getEtudiantsInscritsParFiliereNiveau(promotionId, filiereId, niveauId, formationId)
+    res.json(etudiants)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 router.get('/attestations', async (req, res) => {
   try {
     const { promotionId, filiereId, niveauId, classeId } = req.query
@@ -160,17 +229,41 @@ router.post('/attestations/:id/archiver', async (req, res) => {
   }
 })
 
-router.get('/attestations/archives', async (req, res) => {
+// Route pour récupérer les attestations archivées (avec filtre par classe)
+router.get('/attestations/archives', authenticate, async (req, res) => {
   try {
-    const { promotionId, filiereId, niveauId, classeId } = req.query
-    if (!promotionId || !filiereId || !niveauId || !classeId) {
-      return res.status(400).json({ error: 'Tous les paramètres sont requis' })
+    const { promotionId, filiereId, niveauId, formationId } = req.query
+    
+    if (!promotionId || !filiereId || !niveauId || !formationId) {
+      return res.status(400).json({ 
+        error: 'Tous les paramètres sont requis',
+        required: ['promotionId', 'filiereId', 'niveauId', 'formationId']
+      })
     }
-    const attestations = await getAttestationsArchivees(promotionId, filiereId, niveauId, classeId)
+    
+    console.log('Requête pour les attestations archivées avec les paramètres:', {
+      promotionId,
+      filiereId,
+      niveauId,
+      formationId
+    });
+    
+    const attestations = await getAttestationsArchiveesParFiliereNiveau(
+      promotionId, 
+      filiereId, 
+      niveauId, 
+      formationId
+    )
+    
+    console.log(`Nombre d'attestations trouvées: ${attestations.length}`);
+    
     res.json(attestations)
   } catch (error) {
-    console.error('Erreur:', error)
-    res.status(500).json({ error: error.message })
+    console.error('Erreur lors de la récupération des attestations archivées:', error)
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération des attestations archivées',
+      details: error.message 
+    })
   }
 })
 
@@ -225,6 +318,241 @@ router.post('/diplomes/:id/recuperer', async (req, res) => {
   } catch (error) {
     console.error('Erreur:', error)
     res.status(500).json({ error: error.message })
+  }
+})
+
+// Configuration de multer pour l'upload de documents d'inscription
+const uploadDocuments = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /pdf|jpeg|jpg|png|gif|webp/
+    const extname = allowedTypes.test(file.originalname.toLowerCase().split('.').pop())
+    const mimetype = allowedTypes.test(file.mimetype)
+    
+    if (mimetype && extname) {
+      return cb(null, true)
+    } else {
+      cb(new Error('Seuls les fichiers PDF et images sont autorisés'))
+    }
+  }
+})
+
+// Route pour importer les étudiants depuis un fichier Excel
+router.post('/import-etudiants', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      })
+    }
+
+    const { anneeAcademique } = req.body
+    if (!anneeAcademique) {
+      return res.status(400).json({
+        success: false,
+        error: 'L\'année académique est requise'
+      })
+    }
+
+    // Récupérer l'ID de l'agent connecté
+    const agentId = req.user?.id
+    if (!agentId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Utilisateur non authentifié'
+      })
+    }
+
+    // Parser le fichier Excel
+    const dataBySheet = await parseExcelFile(req.file.buffer)
+    
+    if (Object.keys(dataBySheet).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucune donnée valide trouvée dans le fichier Excel'
+      })
+    }
+
+    // Importer les étudiants
+    const result = await importEtudiants(dataBySheet, anneeAcademique, agentId)
+
+    res.json({
+      success: true,
+      message: `Import terminé: ${result.etudiantsCrees} étudiants créés, ${result.etudiantsExistant} déjà existants`,
+      ...result
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'import des étudiants:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de l\'import du fichier Excel'
+    })
+  }
+})
+
+// Route pour uploader un document d'inscription
+router.post('/inscriptions/:id/documents/:type', authenticate, uploadDocuments.single('document'), async (req, res) => {
+  try {
+    const { id, type } = req.params
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      })
+    }
+    
+    // Vérifier que l'inscription existe
+    const inscription = await prisma.inscription.findUnique({
+      where: { id },
+      include: { etudiant: true }
+    })
+    
+    if (!inscription) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inscription introuvable'
+      })
+    }
+    
+    // Sauvegarder le document
+    const documentUrl = await saveDocument(req.file, inscription.etudiantId, type)
+    
+    // Mettre à jour l'inscription
+    await updateInscriptionDocument(id, type, documentUrl)
+    
+    res.json({
+      success: true,
+      message: 'Document uploadé avec succès',
+      documentUrl
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'upload du document:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de l\'upload du document'
+    })
+  }
+})
+
+// Route pour mettre à jour les informations de l'étudiant
+router.put('/etudiants/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const { email, telephone, adresse, nationalite } = req.body
+    
+    const updated = await updateEtudiantInfo(id, {
+      email,
+      telephone,
+      adresse,
+      nationalite
+    })
+    
+    res.json({
+      success: true,
+      message: 'Informations mises à jour avec succès',
+      etudiant: updated
+    })
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la mise à jour'
+    })
+  }
+})
+
+// Route pour uploader la photo de profil de l'étudiant
+router.post('/etudiants/:id/photo', authenticate, uploadDocuments.single('photo'), async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier fourni'
+      })
+    }
+    
+    // Sauvegarder la photo
+    const photoUrl = await saveDocument(req.file, id, 'photo')
+    
+    // Mettre à jour l'étudiant
+    await updateEtudiantInfo(id, { photo: photoUrl })
+    
+    res.json({
+      success: true,
+      message: 'Photo uploadée avec succès',
+      photoUrl
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'upload de la photo:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de l\'upload de la photo'
+    })
+  }
+})
+
+// Route pour ajouter/mettre à jour un parent
+router.post('/etudiants/:id/parents', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const parentData = req.body
+    
+    const parent = await upsertParent(id, parentData)
+    
+    res.json({
+      success: true,
+      message: 'Parent enregistré avec succès',
+      parent
+    })
+  } catch (error) {
+    console.error('Erreur lors de l\'enregistrement du parent:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de l\'enregistrement du parent'
+    })
+  }
+})
+
+// Route pour récupérer les parents d'un étudiant
+router.get('/etudiants/:id/parents', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const parents = await getParents(id)
+    
+    res.json({
+      success: true,
+      parents
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération des parents:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la récupération des parents'
+    })
+  }
+})
+
+// Route pour récupérer le dossier complet d'un étudiant
+router.get('/dossiers/:etudiantId/:inscriptionId', authenticate, async (req, res) => {
+  try {
+    const { etudiantId, inscriptionId } = req.params
+    const dossier = await getDossierEtudiant(etudiantId, inscriptionId)
+    
+    res.json({
+      success: true,
+      dossier
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération du dossier:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la récupération du dossier'
+    })
   }
 })
 

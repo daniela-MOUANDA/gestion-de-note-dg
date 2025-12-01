@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'votre-secret-jwt-tres-securise-changez-moi-en-production'
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h'
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h' // 8 heures de validité
 
 // Authentifier un utilisateur
 export const authenticateUser = async (email, password) => {
@@ -38,11 +38,6 @@ export const authenticateUser = async (email, password) => {
       }
     }
 
-    // Mettre à jour la dernière connexion
-    await prisma.utilisateur.update({
-      where: { id: utilisateur.id },
-      data: { derniereConnexion: new Date() }
-    })
 
     // Créer un token JWT
     const token = jwt.sign(
@@ -55,6 +50,15 @@ export const authenticateUser = async (email, password) => {
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     )
+
+    // Stocker le token dans la base de données pour cet utilisateur
+    await prisma.utilisateur.update({
+      where: { id: utilisateur.id },
+      data: { 
+        token: token,
+        derniereConnexion: new Date()
+      }
+    })
 
     // Enregistrer l'action dans l'audit
     await prisma.actionAudit.create({
@@ -97,13 +101,96 @@ export const authenticateUser = async (email, password) => {
   }
 }
 
-// Vérifier un token JWT
-export const verifyToken = async (token) => {
+// Renouveler le token d'un utilisateur (appelé lors d'actions)
+export const refreshUserToken = async (userId) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET)
+    const utilisateur = await prisma.utilisateur.findUnique({
+      where: { id: userId }
+    })
+
+    if (!utilisateur || !utilisateur.actif) {
+      return {
+        success: false,
+        error: 'Utilisateur introuvable ou compte désactivé'
+      }
+    }
+
+    // Créer un nouveau token
+    const newToken = jwt.sign(
+      {
+        id: utilisateur.id,
+        email: utilisateur.email,
+        role: utilisateur.role,
+        username: utilisateur.username
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    )
+
+    // Mettre à jour le token dans la base de données
+    await prisma.utilisateur.update({
+      where: { id: userId },
+      data: { token: newToken }
+    })
+
+    return {
+      success: true,
+      token: newToken,
+      user: {
+        id: utilisateur.id,
+        nom: utilisateur.nom,
+        prenom: utilisateur.prenom,
+        email: utilisateur.email,
+        username: utilisateur.username,
+        role: utilisateur.role,
+        actif: utilisateur.actif,
+        photo: utilisateur.photo || null,
+        telephone: utilisateur.telephone || null,
+        adresse: utilisateur.adresse || null,
+        dateCreation: utilisateur.dateCreation,
+        derniereConnexion: utilisateur.derniereConnexion || null
+      }
+    }
+  } catch (error) {
+    console.error('Erreur lors du renouvellement du token:', error)
+    return {
+      success: false,
+      error: 'Erreur lors du renouvellement du token'
+    }
+  }
+}
+
+// Vérifier un token JWT (avec renouvellement automatique si l'utilisateur est actif)
+export const verifyToken = async (token, shouldRefresh = false) => {
+  try {
+    let decoded
+    try {
+      decoded = jwt.verify(token, JWT_SECRET)
+    } catch (verifyError) {
+      // Si le token est expiré mais qu'on doit le renouveler (utilisateur actif)
+      if (verifyError.name === 'TokenExpiredError' && shouldRefresh) {
+        // Décoder sans vérifier l'expiration pour récupérer l'ID
+        decoded = jwt.decode(token)
+        if (!decoded || !decoded.id) {
+          return {
+            valid: false,
+            error: 'Token invalide'
+          }
+        }
+        // Renouveler le token
+        const refreshResult = await refreshUserToken(decoded.id)
+        if (refreshResult.success) {
+          return {
+            valid: true,
+            user: refreshResult.user,
+            newToken: refreshResult.token
+          }
+        }
+      }
+      throw verifyError
+    }
     
     // Vérifier que l'utilisateur existe toujours et est actif
-    // Note: Si photo, telephone, adresse ne sont pas encore dans la DB, on les récupère quand même
     const utilisateur = await prisma.utilisateur.findUnique({
       where: { id: decoded.id }
     })
@@ -114,8 +201,24 @@ export const verifyToken = async (token) => {
         error: 'Utilisateur introuvable'
       }
     }
+
+    // Vérifier que le token correspond à celui stocké dans la base de données
+    if (!utilisateur.token) {
+      return {
+        valid: false,
+        error: 'Session expirée. Veuillez vous reconnecter.'
+      }
+    }
     
-    // Extraire uniquement les champs nécessaires (en gérant les champs optionnels qui pourraient ne pas exister)
+    // Comparer les tokens de manière sécurisée
+    if (utilisateur.token !== token) {
+      return {
+        valid: false,
+        error: 'Token invalide. Une autre session est active. Veuillez vous reconnecter.'
+      }
+    }
+    
+    // Extraire uniquement les champs nécessaires
     const userData = {
       id: utilisateur.id,
       nom: utilisateur.nom,
@@ -131,10 +234,10 @@ export const verifyToken = async (token) => {
       derniereConnexion: utilisateur.derniereConnexion || null
     }
 
-    if (!utilisateur || !utilisateur.actif) {
+    if (!utilisateur.actif) {
       return {
         valid: false,
-        error: 'Utilisateur introuvable ou compte désactivé'
+        error: 'Compte désactivé'
       }
     }
 
@@ -163,9 +266,16 @@ export const verifyToken = async (token) => {
   }
 }
 
-// Déconnexion (enregistrer dans l'audit)
+// Déconnexion (enregistrer dans l'audit et supprimer le token)
 export const logoutUser = async (userId) => {
   try {
+    // Supprimer le token de la base de données
+    await prisma.utilisateur.update({
+      where: { id: userId },
+      data: { token: null }
+    })
+
+    // Enregistrer l'action dans l'audit
     await prisma.actionAudit.create({
       data: {
         utilisateurId: userId,

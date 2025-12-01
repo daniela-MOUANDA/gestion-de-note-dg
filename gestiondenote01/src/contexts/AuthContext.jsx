@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { login as apiLogin, logout as apiLogout, verifyToken, getCurrentUser, getUserFromStorage } from '../api/auth.js'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { login as apiLogin, logout as apiLogout, verifyToken } from '../api/auth.js'
 
 const AuthContext = createContext(null)
 
@@ -16,60 +16,46 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  // Vérifier l'authentification au chargement
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token')
+    setUser(null)
+    setIsAuthenticated(false)
+    // Optionnel: rediriger vers la page de connexion
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login'
+    }
+  }, [])
+
+  // Vérifier l'authentification au chargement de l'application
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Vérifier d'abord dans le localStorage
-        const storedUser = getUserFromStorage()
-        const token = localStorage.getItem('token')
-        
-        if (storedUser && token) {
-          // Charger d'abord les données du localStorage pour un affichage immédiat
-          setUser(storedUser)
-          setIsAuthenticated(true)
-          
-          // Ensuite, vérifier que le token est toujours valide
-          try {
-            const result = await verifyToken()
-            
-            if (result.valid && result.user) {
-              // Mettre à jour avec les données fraîches du serveur
-              setUser(result.user)
-              setIsAuthenticated(true)
-              // S'assurer que le token est toujours dans localStorage
-              if (!localStorage.getItem('token')) {
-                console.warn('Token manquant après vérification, mais utilisateur valide')
-              }
-            } else {
-              // Token invalide mais on garde les données pour l'affichage
-              // L'utilisateur devra se reconnecter pour les actions nécessitant un token valide
-              console.warn('Token invalide, mais données utilisateur conservées pour affichage')
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token')
+      if (token) {
+        try {
+          const result = await verifyToken()
+          if (result.valid && result.user) {
+            setUser(result.user)
+            setIsAuthenticated(true)
+            // Si un nouveau token est renvoyé, le mettre à jour
+            if (result.token) {
+              localStorage.setItem('token', result.token)
             }
-          } catch (verifyError) {
-            console.warn('Erreur lors de la vérification du token, utilisation des données du localStorage:', verifyError)
-            // On garde les données du localStorage même si la vérification échoue
+          } else {
+            console.warn('La vérification du token a échoué, déconnexion.', result.error)
+            handleLogout()
           }
-        } else if (storedUser && !token) {
-          // Utilisateur présent mais pas de token - problème de session
-          console.warn('Utilisateur présent dans localStorage mais token manquant')
-          setUser(storedUser)
-          setIsAuthenticated(false) // Pas authentifié car pas de token
-        } else {
-          setUser(null)
-          setIsAuthenticated(false)
+        } catch (error) {
+          console.error('Erreur lors de la vérification du token:', error)
+          handleLogout()
         }
-      } catch (error) {
-        console.error('Erreur lors de la vérification de l\'authentification:', error)
-        setUser(null)
+      } else {
         setIsAuthenticated(false)
-      } finally {
-        setLoading(false)
       }
+      setLoading(false)
     }
 
-    checkAuth()
-  }, [])
+    checkAuthStatus()
+  }, [handleLogout])
 
   // Fonction de connexion
   const login = async (email, password, matricule = null) => {
@@ -77,28 +63,8 @@ export const AuthProvider = ({ children }) => {
       setLoading(true)
       const result = await apiLogin(email, password, matricule)
       
-      if (result.success && result.user) {
-        // Vérifier que le token a bien été stocké
-        const token = localStorage.getItem('token')
-        if (!token) {
-          console.error('Token non stocké après connexion')
-          // Essayer de récupérer le token depuis la réponse
-          if (result.token) {
-            localStorage.setItem('token', result.token)
-            localStorage.setItem('user', JSON.stringify(result.user))
-            console.log('Token récupéré depuis la réponse et stocké')
-          } else {
-            return { success: false, error: 'Erreur lors du stockage de la session' }
-          }
-        }
-        
-        // Double vérification
-        const tokenAfterStorage = localStorage.getItem('token')
-        if (!tokenAfterStorage) {
-          console.error('Token toujours absent après tentative de stockage')
-          return { success: false, error: 'Impossible de stocker la session. Vérifiez les paramètres du navigateur.' }
-        }
-        
+      if (result.success && result.user && result.token) {
+        localStorage.setItem('token', result.token)
         setUser(result.user)
         setIsAuthenticated(true)
         return { success: true, user: result.user }
@@ -117,17 +83,11 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       setLoading(true)
-      await apiLogout()
-      setUser(null)
-      setIsAuthenticated(false)
-      return { success: true }
+      await apiLogout() // Appelle le backend pour invalider le token côté serveur
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error)
-      // Nettoyer quand même l'état local
-      setUser(null)
-      setIsAuthenticated(false)
-      return { success: true }
+      console.error('Erreur lors de la déconnexion côté serveur:', error)
     } finally {
+      handleLogout() // Nettoie toujours le client
       setLoading(false)
     }
   }

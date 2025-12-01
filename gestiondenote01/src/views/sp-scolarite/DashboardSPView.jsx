@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faFileAlt, faArchive, faBell, faCheckCircle, faUsers, faChartLine, faEnvelope
@@ -8,39 +8,61 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import SidebarSP from '../../components/common/SidebarSP'
 import HeaderSP from '../../components/common/HeaderSP'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import { getSPDashboardStats } from '../../api/scolarite'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const DashboardSPView = () => {
   const { user } = useAuth()
+  const { error: alertError } = useAlert()
   const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Secrétaire Particulière'
   // Données statistiques
-  const [stats] = useState({
-    attestationsGenerees: 145,
-    attestationsDisponibles: 23,
-    attestationsCeMois: 18,
-    enAttente: 12
+  const [stats, setStats] = useState({
+    attestationsGenerees: 0,
+    attestationsDisponibles: 0,
+    attestationsCeMois: 0,
+    enAttente: 0
   })
 
   // Alertes étudiants prêts
-  const [alertes] = useState([
-    { id: 1, nom: 'ANDEME MBO Lidvige Johane', filiere: 'GI', niveau: 'L3', classe: 'GI-3A', date: '2024-11-25' },
-    { id: 2, nom: 'MBADINGA Paul', filiere: 'RT', niveau: 'L2', classe: 'RT-2B', date: '2024-11-24' },
-    { id: 3, nom: 'OBIANG Sophie', filiere: 'MTIC', niveau: 'L1', classe: 'MTIC-1A', date: '2024-11-23' }
-  ])
+  const [alertes, setAlertes] = useState([])
 
   // Données pour les graphiques
-  const dataAttestations = [
-    { mois: 'Août', generes: 12 },
-    { mois: 'Sept', generes: 25 },
-    { mois: 'Oct', generes: 38 },
-    { mois: 'Nov', generes: 18 }
-  ]
+  const [dataAttestations, setDataAttestations] = useState([])
 
-  const dataFileres = [
-    { name: 'GI', value: 45 },
-    { name: 'RT', value: 38 },
-    { name: 'MTIC', value: 35 },
-    { name: 'AV', value: 27 }
-  ]
+  const [dataFileres, setDataFileres] = useState([])
+
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        setLoading(true)
+        const response = await getSPDashboardStats()
+        setStats(response?.stats || {
+          attestationsGenerees: 0,
+          attestationsDisponibles: 0,
+          attestationsCeMois: 0,
+          enAttente: 0
+        })
+        setDataAttestations(response?.monthly || [])
+        setDataFileres(
+          (response?.byFiliere || []).map((item) => ({
+            name: item.code || item.nom,
+            value: item.value
+          }))
+        )
+        setAlertes(response?.alerts || [])
+      } catch (error) {
+        console.error('Erreur lors du chargement du tableau de bord SP:', error)
+        alertError(error.message || 'Erreur lors du chargement des statistiques')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboard()
+  }, [])
 
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
 
@@ -60,6 +82,12 @@ const DashboardSPView = () => {
             </p>
           </div>
 
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-md p-10 flex items-center justify-center">
+              <LoadingSpinner size="lg" text="Chargement des statistiques..." />
+            </div>
+          ) : (
+          <>
           {/* Cartes statistiques */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
             <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm px-5 py-4 hover:shadow-md transition-shadow">
@@ -166,28 +194,32 @@ const DashboardSPView = () => {
                   {alertes.length} étudiants
                 </span>
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {alertes.map((alerte) => (
-                  <div key={alerte.id} className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                        <FontAwesomeIcon icon={faUsers} className="text-amber-600" />
+              {alertes.length === 0 ? (
+                <p className="text-sm text-slate-500">Aucune attestation disponible à générer pour le moment.</p>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {alertes.map((alerte) => (
+                    <div key={alerte.id} className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                          <FontAwesomeIcon icon={faUsers} className="text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800">{alerte.nom}</p>
+                          <p className="text-sm text-slate-600">{alerte.filiere} - {alerte.classe}</p>
+                          <p className="text-xs text-slate-500">Inscription finalisée le {alerte.date}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-slate-800">{alerte.nom}</p>
-                        <p className="text-sm text-slate-600">{alerte.filiere} - {alerte.classe}</p>
-                        <p className="text-xs text-slate-500">Inscription finalisée le {alerte.date}</p>
-                      </div>
+                      <Link
+                        to="/sp-scolarite/attestations"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold"
+                      >
+                        Générer
+                      </Link>
                     </div>
-                    <Link
-                      to="/sp-scolarite/attestations"
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold"
-                    >
-                      Générer
-                    </Link>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Actions rapides */}
@@ -229,6 +261,8 @@ const DashboardSPView = () => {
               </div>
             </div>
           </div>
+          </>
+          )}
         </main>
       </div>
     </div>

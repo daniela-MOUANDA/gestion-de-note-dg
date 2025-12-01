@@ -15,11 +15,18 @@ import {
   getFormations,
   getFilieres,
   getNiveauxDisponibles,
-  getClasses,
-  getEtudiantsParClasse,
+  getEtudiantsParFiliereNiveau,
   getPromotions,
-  finaliserInscription
+  finaliserInscription,
+  uploadDocumentInscription,
+  updateEtudiantInfo,
+  uploadPhotoEtudiant,
+  upsertParent,
+  getParents,
+  getDossierEtudiant
 } from '../../api/scolarite'
+import { useAuth } from '../../contexts/AuthContext'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const GererInscriptionsView = () => {
   const location = useLocation()
@@ -27,24 +34,36 @@ const GererInscriptionsView = () => {
   const Sidebar = isChefView ? SidebarChef : SidebarScolarite
   const Header = isChefView ? HeaderChef : HeaderScolarite
   
-  const { showAlert } = useAlert()
+  const { showAlert, success, error: alertError } = useAlert()
+  const { user } = useAuth()
   const [typeInscription, setTypeInscription] = useState('inscription')
   const [selectedPromotion, setSelectedPromotion] = useState('')
   const [selectedFormation, setSelectedFormation] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
-  const [selectedClasse, setSelectedClasse] = useState('')
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
+  const [selectedInscription, setSelectedInscription] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   
   // États pour les données de la base
   const [formations, setFormations] = useState([])
   const [filieres, setFilieres] = useState([])
   const [niveaux, setNiveaux] = useState([])
-  const [classes, setClasses] = useState([])
   const [promotions, setPromotions] = useState([])
   const [etudiants, setEtudiants] = useState([])
   const [loading, setLoading] = useState(false)
+  
+  // États pour l'édition
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [etudiantInfo, setEtudiantInfo] = useState({})
+  const [parents, setParents] = useState([])
+  const [parentData, setParentData] = useState({
+    PERE: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' },
+    MERE: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' },
+    TUTEUR: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' }
+  })
+  const [uploading, setUploading] = useState({})
+  const [dossierComplet, setDossierComplet] = useState(null)
   
   // Charger les formations et filières au montage
   useEffect(() => {
@@ -91,38 +110,26 @@ const GererInscriptionsView = () => {
     }
   }, [selectedFormation, selectedFiliere])
   
-  // Charger les classes quand filière et niveau sont sélectionnés
+  // Charger les étudiants quand filière, niveau, formation et promotion sont sélectionnés
   useEffect(() => {
-    if (selectedFiliere && selectedNiveau) {
-      const loadClasses = async () => {
-        try {
-          const classesData = await getClasses(selectedFiliere, selectedNiveau)
-          setClasses(classesData)
-        } catch (error) {
-          console.error('Erreur lors du chargement des classes:', error)
-        }
-      }
-      loadClasses()
-    } else {
-      setClasses([])
-    }
-  }, [selectedFiliere, selectedNiveau])
-  
-  // Charger les étudiants quand classe est sélectionnée
-  useEffect(() => {
-    if (selectedClasse && selectedPromotion) {
+    if (selectedFiliere && selectedNiveau && selectedFormation && selectedPromotion) {
       const loadEtudiants = async () => {
         try {
           setLoading(true)
-          const etudiantsData = await getEtudiantsParClasse(
-            selectedClasse,
+          console.log('Chargement des étudiants pour:', { selectedFiliere, selectedNiveau, selectedFormation, selectedPromotion, typeInscription })
+          const etudiantsData = await getEtudiantsParFiliereNiveau(
+            selectedFiliere,
+            selectedNiveau,
             selectedPromotion,
+            selectedFormation,
             typeInscription
           )
-          setEtudiants(etudiantsData)
+          console.log('Étudiants récupérés:', etudiantsData.length, etudiantsData)
+          setEtudiants(etudiantsData || [])
         } catch (error) {
           console.error('Erreur lors du chargement des étudiants:', error)
-          showAlert('Erreur lors du chargement des étudiants', 'error')
+          alertError(error.message || 'Erreur lors du chargement des étudiants')
+          setEtudiants([])
         } finally {
           setLoading(false)
         }
@@ -131,40 +138,249 @@ const GererInscriptionsView = () => {
     } else {
       setEtudiants([])
     }
-  }, [selectedClasse, selectedPromotion, typeInscription])
+  }, [selectedFiliere, selectedNiveau, selectedFormation, selectedPromotion, typeInscription])
 
   const handleBack = () => {
-    if (selectedEtudiant) setSelectedEtudiant(null)
+    if (selectedEtudiant) {
+      setSelectedEtudiant(null)
+      setSelectedInscription(null)
+      setDossierComplet(null)
+    }
     else if (selectedNiveau) setSelectedNiveau('')
     else if (selectedFiliere) setSelectedFiliere('')
     else if (selectedFormation) setSelectedFormation('')
   }
 
+  // Charger le dossier complet quand un étudiant est sélectionné
+  useEffect(() => {
+    const loadDossier = async () => {
+      if (selectedEtudiant && selectedEtudiant.inscriptionId) {
+        try {
+          setLoading(true)
+          
+          // Vérifier que le token existe avant de faire l'appel
+          const token = localStorage.getItem('token')
+          if (!token) {
+            alertError('Session expirée. Veuillez vous reconnecter.')
+            window.location.href = '/login'
+            return
+          }
+          
+          const response = await getDossierEtudiant(selectedEtudiant.id, selectedEtudiant.inscriptionId)
+          // La réponse de l'API est { success: true, dossier: {...} }
+          const dossier = response.dossier || response
+          setDossierComplet(dossier)
+          setSelectedInscription(dossier.inscription ? { id: dossier.inscription.id } : { id: selectedEtudiant.inscriptionId })
+          
+          // Charger les parents
+          const parentsData = await getParents(selectedEtudiant.id)
+          const parentsList = Array.isArray(parentsData) ? parentsData : (parentsData.parents || [])
+          setParents(parentsList)
+          
+          // Initialiser les données des parents
+          const newParentData = {
+            PERE: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' },
+            MERE: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' },
+            TUTEUR: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' }
+          }
+          parentsList.forEach(parent => {
+            if (newParentData[parent.type]) {
+              newParentData[parent.type] = {
+                nom: parent.nom || '',
+                prenom: parent.prenom || '',
+                telephone: parent.telephone || '',
+                email: parent.email || '',
+                profession: parent.profession || '',
+                adresse: parent.adresse || ''
+              }
+            }
+          })
+          setParentData(newParentData)
+          
+          // Initialiser les informations de l'étudiant
+          setEtudiantInfo({
+            email: dossier.etudiant?.email || '',
+            telephone: dossier.etudiant?.telephone || '',
+            adresse: dossier.etudiant?.adresse || '',
+            nationalite: dossier.etudiant?.nationalite || ''
+          })
+        } catch (error) {
+          console.error('Erreur lors du chargement du dossier:', error)
+          // Ne pas afficher d'erreur si c'est une redirection de connexion
+          if (!error.message.includes('Session expirée') && !error.message.includes('reconnecter')) {
+            alertError(error.message || 'Erreur lors du chargement du dossier')
+          }
+        } finally {
+          setLoading(false)
+        }
+      }
+    }
+    loadDossier()
+  }, [selectedEtudiant])
+
   const allDocumentsPresent = (documents) => {
-    return documents.acteNaissance?.uploaded && documents.photo?.uploaded && 
-           documents.quittance?.uploaded && documents.pieceIdentite?.uploaded
+    if (!documents) return false
+    // Les documents peuvent être soit des URLs (string) soit des objets avec { uploaded: true, url: ... }
+    const hasActeNaissance = typeof documents.acteNaissance === 'string' ? !!documents.acteNaissance : documents.acteNaissance?.uploaded
+    const hasPhoto = typeof documents.photo === 'string' ? !!documents.photo : documents.photo?.uploaded
+    const hasQuittance = typeof documents.quittance === 'string' ? !!documents.quittance : documents.quittance?.uploaded
+    const hasPieceIdentite = typeof documents.pieceIdentite === 'string' ? !!documents.pieceIdentite : documents.pieceIdentite?.uploaded
+    const hasReleveBac = typeof documents.releveBac === 'string' ? !!documents.releveBac : documents.releveBac?.uploaded
+    const hasAttestationReussiteBac = typeof documents.attestationReussiteBac === 'string' ? !!documents.attestationReussiteBac : documents.attestationReussiteBac?.uploaded
+    return hasActeNaissance && hasPhoto && hasQuittance && hasPieceIdentite && hasReleveBac && hasAttestationReussiteBac
   }
 
-  const handleFileUpload = (documentType) => {
+  const handleFileUpload = async (documentType) => {
+    if (!selectedInscription) {
+      alertError('Aucune inscription sélectionnée')
+      return
+    }
+    
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = documentType === 'photo' ? 'image/*' : '.pdf'
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = e.target.files[0]
-      if (file) showAlert(`Document ${documentType} uploadé avec succès!`, 'success')
+      if (!file) return
+      
+      try {
+        setUploading({ ...uploading, [documentType]: true })
+        const result = await uploadDocumentInscription(selectedInscription.id, documentType, file)
+        success(`Document ${documentType} uploadé avec succès!`)
+        
+        // Recharger le dossier
+        const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
+        setDossierComplet(dossier.dossier)
+        
+        // Mettre à jour la liste des étudiants
+        const etudiantsData = await getEtudiantsParFiliereNiveau(
+          selectedFiliere,
+          selectedNiveau,
+          selectedPromotion,
+          selectedFormation,
+          typeInscription
+        )
+        setEtudiants(etudiantsData)
+      } catch (error) {
+        console.error('Erreur lors de l\'upload:', error)
+        alertError(error.message || 'Erreur lors de l\'upload du document')
+      } finally {
+        setUploading({ ...uploading, [documentType]: false })
+      }
     }
     input.click()
   }
 
-  const handleFinaliserInscription = () => {
-    if (selectedEtudiant && allDocumentsPresent(selectedEtudiant.documents)) {
+  const handleUpdateEtudiantInfo = async () => {
+    // Vérifier que le token existe
+    const token = localStorage.getItem('token')
+    if (!token) {
+      alertError('Session expirée. Veuillez vous reconnecter.')
+      window.location.href = '/login'
+      return
+    }
+    
+    try {
+      setLoading(true)
+      await updateEtudiantInfo(selectedEtudiant.id, etudiantInfo)
+      success('Informations mises à jour avec succès!')
+      setEditingInfo(false)
+      
+      // Recharger le dossier
+      const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
+      setDossierComplet(dossier.dossier || dossier)
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour:', error)
+      // Ne pas afficher d'erreur si c'est une redirection de connexion
+      if (!error.message.includes('Session expirée') && !error.message.includes('reconnecter')) {
+        alertError(error.message || 'Erreur lors de la mise à jour')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUploadPhoto = async (file) => {
+    // Vérifier que le token existe
+    const token = localStorage.getItem('token')
+    if (!token) {
+      alertError('Session expirée. Veuillez vous reconnecter.')
+      window.location.href = '/login'
+      return
+    }
+    
+    try {
+      setUploading({ ...uploading, photoProfil: true })
+      const result = await uploadPhotoEtudiant(selectedEtudiant.id, file)
+      success('Photo de profil uploadée avec succès!')
+      
+      // Recharger le dossier
+      const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
+      setDossierComplet(dossier.dossier || dossier)
+    } catch (error) {
+      console.error('Erreur lors de l\'upload de la photo:', error)
+      // Ne pas afficher d'erreur si c'est une redirection de connexion
+      if (!error.message.includes('Session expirée') && !error.message.includes('reconnecter')) {
+        alertError(error.message || 'Erreur lors de l\'upload de la photo')
+      }
+    } finally {
+      setUploading({ ...uploading, photoProfil: false })
+    }
+  }
+
+  const handleSaveParent = async (parentData) => {
+    try {
+      setLoading(true)
+      await upsertParent(selectedEtudiant.id, parentData)
+      success('Parent enregistré avec succès!')
+      
+      // Recharger les parents
+      const parentsData = await getParents(selectedEtudiant.id)
+      setParents(parentsData.parents || [])
+    } catch (error) {
+      console.error('Erreur lors de l\'enregistrement du parent:', error)
+      alertError(error.message || 'Erreur lors de l\'enregistrement du parent')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFinaliserInscription = async () => {
+    if (!selectedInscription) {
+      alertError('Aucune inscription sélectionnée')
+      return
+    }
+    
+    if (!dossierComplet || !dossierComplet.inscription || !allDocumentsPresent(dossierComplet.inscription.documents || {})) {
+      alertError('Veuillez uploader tous les documents requis')
+      return
+    }
+    
+    try {
+      setLoading(true)
+      await finaliserInscription(selectedInscription.id, user.id)
       const message = typeInscription === 'inscription' 
         ? `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`
         : `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été réinscrit avec succès!`
-      showAlert(message, 'success')
+      success(message)
+      
+      // Recharger la liste
+      const etudiantsData = await getEtudiantsParFiliereNiveau(
+        selectedFiliere,
+        selectedNiveau,
+        selectedPromotion,
+        selectedFormation,
+        typeInscription
+      )
+      setEtudiants(etudiantsData)
       setSelectedEtudiant(null)
-    } else {
-      showAlert('Veuillez uploader tous les documents requis', 'error')
+      setSelectedInscription(null)
+      setDossierComplet(null)
+    } catch (error) {
+      console.error('Erreur lors de la finalisation:', error)
+      alertError(error.message || 'Erreur lors de la finalisation de l\'inscription')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -257,7 +473,7 @@ const GererInscriptionsView = () => {
                       <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200">
                         <FontAwesomeIcon icon={faGraduationCap} className="text-3xl text-blue-600" />
                       </div>
-                      <div className="text-xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{filiere.id}</div>
+                      <div className="text-xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{filiere.code || filiere.nom}</div>
                       <div className="text-sm text-slate-600">{filiere.nom}</div>
                     </div>
                   </button>
@@ -283,7 +499,7 @@ const GererInscriptionsView = () => {
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
               </button>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-                {typeInscription === 'inscription' ? 'Inscriptions' : 'Réinscriptions'} - {selectedFiliere}
+                {typeInscription === 'inscription' ? 'Inscriptions' : 'Réinscriptions'} - {filieres.find(f => f.id === selectedFiliere)?.nom || filieres.find(f => f.id === selectedFiliere)?.code}
               </h1>
               <p className="text-sm sm:text-base text-slate-600">Sélectionnez le niveau d'études</p>
             </div>
@@ -294,14 +510,13 @@ const GererInscriptionsView = () => {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
                 {niveaux.map((niveau) => {
-                  const niveauObj = niveaux.find(n => n.code === niveau)
                   return (
-                    <button key={niveau.code || niveau} onClick={() => setSelectedNiveau(niveau.id || niveau)}
+                    <button key={niveau.id || niveau.code} onClick={() => setSelectedNiveau(niveau.id)}
                       className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group">
                       <div className="text-center">
-                        <div className="text-3xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{niveau.code || niveau}</div>
+                        <div className="text-3xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{niveau.code}</div>
                         <div className="text-sm text-slate-600 mb-2">
-                          {niveauObj?.nom || (niveau === 'L1' ? 'Première année' : niveau === 'L2' ? 'Deuxième année' : 'Troisième année')}
+                          {niveau.nom || (niveau.code === 'L1' ? 'Première année' : niveau.code === 'L2' ? 'Deuxième année' : 'Troisième année')}
                         </div>
                       </div>
                     </button>
@@ -317,7 +532,28 @@ const GererInscriptionsView = () => {
 
   // Vue 3: Profil détaillé avec documents
   if (selectedEtudiant) {
-    const documentsComplete = allDocumentsPresent(selectedEtudiant.documents)
+    if (loading && !dossierComplet) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+          <Sidebar />
+          <div className="flex flex-col lg:ml-64 min-h-screen">
+            <Header />
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0 flex items-center justify-center">
+              <LoadingSpinner size="lg" text="Chargement du dossier..." />
+            </main>
+          </div>
+        </div>
+      )
+    }
+    
+    const dossier = dossierComplet || {
+      etudiant: selectedEtudiant,
+      inscription: {
+        documents: selectedEtudiant.documents || {}
+      }
+    }
+    const documentsComplete = dossier.inscription && allDocumentsPresent(dossier.inscription.documents || {})
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
         <Sidebar />
@@ -334,7 +570,7 @@ const GererInscriptionsView = () => {
                     Dossier d'{typeInscription === 'inscription' ? 'inscription' : 'réinscription'}
                   </h1>
                   <p className="text-sm sm:text-base text-slate-600">
-                    {typeInscription === 'inscription' ? 'Inscription' : 'Réinscription'} • {selectedFiliere} • {selectedNiveau}
+                    {typeInscription === 'inscription' ? 'Inscription' : 'Réinscription'} • {filieres.find(f => f.id === selectedFiliere)?.nom || 'Filière'} • {niveaux.find(n => n.id === selectedNiveau)?.nom || niveaux.find(n => n.id === selectedNiveau)?.code || 'Niveau'}
                   </p>
                 </div>
                 <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${
@@ -348,49 +584,205 @@ const GererInscriptionsView = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
                 <div className="text-center mb-4">
-                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold">
-                    {selectedEtudiant.prenom[0]}{selectedEtudiant.nom[0]}
+                  <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
+                    {dossier.etudiant.photo ? (
+                      <img 
+                        src={dossier.etudiant.photo.startsWith('http') ? dossier.etudiant.photo : `http://localhost:3000${dossier.etudiant.photo}`}
+                        alt={`${dossier.etudiant.prenom} ${dossier.etudiant.nom}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{dossier.etudiant.prenom[0]}{dossier.etudiant.nom[0]}</span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0]
+                        if (file) handleUploadPhoto(file)
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      disabled={uploading.photoProfil}
+                    />
+                    {uploading.photoProfil && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <LoadingSpinner size="sm" />
+                      </div>
+                    )}
                   </div>
-                  <h2 className="text-xl font-bold text-slate-800">{selectedEtudiant.prenom} {selectedEtudiant.nom}</h2>
-                  <p className="text-slate-600 text-sm">{selectedEtudiant.matricule}</p>
+                  <h2 className="text-xl font-bold text-slate-800">{dossier.etudiant.prenom} {dossier.etudiant.nom}</h2>
+                  <p className="text-slate-600 text-sm">{dossier.etudiant.matricule}</p>
                   <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium mt-2">
-                    {selectedEtudiant.filiere} - {selectedEtudiant.niveau}
+                    {dossier.inscription?.filiere?.nom || selectedEtudiant.filiere} - {dossier.inscription?.niveau?.nom || selectedEtudiant.niveau}
                   </span>
                 </div>
               </div>
 
               <div className="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border border-slate-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-4">Informations personnelles</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-slate-800">Informations personnelles</h3>
+                  <button
+                    onClick={() => {
+                      if (editingInfo) {
+                        handleUpdateEtudiantInfo()
+                      } else {
+                        setEditingInfo(true)
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    disabled={loading}
+                  >
+                    {editingInfo ? 'Enregistrer' : 'Modifier'}
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-start gap-3">
-                    <FontAwesomeIcon icon={faEnvelope} className="text-blue-600 mt-1" />
-                    <div>
-                      <p className="text-xs text-slate-500">Email</p>
-                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.email}</p>
-                    </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Email</p>
+                    {editingInfo ? (
+                      <input
+                        type="email"
+                        value={etudiantInfo.email}
+                        onChange={(e) => setEtudiantInfo({ ...etudiantInfo, email: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{dossier.etudiant.email || 'Non renseigné'}</p>
+                    )}
                   </div>
-                  <div className="flex items-start gap-3">
-                    <FontAwesomeIcon icon={faPhone} className="text-green-600 mt-1" />
-                    <div>
-                      <p className="text-xs text-slate-500">Téléphone</p>
-                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.telephone}</p>
-                    </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Téléphone</p>
+                    {editingInfo ? (
+                      <input
+                        type="tel"
+                        value={etudiantInfo.telephone}
+                        onChange={(e) => setEtudiantInfo({ ...etudiantInfo, telephone: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{dossier.etudiant.telephone || 'Non renseigné'}</p>
+                    )}
                   </div>
-                  <div className="flex items-start gap-3">
-                    <FontAwesomeIcon icon={faCalendar} className="text-purple-600 mt-1" />
-                    <div>
-                      <p className="text-xs text-slate-500">Date de naissance</p>
-                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.dateNaissance}</p>
-                    </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Adresse</p>
+                    {editingInfo ? (
+                      <input
+                        type="text"
+                        value={etudiantInfo.adresse}
+                        onChange={(e) => setEtudiantInfo({ ...etudiantInfo, adresse: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{dossier.etudiant.adresse || 'Non renseigné'}</p>
+                    )}
                   </div>
-                  <div className="flex items-start gap-3">
-                    <FontAwesomeIcon icon={faMapMarkerAlt} className="text-red-600 mt-1" />
-                    <div>
-                      <p className="text-xs text-slate-500">Lieu de naissance</p>
-                      <p className="text-sm font-medium text-slate-800">{selectedEtudiant.lieuNaissance}</p>
-                    </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Nationalité</p>
+                    {editingInfo ? (
+                      <input
+                        type="text"
+                        value={etudiantInfo.nationalite}
+                        onChange={(e) => setEtudiantInfo({ ...etudiantInfo, nationalite: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{dossier.etudiant.nationalite || 'Non renseigné'}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Date de naissance</p>
+                    <p className="text-sm font-medium text-slate-800">
+                      {dossier.etudiant.dateNaissance ? new Date(dossier.etudiant.dateNaissance).toLocaleDateString('fr-FR') : 'Non renseigné'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Lieu de naissance</p>
+                    <p className="text-sm font-medium text-slate-800">{dossier.etudiant.lieuNaissance || 'Non renseigné'}</p>
                   </div>
                 </div>
+              </div>
+            </div>
+            
+            {/* Section Parents */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200 mb-6">
+              <h3 className="text-lg font-bold text-slate-800 mb-4">Informations sur les parents</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['PERE', 'MERE', 'TUTEUR'].map((type) => {
+                  const currentParentData = parentData[type] || { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' }
+                  
+                  const handleParentChange = (field, value) => {
+                    setParentData({
+                      ...parentData,
+                      [type]: {
+                        ...currentParentData,
+                        [field]: value
+                      }
+                    })
+                  }
+                  
+                  const handleParentBlur = () => {
+                    if (currentParentData.nom && currentParentData.prenom) {
+                      handleSaveParent({ ...currentParentData, type })
+                    }
+                  }
+                  
+                  return (
+                    <div key={type} className="border border-slate-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-slate-800 mb-3">
+                        {type === 'PERE' ? 'Père' : type === 'MERE' ? 'Mère' : 'Tuteur'}
+                      </h4>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Nom"
+                          value={currentParentData.nom}
+                          onChange={(e) => handleParentChange('nom', e.target.value)}
+                          onBlur={handleParentBlur}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Prénom"
+                          value={currentParentData.prenom}
+                          onChange={(e) => handleParentChange('prenom', e.target.value)}
+                          onBlur={handleParentBlur}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Téléphone"
+                          value={currentParentData.telephone}
+                          onChange={(e) => handleParentChange('telephone', e.target.value)}
+                          onBlur={handleParentBlur}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="email"
+                          placeholder="Email"
+                          value={currentParentData.email}
+                          onChange={(e) => handleParentChange('email', e.target.value)}
+                          onBlur={handleParentBlur}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Profession"
+                          value={currentParentData.profession}
+                          onChange={(e) => handleParentChange('profession', e.target.value)}
+                          onBlur={handleParentBlur}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Adresse"
+                          value={currentParentData.adresse}
+                          onChange={(e) => handleParentChange('adresse', e.target.value)}
+                          onBlur={handleParentBlur}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
@@ -400,16 +792,23 @@ const GererInscriptionsView = () => {
               </div>
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {['acteNaissance', 'photo', 'quittance', 'pieceIdentite'].map((docType) => {
-                    const doc = selectedEtudiant.documents[docType]
+                  {['acteNaissance', 'photo', 'quittance', 'pieceIdentite', 'releveBac', 'attestationReussiteBac'].map((docType) => {
+                    const documents = dossier.inscription?.documents || {}
+                    const docUrl = documents[docType]
+                    // docUrl peut être soit une string (URL) soit un objet { uploaded: true, url: ... }
+                    const url = typeof docUrl === 'string' ? docUrl : docUrl?.url
+                    const isUploaded = typeof docUrl === 'string' ? !!docUrl : docUrl?.uploaded || false
+                    const doc = isUploaded ? { nom: docType, uploaded: true, url: url } : null
                     const labels = {
                       acteNaissance: { title: 'Acte de naissance', icon: faFileAlt, format: 'PDF' },
                       photo: { title: 'Photo d\'identité', icon: faImage, format: 'JPG/PNG' },
                       quittance: { title: 'Quittance de paiement', icon: faMoneyBillWave, format: 'PDF' },
-                      pieceIdentite: { title: 'Pièce d\'identité', icon: faIdCard, format: 'PDF' }
+                      pieceIdentite: { title: 'Pièce d\'identité', icon: faIdCard, format: 'PDF' },
+                      releveBac: { title: 'Copie légalisée du relevé de notes du bac', icon: faFileAlt, format: 'PDF' },
+                      attestationReussiteBac: { title: 'Copie légalisée de l\'attestation de réussite au bac', icon: faFileAlt, format: 'PDF' }
                     }
                     return (
-                      <div key={docType} className="border-2 border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                      <div key={docType} className={`border-2 rounded-lg p-4 transition-colors ${isUploaded ? 'border-green-300 hover:border-green-400' : 'border-red-300 hover:border-red-400'}`}>
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <FontAwesomeIcon icon={labels[docType].icon}
@@ -424,20 +823,41 @@ const GererInscriptionsView = () => {
                         </div>
                         {doc?.uploaded ? (
                           <div className="bg-green-50 rounded-lg p-3">
-                            <p className="text-sm text-green-800 font-medium mb-2">{doc.nom}</p>
+                            <p className="text-sm text-green-800 font-medium mb-2">✓ Document uploadé</p>
                             <div className="flex gap-2">
-                              <button className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+                              <a
+                                href={doc.url.startsWith('http') ? doc.url : `http://localhost:3000${doc.url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                              >
                                 <FontAwesomeIcon icon={faEye} />Consulter
-                              </button>
-                              <button className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
+                              </a>
+                              <a
+                                href={doc.url.startsWith('http') ? doc.url : `http://localhost:3000${doc.url}`}
+                                download
+                                className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                              >
                                 <FontAwesomeIcon icon={faDownload} />Télécharger
-                              </button>
+                              </a>
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => handleFileUpload(docType)}
-                            className="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-                            <FontAwesomeIcon icon={faUpload} />Uploader
+                          <button 
+                            onClick={() => handleFileUpload(docType)}
+                            disabled={uploading[docType]}
+                            className="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            {uploading[docType] ? (
+                              <>
+                                <LoadingSpinner size="sm" />
+                                Upload en cours...
+                              </>
+                            ) : (
+                              <>
+                                <FontAwesomeIcon icon={faUpload} />Uploader
+                              </>
+                            )}
                           </button>
                         )}
                       </div>
@@ -446,15 +866,27 @@ const GererInscriptionsView = () => {
                 </div>
               </div>
               <div className="px-6 py-4 bg-slate-50 border-t">
-                <button onClick={handleFinaliserInscription} disabled={!documentsComplete}
+                <button 
+                  onClick={handleFinaliserInscription} 
+                  disabled={!documentsComplete || loading}
                   className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${
-                    documentsComplete ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  }`}>
-                  <FontAwesomeIcon icon={faCheckCircle} />
-                  {documentsComplete 
-                    ? (typeInscription === 'inscription' ? 'Finaliser l\'inscription' : 'Finaliser la réinscription')
-                    : 'Documents incomplets'
-                  }
+                    documentsComplete && !loading ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      Finalisation en cours...
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faCheckCircle} />
+                      {documentsComplete 
+                        ? (typeInscription === 'inscription' ? 'Finaliser l\'inscription' : 'Finaliser la réinscription')
+                        : 'Documents incomplets'
+                      }
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -465,10 +897,13 @@ const GererInscriptionsView = () => {
   }
 
   // Vue 4: Liste des étudiants
-  const etudiantsFiltres = etudiants.filter(e =>
-    `${e.nom} ${e.prenom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.matricule.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const etudiantsFiltres = etudiants.filter(e => {
+    if (!e) return false
+    const nomComplet = `${e.nom || ''} ${e.prenom || ''}`.toLowerCase()
+    const matricule = (e.matricule || '').toLowerCase()
+    const query = searchQuery.toLowerCase()
+    return nomComplet.includes(query) || matricule.includes(query)
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
@@ -481,10 +916,10 @@ const GererInscriptionsView = () => {
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
             </button>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              {typeInscription === 'inscription' ? 'Candidats' : 'Étudiants à réinscrire'} - {selectedFiliere} - {selectedNiveau}
+              {typeInscription === 'inscription' ? 'Candidats' : 'Étudiants à réinscrire'} - {filieres.find(f => f.id === selectedFiliere)?.nom} - {niveaux.find(n => n.id === selectedNiveau)?.nom || niveaux.find(n => n.id === selectedNiveau)?.code}
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              {etudiants.length} {typeInscription === 'inscription' ? 'candidat' : 'étudiant'}{etudiants.length > 1 ? 's' : ''}
+              {etudiants.length} {typeInscription === 'inscription' ? 'candidat' : 'étudiant'}{etudiants.length > 1 ? 's' : ''} trouvé{etudiants.length > 1 ? 's' : ''}
             </p>
           </div>
 
@@ -496,12 +931,21 @@ const GererInscriptionsView = () => {
             </div>
           </div>
 
-          {etudiantsFiltres.length === 0 ? (
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
+              <LoadingSpinner size="lg" text="Chargement des étudiants..." />
+            </div>
+          ) : etudiantsFiltres.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
               <FontAwesomeIcon icon={faUserCheck} className="text-6xl text-slate-300 mb-4" />
               <p className="text-slate-500 text-lg">
-                {searchQuery ? 'Aucun candidat ne correspond à votre recherche' : 'Aucun candidat trouvé'}
+                {searchQuery ? 'Aucun candidat ne correspond à votre recherche' : 'Aucun candidat trouvé pour cette classe'}
               </p>
+              {!searchQuery && (
+                <p className="text-slate-400 text-sm mt-2">
+                  Les étudiants doivent être importés depuis Excel pour apparaître ici
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -512,12 +956,12 @@ const GererInscriptionsView = () => {
                     <div className="p-6">
                       <div className="flex items-start gap-4 mb-4">
                         <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                          {etudiant.prenom[0]}{etudiant.nom[0]}
+                          {(etudiant.prenom?.[0] || '')}{(etudiant.nom?.[0] || '')}
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-lg font-bold text-slate-800">{etudiant.prenom} {etudiant.nom}</h3>
-                          <p className="text-sm text-slate-600">{etudiant.matricule}</p>
-                          <p className="text-sm text-slate-600">{etudiant.email}</p>
+                          <h3 className="text-lg font-bold text-slate-800">{etudiant.prenom || ''} {etudiant.nom || ''}</h3>
+                          <p className="text-sm text-slate-600">{etudiant.matricule || 'N/A'}</p>
+                          <p className="text-sm text-slate-600">{etudiant.email || 'Email non renseigné'}</p>
                         </div>
                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                           docsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
@@ -530,7 +974,7 @@ const GererInscriptionsView = () => {
                         <div className="flex gap-2 flex-wrap">
                           {['acteNaissance', 'photo', 'quittance', 'pieceIdentite'].map(doc => (
                             <span key={doc} className={`text-xs px-2 py-1 rounded ${
-                              etudiant.documents[doc]?.uploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              etudiant.documents?.[doc]?.uploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                             }`}>
                               {doc === 'acteNaissance' ? 'Acte' : doc === 'pieceIdentite' ? 'CNI' : doc.charAt(0).toUpperCase() + doc.slice(1)}
                             </span>

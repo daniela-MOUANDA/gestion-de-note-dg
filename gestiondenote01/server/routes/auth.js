@@ -92,10 +92,11 @@ router.post('/login', async (req, res) => {
   }
 })
 
-// Route de vérification du token
+// Route de vérification du token (avec renouvellement si nécessaire)
 router.get('/verify', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '')
+    const shouldRefresh = req.query.refresh === 'true' // Permet de forcer le renouvellement
 
     if (!token) {
       return res.status(401).json({
@@ -104,16 +105,23 @@ router.get('/verify', async (req, res) => {
       })
     }
 
-    const result = await verifyToken(token)
+    const result = await verifyToken(token, shouldRefresh)
 
     if (!result.valid) {
       return res.status(401).json(result)
     }
 
-    res.json({
+    // Si un nouveau token a été généré, le renvoyer
+    const response = {
       valid: true,
       user: result.user
-    })
+    }
+    
+    if (result.newToken) {
+      response.token = result.newToken
+    }
+
+    res.json(response)
   } catch (error) {
     console.error('Erreur lors de la vérification:', error)
     res.status(500).json({

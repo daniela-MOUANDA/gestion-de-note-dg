@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
@@ -9,70 +9,108 @@ import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
+import { getPromotions, getFilieres, getNiveauxDisponibles, getFormations, getAttestationsArchiveesParFiliereNiveau } from '../../api/scolarite'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { useAlert } from '../../contexts/AlertContext'
 
 const ArchivesAttestationsScolariteView = () => {
   const location = useLocation()
   const isChefView = location.pathname.startsWith('/chef-scolarite')
   const Sidebar = isChefView ? SidebarChef : SidebarScolarite
   const Header = isChefView ? HeaderChef : HeaderScolarite
+  const { error: alertError } = useAlert()
   const [selectedPromotion, setSelectedPromotion] = useState('')
+  const [selectedFormation, setSelectedFormation] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
-  const [selectedClasse, setSelectedClasse] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [loading, setLoading] = useState(false)
   const itemsPerPage = 10
 
-  const promotions = [
-    { id: '2024-2025', nom: '2024-2025', statut: 'en_cours' },
-    { id: '2023-2024', nom: '2023-2024', statut: 'archive' },
-    { id: '2022-2023', nom: '2022-2023', statut: 'archive' }
-  ]
+  // États pour les données de la base
+  const [promotions, setPromotions] = useState([])
+  const [formations, setFormations] = useState([])
+  const [filieres, setFilieres] = useState([])
+  const [niveaux, setNiveaux] = useState([])
+  const [attestationsArchivees, setAttestationsArchivees] = useState([])
 
-  const filieres = [
-    { id: 'RT', nom: 'Réseau et Télécom' },
-    { id: 'GI', nom: 'Génie Informatique' },
-    { id: 'MTIC', nom: 'Métiers des TIC' },
-    { id: 'AV', nom: 'Audiovisuel' }
-  ]
+  // Charger les promotions, formations et filières au montage
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const [promotionsData, formationsData, filieresData] = await Promise.all([
+          getPromotions(),
+          getFormations(),
+          getFilieres()
+        ])
+        setPromotions(promotionsData)
+        setFormations(formationsData)
+        setFilieres(filieresData)
+      } catch (error) {
+        console.error('Erreur lors du chargement:', error)
+        alertError('Erreur lors du chargement des données')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [alertError])
 
-  const niveaux = [
-    { id: 'L1', nom: '1ère année' },
-    { id: 'L2', nom: '2ème année' },
-    { id: 'L3', nom: '3ème année' }
-  ]
+  // Charger les niveaux quand filière est sélectionnée (récupérer tous les niveaux disponibles pour cette filière)
+  // On utilise la première formation disponible pour récupérer les niveaux
+  useEffect(() => {
+    if (selectedFiliere && formations.length > 0 && !selectedNiveau) {
+      const loadNiveaux = async () => {
+        try {
+          // Utiliser la première formation pour récupérer les niveaux
+          // Les niveaux sont généralement les mêmes pour toutes les formations d'une filière
+          const niveauxData = await getNiveauxDisponibles(formations[0].id, selectedFiliere)
+          setNiveaux(niveauxData)
+        } catch (error) {
+          console.error('Erreur lors du chargement des niveaux:', error)
+        }
+      }
+      loadNiveaux()
+    } else if (!selectedFiliere) {
+      setNiveaux([])
+    }
+  }, [selectedFiliere, formations])
 
-  const getClasses = (filiere, niveau) => {
-    const niveauNum = niveau.replace('L', '')
-    return [
-      { id: `${filiere}-${niveauNum}A`, nom: `${filiere}-${niveauNum}A` },
-      { id: `${filiere}-${niveauNum}B`, nom: `${filiere}-${niveauNum}B` },
-      { id: `${filiere}-${niveauNum}C`, nom: `${filiere}-${niveauNum}C` }
-    ]
-  }
-
-  const getAttestationsArchivees = (promotion, filiere, niveau, classe) => {
-    const filiereCode = classe.split('-')[0]
-    const niveauNum = classe.split('-')[1].charAt(0)
-    
-    // Attestations archivées
-    const attestations = [
-      { id: 1, etudiant: 'ANDEME MBO Lidvige Johane', matricule: `${filiereCode}2024-L${niveauNum}-125`, formation: 'Formation Initiale 1', dateGeneration: '11 novembre 2024', numero: 'N°0460/INPTIC/DG/DSE/2024' },
-      { id: 2, etudiant: 'MBADINGA Paul', matricule: `${filiereCode}2024-L${niveauNum}-089`, formation: 'Formation Initiale 1', dateGeneration: '12 novembre 2024', numero: 'N°0461/INPTIC/DG/DSE/2024' },
-      { id: 3, etudiant: 'OBIANG Sophie', matricule: `${filiereCode}2024-L${niveauNum}-045`, formation: 'Formation Initiale 1', dateGeneration: '13 novembre 2024', numero: 'N°0462/INPTIC/DG/DSE/2024' },
-      { id: 4, etudiant: 'ONDO Marie', matricule: `${filiereCode}2024-L${niveauNum}-067`, formation: 'Formation Initiale 1', dateGeneration: '14 novembre 2024', numero: 'N°0463/INPTIC/DG/DSE/2024' },
-      { id: 5, etudiant: 'EKOMY Pierre', matricule: `${filiereCode}2024-L${niveauNum}-034`, formation: 'Formation Initiale 2', dateGeneration: '15 novembre 2024', numero: 'N°0464/INPTIC/DG/DSE/2024' },
-      { id: 6, etudiant: 'NZAMBA Claire', matricule: `${filiereCode}2024-L${niveauNum}-156`, formation: 'Formation Initiale 1', dateGeneration: '16 novembre 2024', numero: 'N°0465/INPTIC/DG/DSE/2024' },
-      { id: 7, etudiant: 'IBINGA Jean', matricule: `${filiereCode}2024-L${niveauNum}-078`, formation: 'Formation Initiale 2', dateGeneration: '17 novembre 2024', numero: 'N°0466/INPTIC/DG/DSE/2024' },
-      { id: 8, etudiant: 'MOUITY Sarah', matricule: `${filiereCode}2024-L${niveauNum}-134`, formation: 'Formation Initiale 1', dateGeneration: '18 novembre 2024', numero: 'N°0467/INPTIC/DG/DSE/2024' },
-      { id: 9, etudiant: 'AKUE David', matricule: `${filiereCode}2024-L${niveauNum}-092`, formation: 'Formation Initiale 1', dateGeneration: '19 novembre 2024', numero: 'N°0468/INPTIC/DG/DSE/2024' },
-      { id: 10, etudiant: 'ELLA Nadège', matricule: `${filiereCode}2024-L${niveauNum}-103`, formation: 'Formation Initiale 2', dateGeneration: '20 novembre 2024', numero: 'N°0469/INPTIC/DG/DSE/2024' },
-      { id: 11, etudiant: 'BIVIGOU Thomas', matricule: `${filiereCode}2024-L${niveauNum}-118`, formation: 'Formation Initiale 1', dateGeneration: '21 novembre 2024', numero: 'N°0470/INPTIC/DG/DSE/2024' },
-      { id: 12, etudiant: 'MBOUMBA Astrid', matricule: `${filiereCode}2024-L${niveauNum}-147`, formation: 'Formation Initiale 1', dateGeneration: '22 novembre 2024', numero: 'N°0471/INPTIC/DG/DSE/2024' }
-    ]
-    
-    return attestations
-  }
+  // Charger les attestations archivées quand promotion, filière et niveau sont sélectionnés (sans formation)
+  useEffect(() => {
+    if (selectedPromotion && selectedFiliere && selectedNiveau) {
+      const loadAttestations = async () => {
+        try {
+          setLoading(true)
+          // Passer null pour formationId pour récupérer toutes les formations
+          const attestations = await getAttestationsArchiveesParFiliereNiveau(
+            selectedPromotion,
+            selectedFiliere,
+            selectedNiveau,
+            null // Pas de filtre par formation
+          )
+          
+          if (!attestations || !Array.isArray(attestations)) {
+            setAttestationsArchivees([])
+            return
+          }
+          
+          setAttestationsArchivees(attestations)
+        } catch (error) {
+          console.error('Erreur lors du chargement des attestations:', error)
+          alertError('Erreur lors du chargement des attestations')
+          setAttestationsArchivees([])
+        } finally {
+          setLoading(false)
+        }
+      }
+      loadAttestations()
+    } else {
+      setAttestationsArchivees([])
+    }
+  }, [selectedPromotion, selectedFiliere, selectedNiveau, alertError])
 
   const generateAttestationPDF = async (attestation) => {
     const element = document.createElement('div')
@@ -209,31 +247,32 @@ const ArchivesAttestationsScolariteView = () => {
   }
 
   const handleBack = () => {
-    if (selectedClasse) {
-      setSelectedClasse('')
-      setSearchQuery('')
-      setCurrentPage(1)
-    } else if (selectedNiveau) {
+    if (selectedNiveau) {
       setSelectedNiveau('')
+      setAttestationsArchivees([])
     } else if (selectedFiliere) {
       setSelectedFiliere('')
+      setNiveaux([])
     } else if (selectedPromotion) {
       setSelectedPromotion('')
     }
+    setSearchQuery('')
+    setCurrentPage(1)
   }
 
   // Vue: Liste des attestations archivées
-  if (selectedClasse) {
-    const attestations = getAttestationsArchivees(selectedPromotion, selectedFiliere, selectedNiveau, selectedClasse)
+  if (selectedPromotion && selectedFiliere && selectedNiveau) {
     const promotion = promotions.find(p => p.id === selectedPromotion)
     const filiere = filieres.find(f => f.id === selectedFiliere)
     const niveau = niveaux.find(n => n.id === selectedNiveau)
 
-    const filteredAttestations = attestations.filter(att => 
-      att.etudiant.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      att.matricule.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      att.numero.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    const filteredAttestations = attestationsArchivees.filter(att => {
+      const nomComplet = `${att.etudiant?.prenom || ''} ${att.etudiant?.nom || ''}`.toLowerCase()
+      const matricule = (att.etudiant?.matricule || '').toLowerCase()
+      const numero = (att.numero || '').toLowerCase()
+      const query = searchQuery.toLowerCase()
+      return nomComplet.includes(query) || matricule.includes(query) || numero.includes(query)
+    })
 
     const totalPages = Math.ceil(filteredAttestations.length / itemsPerPage)
     const startIndex = (currentPage - 1) * itemsPerPage
@@ -251,10 +290,10 @@ const ArchivesAttestationsScolariteView = () => {
               </button>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
                 <FontAwesomeIcon icon={faArchive} className="text-blue-600" />
-                Archives des attestations - {selectedClasse}
+                Archives des attestations
               </h1>
               <p className="text-sm sm:text-base text-slate-600">
-                {promotion?.nom} • {filiere?.nom} • {niveau?.nom}
+                {promotion?.nom || promotion?.anneeAcademique} • {filiere?.nom} • {niveau?.nom || niveau?.code}
               </p>
             </div>
 
@@ -296,26 +335,64 @@ const ArchivesAttestationsScolariteView = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {paginatedAttestations.map((attestation) => (
-                      <tr key={attestation.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-slate-800">{attestation.etudiant}</p>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{attestation.matricule}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{attestation.formation}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{attestation.dateGeneration}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{attestation.numero}</td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => generateAttestationPDF(attestation)}
-                            className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-sm inline-flex items-center gap-2"
-                          >
-                            <FontAwesomeIcon icon={faDownload} />
-                            Télécharger PDF
-                          </button>
+                    {loading ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-12 text-center">
+                          <LoadingSpinner size="md" text="Chargement des attestations..." />
                         </td>
                       </tr>
-                    ))}
+                    ) : paginatedAttestations.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                          Aucune attestation archivée trouvée
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedAttestations.map((attestation) => {
+                        // Gérer les deux formats possibles
+                        const nomComplet = typeof attestation.etudiant === 'string' 
+                          ? attestation.etudiant 
+                          : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
+                        const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
+                        const dateGen = attestation.dateGeneration 
+                          ? (typeof attestation.dateGeneration === 'string' 
+                              ? attestation.dateGeneration 
+                              : new Date(attestation.dateGeneration).toLocaleDateString('fr-FR', { 
+                                  day: 'numeric', 
+                                  month: 'long', 
+                                  year: 'numeric' 
+                                }))
+                          : 'N/A'
+                        const formationNom = attestation.formation || 'N/A'
+                        return (
+                          <tr key={attestation.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <p className="font-semibold text-slate-800">{nomComplet || 'N/A'}</p>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{matricule}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{formationNom}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{dateGen}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{attestation.numero || 'N/A'}</td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                onClick={() => generateAttestationPDF({
+                                  ...attestation,
+                                  etudiant: nomComplet,
+                                  matricule: matricule,
+                                  formation: formationNom,
+                                  dateGeneration: dateGen,
+                                  numero: attestation.numero || 'N/A'
+                                })}
+                                className="px-3 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-sm inline-flex items-center gap-2"
+                              >
+                                <FontAwesomeIcon icon={faDownload} />
+                                Télécharger PDF
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -362,56 +439,9 @@ const ArchivesAttestationsScolariteView = () => {
     )
   }
 
-  // Vue: Sélection de la classe
-  if (selectedNiveau) {
-    const classes = getClasses(selectedFiliere, selectedNiveau)
-    const filiere = filieres.find(f => f.id === selectedFiliere)
-    const niveau = niveaux.find(n => n.id === selectedNiveau)
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
-        <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
-            <div className="mb-6">
-              <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
-                <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
-              </button>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
-                <FontAwesomeIcon icon={faSchool} className="text-blue-600" />
-                Choisissez la classe
-              </h1>
-              <p className="text-sm sm:text-base text-slate-600">
-                {selectedPromotion} • {filiere?.nom} • {niveau?.nom}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {classes.map((classe) => (
-                <button
-                  key={classe.id}
-                  onClick={() => setSelectedClasse(classe.id)}
-                  className="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition-all hover:scale-105 border-2 border-transparent hover:border-blue-500"
-                >
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mb-4">
-                      <FontAwesomeIcon icon={faUsers} className="text-white text-2xl" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">{classe.nom}</h3>
-                    <p className="text-sm text-slate-600">Voir les archives</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </main>
-        </div>
-      </div>
-    )
-  }
 
   // Vue: Sélection du niveau
-  if (selectedFiliere) {
+  if (selectedFiliere && selectedFormation && !selectedNiveau) {
     const filiere = filieres.find(f => f.id === selectedFiliere)
 
     return (
@@ -429,27 +459,33 @@ const ArchivesAttestationsScolariteView = () => {
                 Choisissez le niveau
               </h1>
               <p className="text-sm sm:text-base text-slate-600">
-                {selectedPromotion} • {filiere?.nom}
+                {promotions.find(p => p.id === selectedPromotion)?.nom || promotions.find(p => p.id === selectedPromotion)?.anneeAcademique} • {filiere?.nom}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {niveaux.map((niveau) => (
-                <button
-                  key={niveau.id}
-                  onClick={() => setSelectedNiveau(niveau.id)}
-                  className="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition-all hover:scale-105 border-2 border-transparent hover:border-blue-500"
-                >
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mb-4">
-                      <FontAwesomeIcon icon={faGraduationCap} className="text-white text-2xl" />
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <LoadingSpinner size="lg" text="Chargement des niveaux..." />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {niveaux.map((niveau) => (
+                  <button
+                    key={niveau.id}
+                    onClick={() => setSelectedNiveau(niveau.id)}
+                    className="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition-all hover:scale-105 border-2 border-transparent hover:border-blue-500"
+                  >
+                    <div className="flex flex-col items-center">
+                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mb-4">
+                        <FontAwesomeIcon icon={faGraduationCap} className="text-white text-2xl" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-800 mb-2">{niveau.nom || niveau.code}</h3>
+                      <p className="text-sm text-slate-600">{niveau.code || niveau.id}</p>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">{niveau.nom}</h3>
-                    <p className="text-sm text-slate-600">{niveau.id}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </main>
         </div>
       </div>
@@ -519,29 +555,35 @@ const ArchivesAttestationsScolariteView = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {promotions.map((promotion) => (
-              <button
-                key={promotion.id}
-                onClick={() => setSelectedPromotion(promotion.id)}
-                className="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition-all hover:scale-105 border-2 border-transparent hover:border-blue-500"
-              >
-                <div className="flex flex-col items-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mb-4">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="text-white text-2xl" />
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <LoadingSpinner size="lg" text="Chargement des promotions..." />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {promotions.map((promotion) => (
+                <button
+                  key={promotion.id}
+                  onClick={() => setSelectedPromotion(promotion.id)}
+                  className="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition-all hover:scale-105 border-2 border-transparent hover:border-blue-500"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mb-4">
+                      <FontAwesomeIcon icon={faCalendarAlt} className="text-white text-2xl" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">{promotion.nom || promotion.anneeAcademique}</h3>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      promotion.statut === 'EN_COURS'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {promotion.statut === 'EN_COURS' ? 'En cours' : 'Archivé'}
+                    </span>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">{promotion.nom}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    promotion.statut === 'en_cours'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {promotion.statut === 'en_cours' ? 'En cours' : 'Archivé'}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          )}
         </main>
       </div>
     </div>

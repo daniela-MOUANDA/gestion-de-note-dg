@@ -102,6 +102,16 @@ export const AuthProvider = ({ children }) => {
     return roles.includes(user?.role)
   }
 
+  // Mettre à jour les données de l'utilisateur (par exemple après upload de photo)
+  const updateUser = (updatedUserData) => {
+    if (user && updatedUserData) {
+      const newUser = { ...user, ...updatedUserData }
+      setUser(newUser)
+      // Mettre à jour aussi localStorage pour persister les changements
+      localStorage.setItem('user', JSON.stringify(newUser))
+    }
+  }
+
   const value = {
     user,
     loading,
@@ -109,7 +119,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     hasRole,
-    hasAnyRole
+    hasAnyRole,
+    updateUser
   }
 
   return (

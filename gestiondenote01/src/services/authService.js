@@ -6,36 +6,225 @@ const JWT_SECRET = process.env.JWT_SECRET || 'votre-secret-jwt-tres-securise-cha
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h' // 8 heures de validité
 
 // Authentifier un utilisateur
-export const authenticateUser = async (email, password) => {
+export const authenticateUser = async (email, password, matricule = null) => {
   try {
-    // Trouver l'utilisateur par email
-    const utilisateur = await prisma.utilisateur.findUnique({
-      where: { email }
-    })
-
-    if (!utilisateur) {
+    // Normaliser l'email (trim et lowercase pour éviter les problèmes de casse)
+    const normalizedEmail = email?.trim().toLowerCase()
+    
+    if (!normalizedEmail || !password) {
+      console.log('❌ Email ou mot de passe manquant')
       return {
         success: false,
-        error: 'Email ou mot de passe incorrect'
+        error: 'Email et mot de passe sont requis'
       }
     }
 
+    let utilisateur = null
+
+    // Si un matricule est fourni, c'est probablement un étudiant
+    if (matricule) {
+      console.log('🎓 Tentative de connexion étudiant avec matricule:', matricule)
+      
+      // Chercher l'étudiant par matricule
+      const etudiant = await prisma.etudiant.findUnique({
+        where: { matricule: matricule.trim() },
+        include: {
+          inscriptions: {
+            where: { statut: 'INSCRIT' },
+            take: 1,
+            include: {
+              promotion: true
+            }
+          }
+        }
+      })
+
+      if (!etudiant) {
+        console.log('❌ Étudiant non trouvé avec matricule:', matricule)
+        return {
+          success: false,
+          error: 'Matricule incorrect'
+        }
+      }
+
+      // Vérifier que l'email correspond à l'étudiant (si l'étudiant a déjà un email)
+      if (etudiant.email && etudiant.email.trim() !== '' && etudiant.email.toLowerCase() !== normalizedEmail) {
+        console.log('❌ Email ne correspond pas au matricule')
+        return {
+          success: false,
+          error: 'Email ne correspond pas au matricule fourni'
+        }
+      }
+
+      console.log('✅ Étudiant trouvé:', etudiant.nom, etudiant.prenom)
+
+      // Chercher ou créer un compte Utilisateur pour cet étudiant
+      utilisateur = await prisma.utilisateur.findFirst({
+        where: {
+          OR: [
+            { email: normalizedEmail },
+            { username: matricule.trim() }
+          ]
+        }
+      })
+
+      // Si aucun compte Utilisateur n'existe, le créer
+      if (!utilisateur) {
+        console.log('📝 Création d\'un compte Utilisateur pour l\'étudiant')
+        
+        // Générer un username unique basé sur le matricule
+        let username = matricule.trim().toLowerCase()
+        let usernameExists = await prisma.utilisateur.findUnique({
+          where: { username }
+        })
+        
+        if (usernameExists) {
+          username = `${matricule.trim()}_${Date.now()}`
+        }
+
+        // Hasher le mot de passe
+        const hashedPassword = await bcrypt.hash(password, 10)
+
+        // Créer le compte Utilisateur
+        utilisateur = await prisma.utilisateur.create({
+          data: {
+            nom: etudiant.nom,
+            prenom: etudiant.prenom,
+            email: normalizedEmail || `${matricule.trim()}@etudiant.inptic.ga`,
+            username: username,
+            password: hashedPassword,
+            role: 'ETUDIANT',
+            actif: true,
+            photo: etudiant.photo || null,
+            telephone: etudiant.telephone || null,
+            adresse: etudiant.adresse || null
+          }
+        })
+
+        console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
+        
+        // Mettre à jour l'email de l'étudiant si nécessaire
+        if (etudiant.email !== normalizedEmail) {
+          await prisma.etudiant.update({
+            where: { id: etudiant.id },
+            data: { email: normalizedEmail }
+          })
+          console.log('✅ Email de l\'étudiant mis à jour')
+        }
+      } else {
+        // Vérifier que c'est bien un compte étudiant
+        if (utilisateur.role !== 'ETUDIANT') {
+          console.log('❌ Le compte trouvé n\'est pas un compte étudiant')
+          return {
+            success: false,
+            error: 'Ce compte n\'est pas un compte étudiant'
+          }
+        }
+        
+        // Mettre à jour l'email de l'étudiant si nécessaire
+        if (etudiant.email !== normalizedEmail) {
+          await prisma.etudiant.update({
+            where: { id: etudiant.id },
+            data: { email: normalizedEmail }
+          })
+          console.log('✅ Email de l\'étudiant mis à jour')
+        }
+      }
+    } else {
+      // Authentification normale pour les autres utilisateurs
+      console.log('🔍 Recherche de l\'utilisateur avec email:', normalizedEmail)
+      
+      // Trouver l'utilisateur par email (insensible à la casse)
+      // On essaie d'abord avec l'email normalisé, puis avec l'email original
+      utilisateur = await prisma.utilisateur.findUnique({
+        where: { email: normalizedEmail }
+      })
+      
+      // Si pas trouvé, essayer avec l'email original (trim seulement)
+      if (!utilisateur) {
+        const trimmedEmail = email.trim()
+        if (trimmedEmail !== normalizedEmail) {
+          console.log('🔍 Essai avec l\'email original (trim):', trimmedEmail)
+          utilisateur = await prisma.utilisateur.findUnique({
+            where: { email: trimmedEmail }
+          })
+        }
+      }
+      
+      // Si toujours pas trouvé, utiliser une requête SQL brute pour recherche insensible à la casse
+      if (!utilisateur) {
+        console.log('🔍 Recherche insensible à la casse avec SQL...')
+        try {
+          const result = await prisma.$queryRaw`
+            SELECT * FROM utilisateurs WHERE LOWER(email) = LOWER(${normalizedEmail}) LIMIT 1
+          `
+          if (result && Array.isArray(result) && result.length > 0) {
+            utilisateur = result[0]
+            console.log('✅ Utilisateur trouvé via recherche SQL (insensible à la casse)')
+          }
+        } catch (sqlError) {
+          console.log('⚠️ Erreur lors de la recherche SQL (non bloquant):', sqlError.message)
+          // On continue avec utilisateur = null
+        }
+      }
+
+      if (!utilisateur) {
+        console.log('❌ Utilisateur non trouvé avec email:', normalizedEmail)
+        return {
+          success: false,
+          error: 'Email ou mot de passe incorrect'
+        }
+      }
+    }
+
+    console.log('✅ Utilisateur trouvé:', utilisateur.email, 'Rôle:', utilisateur.role)
+
     // Vérifier si le compte est actif
     if (!utilisateur.actif) {
+      console.log('❌ Compte désactivé pour:', utilisateur.email)
       return {
         success: false,
         error: 'Votre compte a été désactivé. Contactez l\'administrateur.'
       }
     }
 
-    // Vérifier le mot de passe
-    const passwordValid = await bcrypt.compare(password, utilisateur.password)
-    
-    if (!passwordValid) {
-      return {
-        success: false,
-        error: 'Email ou mot de passe incorrect'
+    // Vérifier que le mot de passe est hashé (commence par $2a$, $2b$ ou $2y$)
+    const isPasswordHashed = utilisateur.password && (
+      utilisateur.password.startsWith('$2a$') || 
+      utilisateur.password.startsWith('$2b$') || 
+      utilisateur.password.startsWith('$2y$')
+    )
+
+    if (!isPasswordHashed) {
+      console.log('⚠️ ATTENTION: Le mot de passe en base n\'est pas hashé pour:', utilisateur.email)
+      // Si le mot de passe n'est pas hashé, comparer directement (pour migration)
+      if (utilisateur.password !== password) {
+        console.log('❌ Mot de passe incorrect (comparaison directe)')
+        return {
+          success: false,
+          error: 'Email ou mot de passe incorrect'
+        }
       }
+      // Si la comparaison directe réussit, hasher le mot de passe pour la prochaine fois
+      const hashedPassword = await bcrypt.hash(password, 10)
+      await prisma.utilisateur.update({
+        where: { id: utilisateur.id },
+        data: { password: hashedPassword }
+      })
+      console.log('✅ Mot de passe hashé et mis à jour pour:', utilisateur.email)
+    } else {
+      // Vérifier le mot de passe avec bcrypt
+      console.log('🔐 Vérification du mot de passe avec bcrypt...')
+      const passwordValid = await bcrypt.compare(password, utilisateur.password)
+      
+      if (!passwordValid) {
+        console.log('❌ Mot de passe incorrect pour:', utilisateur.email)
+        return {
+          success: false,
+          error: 'Email ou mot de passe incorrect'
+        }
+      }
+      console.log('✅ Mot de passe correct')
     }
 
 

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUser,
@@ -12,46 +13,83 @@ import {
 import Sidebar from '../../components/common/Sidebar'
 import Header from '../../components/common/Header'
 import { StudentModel } from '../../models/StudentModel'
+import { useAuth } from '../../contexts/AuthContext'
+import { getMonProfilEtudiant } from '../../api/scolarite'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { useAlert } from '../../contexts/AlertContext'
 
 const ProfileView = () => {
-  // Données par défaut pour l'affichage sans connexion
-  const defaultStudentData = {
-    id: 1,
-    email: 'lidvigembo@mail.com',
-    matricule: 'INPTIC2025',
-    nom: 'MBO',
-    prenom: 'Lidvige',
-    programme: 'GI 2025 Génie Informatique',
-    niveau: 'L3',
-    moyenneGenerale: 14.5,
-    credits: 24,
-    totalModules: 15,
-    rangClasse: 5,
-    estActif: true,
-    estBoursier: true,
-    semestre: 'S4',
-    derniereConnexion: new Date().toISOString(),
-    telephone: '077 00 00 00',
-    adresse: 'Glasse',
-    dateNaissance: '05/09/2005',
-    lieuNaissance: 'Nantes, France',
-    anneeInscription: '2023',
-    filiere: 'GI',
-    niveauDetail: 'GI 3',
-    contactParent: {
-      nom: 'Lidige MBANG',
-      telephone: '66 00 00 00',
-      email: 'lidige@mail.com'
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
+  const { error: alertError } = useAlert()
+  const [student, setStudent] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadStudentProfile = async () => {
+      // Vérifier que l'utilisateur est authentifié et est un étudiant
+      if (!isAuthenticated || !user) {
+        navigate('/login-etudiant')
+        return
+      }
+
+      if (user.role !== 'ETUDIANT') {
+        alertError('Accès refusé. Cette page est réservée aux étudiants.')
+        navigate('/dashboard')
+        return
+      }
+
+      try {
+        setLoading(true)
+        const etudiantData = await getMonProfilEtudiant()
+        setStudent(new StudentModel({
+          ...etudiantData,
+          // Mapper les données pour le modèle StudentModel
+          niveauDetail: etudiantData.niveauNom || etudiantData.niveau,
+          anneeInscription: etudiantData.anneeAcademique ? etudiantData.anneeAcademique.split('-')[0] : '',
+          contactParent: etudiantData.parents && etudiantData.parents.length > 0 ? etudiantData.parents[0] : null
+        }))
+      } catch (error) {
+        console.error('Erreur lors du chargement du profil:', error)
+        alertError(error.message || 'Erreur lors du chargement du profil')
+      } finally {
+        setLoading(false)
+      }
     }
+
+    loadStudentProfile()
+  }, [isAuthenticated, user, navigate, alertError])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <Header studentName="Chargement..." />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0 flex items-center justify-center">
+            <LoadingSpinner size="lg" text="Chargement de votre profil..." />
+          </main>
+        </div>
+      </div>
+    )
   }
 
-  const [student] = useState(() => {
-    const studentData = localStorage.getItem('student')
-    if (studentData) {
-      return new StudentModel(JSON.parse(studentData))
-    }
-    return new StudentModel(defaultStudentData)
-  })
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <Header studentName="Erreur" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <strong className="font-bold">Erreur!</strong>
+              <span className="block sm:inline"> Impossible de charger votre profil.</span>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
@@ -71,8 +109,23 @@ const ProfileView = () => {
           <div className="bg-gradient-to-br from-slate-100 to-blue-100 rounded-xl shadow-lg p-4 sm:p-6 border border-slate-200 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 lg:justify-between">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg flex-shrink-0">
-                  <FontAwesomeIcon icon={faUser} className="text-2xl sm:text-3xl" />
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg flex-shrink-0 overflow-hidden">
+                  {student.photo ? (
+                    <img 
+                      src={student.photo.startsWith('http') ? student.photo : `http://localhost:3000${student.photo}`}
+                      alt={student.fullName}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                        e.target.nextSibling.style.display = 'flex'
+                      }}
+                    />
+                  ) : null}
+                  <FontAwesomeIcon 
+                    icon={faUser} 
+                    className="text-2xl sm:text-3xl"
+                    style={{ display: student.photo ? 'none' : 'flex' }}
+                  />
                 </div>
                 <div className="flex-1 w-full">
                   <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">

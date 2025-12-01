@@ -203,11 +203,12 @@ model Inscription {
   agentValideurId   String?  // ID de l'agent qui a validé
   
   // Documents
-  copieReleve       String?  // URL du document
+  copieReleve       String?  // URL du document (relevé de notes du bac)
   copieDiplome      String?  // URL du document
   copieActeNaissance String? // URL du document
   photoIdentite     String?  // URL du document
   quittance         String?  // URL du document
+  pieceIdentite     String?  // URL du document (pièce d'identité/CNI)
   
   // Relations
   etudiant          Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)

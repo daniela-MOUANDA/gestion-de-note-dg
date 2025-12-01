@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
@@ -9,51 +10,88 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
 import { useAuth } from '../../contexts/AuthContext'
+import { getChefDashboardStats } from '../../api/scolarite'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { useAlert } from '../../contexts/AlertContext'
 
 const DashboardChefView = () => {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
+  const { error: alertError } = useAlert()
   const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Chef de Service'
-  const [stats] = useState({
-    totalAgents: 5,
-    agentsActifs: 4,
-    totalInscriptions: 180,
-    attestationsGenerees: 145,
-    messagesNonLus: 8
+  
+  const [stats, setStats] = useState({
+    totalAgents: 0,
+    agentsActifs: 0,
+    totalSP: 0,
+    spActives: 0,
+    candidatsAdmis: 0,
+    etudiantsInscrits: 0,
+    inscriptionsEnAttente: 0,
+    attestationsGenerees: 0,
+    messagesNonLus: 0
   })
+  const [dernieresConnexions, setDernieresConnexions] = useState([])
+  const [actionsRecentes, setActionsRecentes] = useState([])
+  const [inscriptionsParSemaine, setInscriptionsParSemaine] = useState([])
+  const [connexionsAujourdhui, setConnexionsAujourdhui] = useState([])
+  const [tauxActivite, setTauxActivite] = useState(0)
+  const [variationTauxActivite, setVariationTauxActivite] = useState(0)
+  const [anneeAcademique, setAnneeAcademique] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Données des dernières connexions
-  const [dernieresConnexions] = useState([
-    { id: 1, nom: 'Marie NZAMBA', role: 'Agent', date: '27/11/2024', heure: '14:32', statut: 'actif' },
-    { id: 2, nom: 'Jeanne OBIANG', role: 'SP-Scolarité', date: '27/11/2024', heure: '09:15', statut: 'actif' },
-    { id: 3, nom: 'Paul MBADINGA', role: 'Agent', date: '26/11/2024', heure: '16:45', statut: 'actif' },
-    { id: 4, nom: 'Sophie ELLA', role: 'Agent', date: '26/11/2024', heure: '11:20', statut: 'inactif' }
-  ])
+  // Vérification du rôle et redirection si nécessaire
+  useEffect(() => {
+    if (isAuthenticated && user?.role !== 'CHEF_SERVICE_SCOLARITE') {
+      console.warn(`Accès non autorisé au dashboard Chef pour le rôle: ${user?.role}. Redirection...`)
+      const role = user?.role?.trim().toUpperCase()
+      if (role === 'SP_SCOLARITE') {
+        navigate('/sp-scolarite/dashboard', { replace: true })
+      } else if (role === 'AGENT_SCOLARITE') {
+        navigate('/scolarite/dashboard', { replace: true })
+      } else {
+        navigate('/login', { replace: true })
+      }
+    }
+  }, [isAuthenticated, user, navigate])
 
-  // Données des actions récentes
-  const [actionsRecentes] = useState([
-    { id: 1, agent: 'Marie NZAMBA', action: 'Inscription validée', details: 'ANDEME MBO Lidvige - GI-1A', date: '27/11/2024 14:30', type: 'success' },
-    { id: 2, agent: 'Jeanne OBIANG', action: 'Attestation générée', details: 'N°0460/INPTIC/DG/DSE/2024', date: '27/11/2024 09:15', type: 'info' },
-    { id: 3, agent: 'Paul MBADINGA', action: 'Bulletin distribué', details: 'RT-2A - Semestre 1', date: '26/11/2024 16:40', type: 'success' },
-    { id: 4, agent: 'Marie NZAMBA', action: 'Message envoyé', details: 'Classe GI-1A (35 étudiants)', date: '26/11/2024 15:20', type: 'info' },
-    { id: 5, agent: 'Sophie ELLA', action: 'Tentative de connexion échouée', details: '3 tentatives', date: '26/11/2024 11:15', type: 'warning' }
-  ])
+  // Charger les données du dashboard
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      // Seulement charger si l'utilisateur est un Chef de Service
+      if (user?.role === 'CHEF_SERVICE_SCOLARITE') {
+        try {
+          setLoading(true)
+          setError(null)
+          const data = await getChefDashboardStats()
+          setStats(data.stats)
+          setDernieresConnexions(data.dernieresConnexions || [])
+          setActionsRecentes(data.actionsRecentes || [])
+          setInscriptionsParSemaine(data.inscriptionsParSemaine || [])
+          setConnexionsAujourdhui(data.connexionsAujourdhui || [])
+          setTauxActivite(data.stats.tauxActivite || 0)
+          setVariationTauxActivite(data.stats.variationTauxActivite || 0)
+          // Forcer l'année académique à 2025-2026
+          setAnneeAcademique('2025-2026')
+        } catch (err) {
+          console.error('Erreur lors du chargement du dashboard chef:', err)
+          setError(err.message || 'Erreur lors du chargement des données du tableau de bord.')
+          alertError(err.message || 'Erreur lors du chargement des données du tableau de bord.')
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        setLoading(false)
+      }
+    }
+    
+    if (isAuthenticated && user?.role === 'CHEF_SERVICE_SCOLARITE') {
+      loadDashboardData()
+    }
+  }, [isAuthenticated, user, alertError])
 
-  // Données pour les graphiques
-  const dataActivites = [
-    { jour: 'Lun', inscriptions: 12, attestations: 8, bulletins: 15 },
-    { jour: 'Mar', inscriptions: 18, attestations: 12, bulletins: 20 },
-    { jour: 'Mer', inscriptions: 15, attestations: 10, bulletins: 18 },
-    { jour: 'Jeu', inscriptions: 22, attestations: 15, bulletins: 25 },
-    { jour: 'Ven', inscriptions: 20, attestations: 18, bulletins: 22 },
-  ]
-
-  const dataConnexions = [
-    { heure: '8h', connexions: 2 },
-    { heure: '10h', connexions: 4 },
-    { heure: '12h', connexions: 3 },
-    { heure: '14h', connexions: 5 },
-    { heure: '16h', connexions: 3 },
-  ]
+  // Les données de connexions sont maintenant chargées depuis l'API
 
   const getActionIcon = (type) => {
     switch(type) {
@@ -69,6 +107,39 @@ const DashboardChefView = () => {
       case 'warning': return 'text-amber-600 bg-amber-100'
       default: return 'text-blue-600 bg-blue-100'
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarChef />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderChef />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+            <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
+              <LoadingSpinner size="lg" text="Chargement du tableau de bord..." />
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarChef />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderChef />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <strong className="font-bold">Erreur!</strong>
+              <span className="block sm:inline"> {error}</span>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -95,16 +166,21 @@ const DashboardChefView = () => {
               </div>
               <h3 className="text-3xl font-bold text-slate-800">{stats.totalAgents}</h3>
               <p className="text-sm text-slate-600">Agents enregistrés</p>
-              <p className="text-xs text-green-600 mt-1">{stats.agentsActifs} actifs</p>
+              <p className="text-xs text-green-600 mt-1">{stats.agentsActifs || stats.totalAgents} actifs</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
               <div className="flex items-center justify-between mb-2">
                 <FontAwesomeIcon icon={faUserCheck} className="text-emerald-500 text-3xl" />
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.totalInscriptions}</h3>
-              <p className="text-sm text-slate-600">Inscriptions totales</p>
-              <p className="text-xs text-slate-500 mt-1">Année 2024-2025</p>
+              <h3 className="text-3xl font-bold text-slate-800">{stats.etudiantsInscrits}</h3>
+              <p className="text-sm text-slate-600">Étudiants inscrits</p>
+              <p className="text-xs text-slate-500 mt-1">{anneeAcademique ? `Année ${anneeAcademique}` : 'Chargement...'}</p>
+              {stats.candidatsAdmis > stats.etudiantsInscrits && (
+                <p className="text-xs text-amber-600 mt-1">
+                  {stats.candidatsAdmis - stats.etudiantsInscrits} en attente
+                </p>
+              )}
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
@@ -132,9 +208,11 @@ const DashboardChefView = () => {
               <div className="flex items-center justify-between mb-2">
                 <FontAwesomeIcon icon={faChartLine} className="text-amber-500 text-3xl" />
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">98%</h3>
+              <h3 className="text-3xl font-bold text-slate-800">{tauxActivite}%</h3>
               <p className="text-sm text-slate-600">Taux d'activité</p>
-              <p className="text-xs text-green-600 mt-1">+5% cette semaine</p>
+              <p className={`text-xs mt-1 ${variationTauxActivite >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {variationTauxActivite >= 0 ? '+' : ''}{variationTauxActivite}% cette semaine
+              </p>
             </div>
           </div>
 
@@ -142,34 +220,44 @@ const DashboardChefView = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             {/* Graphique des activités */}
             <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Activités de la semaine</h2>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={dataActivites}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="jour" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="inscriptions" fill="#10B981" name="Inscriptions" />
-                  <Bar dataKey="attestations" fill="#3B82F6" name="Attestations" />
-                  <Bar dataKey="bulletins" fill="#8B5CF6" name="Bulletins" />
-                </BarChart>
-              </ResponsiveContainer>
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Inscriptions par semaine</h2>
+              {inscriptionsParSemaine.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={inscriptionsParSemaine}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="semaine" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="inscriptions" fill="#10B981" name="Inscriptions" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-slate-500">
+                  <p>Aucune donnée disponible</p>
+                </div>
+              )}
             </div>
 
             {/* Graphique des connexions */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Connexions aujourd'hui</h2>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={dataConnexions}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="heure" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="connexions" stroke="#6366F1" strokeWidth={2} name="Connexions" />
-                </LineChart>
-              </ResponsiveContainer>
+              {connexionsAujourdhui.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={connexionsAujourdhui}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="heure" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="connexions" stroke="#6366F1" strokeWidth={2} name="Connexions" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-slate-500">
+                  <p>Aucune connexion aujourd'hui</p>
+                </div>
+              )}
             </div>
           </div>
 

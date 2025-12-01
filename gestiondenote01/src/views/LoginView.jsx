@@ -28,25 +28,37 @@ const LoginView = () => {
   // Fonction pour rediriger selon le rôle
   const redirectByRole = (role) => {
     console.log('Redirection pour le rôle:', role)
-    switch (role) {
+    // Vérifier que le rôle est bien défini et valide
+    if (!role) {
+      console.error('❌ Rôle non défini lors de la redirection')
+      return
+    }
+    
+    // Normaliser le rôle (enlever les espaces, mettre en majuscules)
+    const normalizedRole = role.trim().toUpperCase()
+    console.log('Rôle normalisé:', normalizedRole)
+    
+    switch (normalizedRole) {
       case 'ETUDIANT':
-        navigate('/dashboard')
+        navigate('/dashboard', { replace: true })
         break
       case 'CHEF_SERVICE_SCOLARITE':
-        navigate('/chef-scolarite/dashboard')
+        navigate('/chef-scolarite/dashboard', { replace: true })
         break
       case 'AGENT_SCOLARITE':
-        navigate('/scolarite/dashboard')
+        navigate('/scolarite/dashboard', { replace: true })
         break
       case 'SP_SCOLARITE':
-        console.log('Redirection vers /sp-scolarite/dashboard')
-        navigate('/sp-scolarite/dashboard')
+        console.log('✅ Redirection vers /sp-scolarite/dashboard pour SP_SCOLARITE')
+        navigate('/sp-scolarite/dashboard', { replace: true })
         break
       case 'CHEF_DEPARTEMENT':
-        navigate('/chef/dashboard')
+        navigate('/chef/dashboard', { replace: true })
         break
       default:
-        console.warn('Rôle non reconnu:', role)
+        console.warn('⚠️ Rôle non reconnu:', normalizedRole, '(rôle original:', role, ')')
+        // En cas de rôle non reconnu, rediriger vers la page de login
+        navigate('/login', { replace: true })
     }
   }
 

@@ -63,7 +63,7 @@ const router = express.Router()
 // Route de connexion
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email, password, matricule } = req.body
 
     if (!email || !password) {
       return res.status(400).json({
@@ -72,7 +72,8 @@ router.post('/login', async (req, res) => {
       })
     }
 
-    const result = await authenticateUser(email, password)
+    // Si un matricule est fourni, c'est probablement un étudiant
+    const result = await authenticateUser(email, password, matricule)
 
     if (!result.success) {
       return res.status(401).json(result)

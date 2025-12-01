@@ -14,7 +14,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { uploadProfilePhoto, getCurrentUser } from '../../api/auth'
 
 const ProfilAdminView = () => {
-  const { user, logout, isAuthenticated } = useAuth()
+  const { user, logout, isAuthenticated, updateUser } = useAuth()
   const navigate = useNavigate()
   
   // Rediriger vers la page de connexion si l'utilisateur n'est pas authentifié
@@ -85,28 +85,33 @@ const ProfilAdminView = () => {
         setLoading(false)
         
         // Ensuite, essayer de récupérer les données complètes depuis l'API en arrière-plan
-        // MAIS seulement si l'email correspond à celui de l'utilisateur connecté
+        // MAIS seulement si l'ID et l'email correspondent exactement à celui de l'utilisateur connecté
         try {
           const currentUser = await getCurrentUser()
-          // Vérifier que les données de l'API correspondent bien à l'utilisateur connecté
-          if (currentUser && currentUser.email === userEmail) {
-            const role = currentUser.role || ''
+          // Vérifier que les données de l'API correspondent EXACTEMENT à l'utilisateur connecté
+          // Vérifier à la fois l'ID, l'email et le rôle pour être sûr
+          const userRole = user.role || ''
+          if (currentUser && currentUser.id === user.id && currentUser.email === userEmail && currentUser.role === userRole) {
+            const updatedRole = currentUser.role || ''
             setUserData({
               nom: currentUser.nom || '',
               prenom: currentUser.prenom || '',
               email: currentUser.email || '',
-              role: role,
+              role: updatedRole,
               telephone: currentUser.telephone || 'N/A',
               adresse: currentUser.adresse || 'N/A',
               dateCreation: currentUser.dateCreation ? new Date(currentUser.dateCreation).toLocaleDateString('fr-FR') : 'N/A',
               derniereConnexion: currentUser.derniereConnexion ? new Date(currentUser.derniereConnexion).toLocaleString('fr-FR') : 'N/A',
               photo: currentUser.photo || null,
-              service: getServiceLabel(role),
-              poste: getRoleLabel(role)
+              service: getServiceLabel(updatedRole),
+              poste: getRoleLabel(updatedRole)
             })
-          } else if (currentUser && currentUser.email !== userEmail) {
-            // Si l'API retourne un autre utilisateur, ne pas mettre à jour
-            console.warn('Les données de l\'API ne correspondent pas à l\'utilisateur connecté. Conservation des données du contexte.')
+          } else if (currentUser) {
+            // Si l'API retourne un autre utilisateur (ID, email ou rôle différent), ne pas mettre à jour
+            console.warn('Les données de l\'API ne correspondent pas à l\'utilisateur connecté. Conservation des données du contexte.', {
+              apiUser: { id: currentUser.id, email: currentUser.email, role: currentUser.role },
+              contextUser: { id: user.id, email: userEmail, role: userRole }
+            })
           }
         } catch (apiError) {
           console.warn('Impossible de récupérer les données depuis l\'API, utilisation des données du contexte:', apiError)
@@ -171,7 +176,7 @@ const ProfilAdminView = () => {
         const updatedUser = await getCurrentUser()
         if (updatedUser) {
           const role = updatedUser.role || ''
-          setUserData({
+          const newUserData = {
             nom: updatedUser.nom || '',
             prenom: updatedUser.prenom || '',
             email: updatedUser.email || '',
@@ -183,7 +188,13 @@ const ProfilAdminView = () => {
             photo: updatedUser.photo || null,
             service: getServiceLabel(role),
             poste: getRoleLabel(role)
-          })
+          }
+          setUserData(newUserData)
+          
+          // Mettre à jour le contexte AuthContext pour que le header se mette à jour
+          if (updateUser && updatedUser.photo) {
+            updateUser({ photo: updatedUser.photo })
+          }
         }
       }
     } catch (error) {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faFileAlt, faArchive, faBell, faCheckCircle, faUsers, faChartLine, faEnvelope
@@ -13,9 +14,37 @@ import { getSPDashboardStats } from '../../api/scolarite'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const DashboardSPView = () => {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { user, isAuthenticated } = useAuth()
   const { error: alertError } = useAlert()
   const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Secrétaire Particulière'
+
+  // Vérifier que l'utilisateur a le bon rôle
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      navigate('/login')
+      return
+    }
+    
+    // Si l'utilisateur n'est pas SP_SCOLARITE, rediriger vers le bon dashboard
+    if (user.role !== 'SP_SCOLARITE') {
+      console.warn('Utilisateur avec rôle incorrect sur le dashboard SP:', user.role)
+      switch (user.role) {
+        case 'AGENT_SCOLARITE':
+          navigate('/scolarite/dashboard')
+          break
+        case 'CHEF_SERVICE_SCOLARITE':
+          navigate('/chef-scolarite/dashboard')
+          break
+        case 'CHEF_DEPARTEMENT':
+          navigate('/chef/dashboard')
+          break
+        default:
+          navigate('/login')
+      }
+    }
+  }, [user, isAuthenticated, navigate])
   // Données statistiques
   const [stats, setStats] = useState({
     attestationsGenerees: 0,
@@ -34,35 +63,58 @@ const DashboardSPView = () => {
 
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        setLoading(true)
-        const response = await getSPDashboardStats()
-        setStats(response?.stats || {
-          attestationsGenerees: 0,
-          attestationsDisponibles: 0,
-          attestationsCeMois: 0,
-          enAttente: 0
-        })
-        setDataAttestations(response?.monthly || [])
-        setDataFileres(
-          (response?.byFiliere || []).map((item) => ({
-            name: item.code || item.nom,
-            value: item.value
-          }))
-        )
-        setAlertes(response?.alerts || [])
-      } catch (error) {
-        console.error('Erreur lors du chargement du tableau de bord SP:', error)
-        alertError(error.message || 'Erreur lors du chargement des statistiques')
-      } finally {
-        setLoading(false)
-      }
+  const loadDashboard = async () => {
+    try {
+      setLoading(true)
+      const response = await getSPDashboardStats()
+      setStats(response?.stats || {
+        attestationsGenerees: 0,
+        attestationsDisponibles: 0,
+        attestationsCeMois: 0,
+        enAttente: 0
+      })
+      setDataAttestations(response?.monthly || [])
+      setDataFileres(
+        (response?.byFiliere || []).map((item) => ({
+          name: item.code || item.nom,
+          value: item.value
+        }))
+      )
+      setAlertes(response?.alerts || [])
+    } catch (error) {
+      console.error('Erreur lors du chargement du tableau de bord SP:', error)
+      alertError(error.message || 'Erreur lors du chargement des statistiques')
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadDashboard()
+    
+    // Rafraîchir le dashboard toutes les 30 secondes pour avoir les données à jour
+    const interval = setInterval(() => {
+      loadDashboard()
+    }, 30000) // 30 secondes
+
+    // Écouter les événements de génération d'attestation pour rafraîchir immédiatement
+    const handleAttestationGenerated = () => {
+      loadDashboard()
+    }
+    window.addEventListener('attestationGenerated', handleAttestationGenerated)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('attestationGenerated', handleAttestationGenerated)
+    }
   }, [])
+
+  // Rafraîchir le dashboard quand on revient sur cette page
+  useEffect(() => {
+    if (location.pathname === '/sp-scolarite/dashboard') {
+      loadDashboard()
+    }
+  }, [location.pathname])
 
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
 

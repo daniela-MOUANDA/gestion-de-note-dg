@@ -4,7 +4,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
   faIdCard, faMoneyBillWave, faImage, faUpload, faUser, faCalendar,
-  faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt, faBook
+  faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt, faBook, faTrash,
+  faTh, faList, faCopy, faKey
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
@@ -19,6 +20,7 @@ import {
   getPromotions,
   finaliserInscription,
   uploadDocumentInscription,
+  deleteDocumentInscription,
   updateEtudiantInfo,
   uploadPhotoEtudiant,
   upsertParent,
@@ -44,6 +46,10 @@ const GererInscriptionsView = () => {
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [selectedInscription, setSelectedInscription] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filtreInscrit, setFiltreInscrit] = useState('tous') // 'tous', 'inscrits', 'non-inscrits'
+  const [viewMode, setViewMode] = useState('grid') // 'grid' ou 'list'
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false)
+  const [studentCredentials, setStudentCredentials] = useState(null)
   
   // États pour les données de la base
   const [formations, setFormations] = useState([])
@@ -116,7 +122,6 @@ const GererInscriptionsView = () => {
       const loadEtudiants = async () => {
         try {
           setLoading(true)
-          console.log('Chargement des étudiants pour:', { selectedFiliere, selectedNiveau, selectedFormation, selectedPromotion, typeInscription })
           const etudiantsData = await getEtudiantsParFiliereNiveau(
             selectedFiliere,
             selectedNiveau,
@@ -124,7 +129,6 @@ const GererInscriptionsView = () => {
             selectedFormation,
             typeInscription
           )
-          console.log('Étudiants récupérés:', etudiantsData.length, etudiantsData)
           setEtudiants(etudiantsData || [])
         } catch (error) {
           console.error('Erreur lors du chargement des étudiants:', error)
@@ -230,6 +234,60 @@ const GererInscriptionsView = () => {
     return hasActeNaissance && hasPhoto && hasQuittance && hasPieceIdentite && hasReleveBac && hasAttestationReussiteBac
   }
 
+  // Valider que les informations personnelles sont complètes
+  const isPersonalInfoComplete = (etudiant) => {
+    if (!etudiant) return false
+    return !!(
+      etudiant.nom &&
+      etudiant.prenom &&
+      etudiant.dateNaissance &&
+      etudiant.lieuNaissance &&
+      etudiant.nationalite &&
+      etudiant.email &&
+      etudiant.telephone &&
+      etudiant.adresse
+    )
+  }
+
+  // Valider qu'au moins un parent est renseigné
+  const hasAtLeastOneParent = (parents) => {
+    if (!parents || parents.length === 0) return false
+    return parents.some(parent => 
+      parent.nom && 
+      parent.prenom && 
+      parent.telephone
+    )
+  }
+
+  // Validation complète avant finalisation
+  const canFinalizeInscription = () => {
+    if (!dossierComplet || !dossierComplet.etudiant || !dossierComplet.inscription) {
+      return { valid: false, reason: 'Dossier incomplet' }
+    }
+
+    // Vérifier les documents
+    if (!allDocumentsPresent(dossierComplet.inscription.documents || {})) {
+      return { valid: false, reason: 'Tous les documents requis doivent être uploadés' }
+    }
+
+    // Vérifier les informations personnelles
+    if (!isPersonalInfoComplete(dossierComplet.etudiant)) {
+      return { valid: false, reason: 'Toutes les informations personnelles doivent être renseignées (nom, prénom, date de naissance, lieu de naissance, nationalité, email, téléphone, adresse)' }
+    }
+
+    // Vérifier qu'au moins un parent est renseigné
+    if (!hasAtLeastOneParent(dossierComplet.parents || [])) {
+      return { valid: false, reason: 'Au moins un parent doit avoir ses informations renseignées (nom, prénom, téléphone)' }
+    }
+
+    // Vérifier que l'inscription n'est pas déjà finalisée
+    if (dossierComplet.inscription.statut === 'INSCRIT') {
+      return { valid: false, reason: 'Cette inscription est déjà finalisée', alreadyFinalized: true }
+    }
+
+    return { valid: true }
+  }
+
   const handleFileUpload = async (documentType) => {
     if (!selectedInscription) {
       alertError('Aucune inscription sélectionnée')
@@ -269,6 +327,43 @@ const GererInscriptionsView = () => {
       }
     }
     input.click()
+  }
+
+  const handleDeleteDocument = async (documentType) => {
+    if (!selectedInscription) {
+      alertError('Aucune inscription sélectionnée')
+      return
+    }
+    
+    // Confirmation avant suppression
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce document ? Vous pourrez ensuite uploader un nouveau document.')) {
+      return
+    }
+    
+    try {
+      setUploading({ ...uploading, [documentType]: true })
+      await deleteDocumentInscription(selectedInscription.id, documentType)
+      success('Document supprimé avec succès!')
+      
+      // Recharger le dossier
+      const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
+      setDossierComplet(dossier.dossier)
+      
+      // Mettre à jour la liste des étudiants
+      const etudiantsData = await getEtudiantsParFiliereNiveau(
+        selectedFiliere,
+        selectedNiveau,
+        selectedPromotion,
+        selectedFormation,
+        typeInscription
+      )
+      setEtudiants(etudiantsData)
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error)
+      alertError(error.message || 'Erreur lors de la suppression du document')
+    } finally {
+      setUploading({ ...uploading, [documentType]: false })
+    }
   }
 
   const handleUpdateEtudiantInfo = async () => {
@@ -334,9 +429,14 @@ const GererInscriptionsView = () => {
       await upsertParent(selectedEtudiant.id, parentData)
       success('Parent enregistré avec succès!')
       
+      // Recharger le dossier complet pour mettre à jour la validation
+      const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
+      setDossierComplet(dossier.dossier || dossier)
+      
       // Recharger les parents
       const parentsData = await getParents(selectedEtudiant.id)
-      setParents(parentsData.parents || [])
+      const parentsList = Array.isArray(parentsData) ? parentsData : (parentsData.parents || [])
+      setParents(parentsList)
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement du parent:', error)
       alertError(error.message || 'Erreur lors de l\'enregistrement du parent')
@@ -351,18 +451,45 @@ const GererInscriptionsView = () => {
       return
     }
     
-    if (!dossierComplet || !dossierComplet.inscription || !allDocumentsPresent(dossierComplet.inscription.documents || {})) {
-      alertError('Veuillez uploader tous les documents requis')
+    // Validation complète
+    const validation = canFinalizeInscription()
+    if (!validation.valid) {
+      if (validation.alreadyFinalized) {
+        alertError('Cette inscription est déjà finalisée. Cette action ne peut être effectuée qu\'une seule fois.')
+      } else {
+        alertError(validation.reason)
+      }
       return
     }
     
     try {
       setLoading(true)
-      await finaliserInscription(selectedInscription.id, user.id)
+      const result = await finaliserInscription(selectedInscription.id, user.id)
+      
+      // Afficher les identifiants dans une modal
+      if (result.password) {
+        setStudentCredentials({
+          nom: result.etudiantNom || `${selectedEtudiant.prenom} ${selectedEtudiant.nom}`,
+          email: result.etudiantEmail || selectedEtudiant.email,
+          matricule: result.etudiantMatricule || selectedEtudiant.matricule,
+          password: result.password
+        })
+        setShowCredentialsModal(true)
+      }
+      
       const message = typeInscription === 'inscription' 
         ? `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`
         : `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été réinscrit avec succès!`
       success(message)
+      
+      // Recharger le dossier pour mettre à jour le statut
+      const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
+      const dossierData = dossier.dossier || dossier
+      setDossierComplet(dossierData)
+      
+      // Recharger les parents
+      const parentsData = await getParents(selectedEtudiant.id)
+      setParents(Array.isArray(parentsData) ? parentsData : (parentsData.parents || []))
       
       // Recharger la liste
       const etudiantsData = await getEtudiantsParFiliereNiveau(
@@ -373,9 +500,6 @@ const GererInscriptionsView = () => {
         typeInscription
       )
       setEtudiants(etudiantsData)
-      setSelectedEtudiant(null)
-      setSelectedInscription(null)
-      setDossierComplet(null)
     } catch (error) {
       console.error('Erreur lors de la finalisation:', error)
       alertError(error.message || 'Erreur lors de la finalisation de l\'inscription')
@@ -553,6 +677,9 @@ const GererInscriptionsView = () => {
       }
     }
     const documentsComplete = dossier.inscription && allDocumentsPresent(dossier.inscription.documents || {})
+    const isAlreadyFinalized = dossier.inscription?.statut === 'INSCRIT'
+    const validation = canFinalizeInscription()
+    const canFinalize = validation.valid && !isAlreadyFinalized
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
@@ -574,9 +701,17 @@ const GererInscriptionsView = () => {
                   </p>
                 </div>
                 <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${
-                  documentsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  isAlreadyFinalized 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : documentsComplete 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'bg-amber-100 text-amber-700'
                 }`}>
-                  {documentsComplete ? '✓ Dossier complet' : '⚠ Documents manquants'}
+                  {isAlreadyFinalized 
+                    ? '✓ Déjà inscrit' 
+                    : documentsComplete 
+                      ? '✓ Dossier complet' 
+                      : '⚠ Documents manquants'}
                 </span>
               </div>
             </div>
@@ -589,7 +724,18 @@ const GererInscriptionsView = () => {
                       <img 
                         src={dossier.etudiant.photo.startsWith('http') ? dossier.etudiant.photo : `http://localhost:3000${dossier.etudiant.photo}`}
                         alt={`${dossier.etudiant.prenom} ${dossier.etudiant.nom}`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover rounded-full"
+                        onError={(e) => {
+                          // Si l'image ne charge pas, afficher les initiales
+                          e.target.style.display = 'none'
+                          const parent = e.target.parentElement
+                          if (parent && !parent.querySelector('.fallback-initials')) {
+                            const fallback = document.createElement('span')
+                            fallback.textContent = `${dossier.etudiant.prenom[0]}${dossier.etudiant.nom[0]}`
+                            fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
+                            parent.appendChild(fallback)
+                          }
+                        }}
                       />
                     ) : (
                       <span>{dossier.etudiant.prenom[0]}{dossier.etudiant.nom[0]}</span>
@@ -824,7 +970,7 @@ const GererInscriptionsView = () => {
                         {doc?.uploaded ? (
                           <div className="bg-green-50 rounded-lg p-3">
                             <p className="text-sm text-green-800 font-medium mb-2">✓ Document uploadé</p>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 flex-wrap">
                               <a
                                 href={doc.url.startsWith('http') ? doc.url : `http://localhost:3000${doc.url}`}
                                 target="_blank"
@@ -840,6 +986,14 @@ const GererInscriptionsView = () => {
                               >
                                 <FontAwesomeIcon icon={faDownload} />Télécharger
                               </a>
+                              <button
+                                onClick={() => handleDeleteDocument(docType)}
+                                disabled={uploading[docType]}
+                                className="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Supprimer le document"
+                              >
+                                <FontAwesomeIcon icon={faTrash} />Supprimer
+                              </button>
                             </div>
                           </div>
                         ) : (
@@ -866,28 +1020,38 @@ const GererInscriptionsView = () => {
                 </div>
               </div>
               <div className="px-6 py-4 bg-slate-50 border-t">
-                <button 
-                  onClick={handleFinaliserInscription} 
-                  disabled={!documentsComplete || loading}
-                  className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${
-                    documentsComplete && !loading ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  }`}
-                >
-                  {loading ? (
-                    <>
-                      <LoadingSpinner size="sm" />
-                      Finalisation en cours...
-                    </>
-                  ) : (
-                    <>
-                      <FontAwesomeIcon icon={faCheckCircle} />
-                      {documentsComplete 
-                        ? (typeInscription === 'inscription' ? 'Finaliser l\'inscription' : 'Finaliser la réinscription')
-                        : 'Documents incomplets'
-                      }
-                    </>
-                  )}
-                </button>
+                {isAlreadyFinalized ? (
+                  <div className="w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 bg-blue-100 text-blue-700">
+                    <FontAwesomeIcon icon={faCheckCircle} />
+                    Inscription déjà finalisée
+                  </div>
+                ) : (
+                  <button 
+                    onClick={handleFinaliserInscription} 
+                    disabled={!canFinalize || loading}
+                    className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${
+                      canFinalize && !loading 
+                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                        : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    }`}
+                    title={!canFinalize && !isAlreadyFinalized ? validation.reason : ''}
+                  >
+                    {loading ? (
+                      <>
+                        <LoadingSpinner size="sm" />
+                        Finalisation en cours...
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesomeIcon icon={faCheckCircle} />
+                        {canFinalize
+                          ? (typeInscription === 'inscription' ? 'Finaliser l\'inscription' : 'Finaliser la réinscription')
+                          : validation.reason || 'Informations incomplètes'
+                        }
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </main>
@@ -899,6 +1063,16 @@ const GererInscriptionsView = () => {
   // Vue 4: Liste des étudiants
   const etudiantsFiltres = etudiants.filter(e => {
     if (!e) return false
+    
+    // Filtre par statut d'inscription
+    if (filtreInscrit === 'inscrits' && !(e.inscrit || e.statut === 'INSCRIT')) {
+      return false
+    }
+    if (filtreInscrit === 'non-inscrits' && (e.inscrit || e.statut === 'INSCRIT')) {
+      return false
+    }
+    
+    // Filtre par recherche textuelle
     const nomComplet = `${e.nom || ''} ${e.prenom || ''}`.toLowerCase()
     const matricule = (e.matricule || '').toLowerCase()
     const query = searchQuery.toLowerCase()
@@ -919,15 +1093,58 @@ const GererInscriptionsView = () => {
               {typeInscription === 'inscription' ? 'Candidats' : 'Étudiants à réinscrire'} - {filieres.find(f => f.id === selectedFiliere)?.nom} - {niveaux.find(n => n.id === selectedNiveau)?.nom || niveaux.find(n => n.id === selectedNiveau)?.code}
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
-              {etudiants.length} {typeInscription === 'inscription' ? 'candidat' : 'étudiant'}{etudiants.length > 1 ? 's' : ''} trouvé{etudiants.length > 1 ? 's' : ''}
+              {etudiantsFiltres.length} {typeInscription === 'inscription' ? 'candidat' : 'étudiant'}{etudiantsFiltres.length > 1 ? 's' : ''} trouvé{etudiantsFiltres.length > 1 ? 's' : ''}
+              {filtreInscrit !== 'tous' && ` (${etudiants.length} au total)`}
             </p>
           </div>
 
           <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
-            <div className="relative">
-              <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Rechercher par nom ou matricule..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                />
+              </div>
+              <div className="sm:w-64">
+                <select
+                  value={filtreInscrit}
+                  onChange={(e) => setFiltreInscrit(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="tous">Tous les candidats</option>
+                  <option value="inscrits">Inscrits uniquement</option>
+                  <option value="non-inscrits">Non inscrits uniquement</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    viewMode === 'grid' 
+                      ? 'bg-blue-500 text-white border-blue-500' 
+                      : 'bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                  title="Vue grille"
+                >
+                  <FontAwesomeIcon icon={faTh} />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    viewMode === 'list' 
+                      ? 'bg-blue-500 text-white border-blue-500' 
+                      : 'bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                  title="Vue liste"
+                >
+                  <FontAwesomeIcon icon={faList} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -947,7 +1164,7 @@ const GererInscriptionsView = () => {
                 </p>
               )}
             </div>
-          ) : (
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {etudiantsFiltres.map((etudiant) => {
                 const docsComplete = allDocumentsPresent(etudiant.documents)
@@ -955,8 +1172,28 @@ const GererInscriptionsView = () => {
                   <div key={etudiant.id} className="bg-white rounded-xl shadow-md border border-slate-200 hover:shadow-lg transition-shadow overflow-hidden">
                     <div className="p-6">
                       <div className="flex items-start gap-4 mb-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                          {(etudiant.prenom?.[0] || '')}{(etudiant.nom?.[0] || '')}
+                        <div className="relative w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
+                          {etudiant.photo ? (
+                            <img 
+                              src={etudiant.photo.startsWith('http') ? etudiant.photo : `http://localhost:3000${etudiant.photo}`}
+                              alt={`${etudiant.prenom || ''} ${etudiant.nom || ''}`}
+                              className="w-full h-full object-cover rounded-full"
+                              onError={(e) => {
+                                // Si l'image ne charge pas, masquer l'image et afficher les initiales
+                                e.target.style.display = 'none'
+                                const parent = e.target.parentElement
+                                if (parent && !parent.querySelector('.fallback-initials')) {
+                                  const fallback = document.createElement('span')
+                                  fallback.textContent = `${etudiant.prenom?.[0] || ''}${etudiant.nom?.[0] || ''}`
+                                  fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
+                                  parent.appendChild(fallback)
+                                }
+                              }}
+                            />
+                          ) : null}
+                          {!etudiant.photo && (
+                            <span className="absolute inset-0 flex items-center justify-center">{(etudiant.prenom?.[0] || '')}{(etudiant.nom?.[0] || '')}</span>
+                          )}
                         </div>
                         <div className="flex-1">
                           <h3 className="text-lg font-bold text-slate-800">{etudiant.prenom || ''} {etudiant.nom || ''}</h3>
@@ -972,27 +1209,308 @@ const GererInscriptionsView = () => {
                       <div className="bg-slate-50 rounded-lg p-3 mb-4">
                         <p className="text-xs font-medium text-slate-700 mb-2">Documents:</p>
                         <div className="flex gap-2 flex-wrap">
-                          {['acteNaissance', 'photo', 'quittance', 'pieceIdentite'].map(doc => (
-                            <span key={doc} className={`text-xs px-2 py-1 rounded ${
-                              etudiant.documents?.[doc]?.uploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {doc === 'acteNaissance' ? 'Acte' : doc === 'pieceIdentite' ? 'CNI' : doc.charAt(0).toUpperCase() + doc.slice(1)}
-                            </span>
-                          ))}
+                          {['acteNaissance', 'photo', 'quittance', 'pieceIdentite', 'releveBac', 'attestationReussiteBac'].map(doc => {
+                            // Vérifier si le document est uploadé (peut être string ou objet)
+                            const docData = etudiant.documents?.[doc]
+                            const isUploaded = typeof docData === 'string' ? !!docData : docData?.uploaded || false
+                            
+                            // Labels pour l'affichage
+                            const labels = {
+                              acteNaissance: 'Acte',
+                              photo: 'Photo',
+                              quittance: 'Quittance',
+                              pieceIdentite: 'CNI',
+                              releveBac: 'Relevé Bac',
+                              attestationReussiteBac: 'Attest. Bac'
+                            }
+                            
+                            return (
+                              <span key={doc} className={`text-xs px-2 py-1 rounded ${
+                                isUploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                                {labels[doc] || doc}
+                              </span>
+                            )
+                          })}
                         </div>
                       </div>
-                      <button onClick={() => setSelectedEtudiant(etudiant)}
-                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
-                        <FontAwesomeIcon icon={faEye} />Voir le dossier
-                      </button>
+                      {etudiant.inscrit || etudiant.statut === 'INSCRIT' ? (
+                        <button 
+                          onClick={() => setSelectedEtudiant(etudiant)}
+                          className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
+                          <FontAwesomeIcon icon={faCheckCircle} />Déjà inscrit - Voir le dossier
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => setSelectedEtudiant(etudiant)}
+                          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
+                          <FontAwesomeIcon icon={faEye} />Voir le dossier
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
               })}
             </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Étudiant</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Matricule</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Statut</th>
+                      <th className="px-6 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    {etudiantsFiltres.map((etudiant, index) => {
+                      const docsComplete = allDocumentsPresent(etudiant.documents)
+                      const labels = {
+                        acteNaissance: 'Acte',
+                        photo: 'Photo',
+                        quittance: 'Quittance',
+                        pieceIdentite: 'CNI',
+                        releveBac: 'Relevé Bac',
+                        attestationReussiteBac: 'Attest. Bac'
+                      }
+                      return (
+                        <tr 
+                          key={etudiant.id} 
+                          className={`hover:bg-blue-50 transition-all duration-200 ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                          }`}
+                        >
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-4">
+                              <div className="relative w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-base overflow-hidden flex-shrink-0 ring-2 ring-blue-100">
+                                {etudiant.photo ? (
+                                  <img 
+                                    src={etudiant.photo.startsWith('http') ? etudiant.photo : `http://localhost:3000${etudiant.photo}`}
+                                    alt={`${etudiant.prenom || ''} ${etudiant.nom || ''}`}
+                                    className="w-full h-full object-cover rounded-full"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none'
+                                      const parent = e.target.parentElement
+                                      if (parent && !parent.querySelector('.fallback-initials')) {
+                                        const fallback = document.createElement('span')
+                                        fallback.textContent = `${etudiant.prenom?.[0] || ''}${etudiant.nom?.[0] || ''}`
+                                        fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
+                                        parent.appendChild(fallback)
+                                      }
+                                    }}
+                                  />
+                                ) : null}
+                                {!etudiant.photo && (
+                                  <span className="absolute inset-0 flex items-center justify-center">{(etudiant.prenom?.[0] || '')}{(etudiant.nom?.[0] || '')}</span>
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-sm font-bold text-slate-900">{etudiant.prenom || ''} {etudiant.nom || ''}</div>
+                                {etudiant.email && (
+                                  <div className="text-xs text-slate-500 mt-0.5">{etudiant.email}</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="text-sm font-medium text-slate-700 bg-slate-100 px-3 py-1 rounded-md inline-block">
+                              {etudiant.matricule || 'N/A'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="text-sm text-slate-600 flex items-center gap-2">
+                              {etudiant.email ? (
+                                <>
+                                  <FontAwesomeIcon icon={faEnvelope} className="text-blue-500 text-xs" />
+                                  <span>{etudiant.email}</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-400 italic">Email non renseigné</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            {(etudiant.inscrit || etudiant.statut === 'INSCRIT') ? (
+                              <span className="px-3 py-1.5 text-xs font-semibold rounded-lg inline-block w-fit bg-blue-100 text-blue-700 border border-blue-300">
+                                ✓ Inscrit
+                              </span>
+                            ) : (
+                              <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-block w-fit ${
+                                docsComplete ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-amber-100 text-amber-700 border border-amber-300'
+                              }`}>
+                                {docsComplete ? '✓ Complet' : '⚠ Incomplet'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            {etudiant.inscrit || etudiant.statut === 'INSCRIT' ? (
+                              <button 
+                                onClick={() => setSelectedEtudiant(etudiant)}
+                                className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                                <FontAwesomeIcon icon={faCheckCircle} />Voir
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => setSelectedEtudiant(etudiant)}
+                                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                                <FontAwesomeIcon icon={faEye} />Voir
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </main>
       </div>
+
+      {/* Modal pour afficher les identifiants de connexion */}
+      {showCredentialsModal && studentCredentials && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold flex items-center gap-3">
+                  <FontAwesomeIcon icon={faKey} />
+                  Identifiants de connexion générés
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowCredentialsModal(false)
+                    setStudentCredentials(null)
+                  }}
+                  className="text-white hover:text-gray-200 transition-colors"
+                >
+                  <FontAwesomeIcon icon={faTimes} className="text-2xl" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <p className="text-lg text-slate-700 mb-4">
+                  L'inscription de <strong>{studentCredentials.nom}</strong> a été finalisée avec succès.
+                </p>
+                <p className="text-sm text-slate-600 mb-6">
+                  Veuillez noter ces identifiants et les communiquer à l'étudiant :
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <FontAwesomeIcon icon={faIdCard} className="text-blue-600" />
+                  Identifiants de connexion
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={studentCredentials.email}
+                        readOnly
+                        className="flex-1 px-4 py-3 bg-white border-2 border-blue-300 rounded-lg text-slate-800 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(studentCredentials.email)
+                          success('Email copié dans le presse-papiers')
+                        }}
+                        className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        title="Copier"
+                      >
+                        <FontAwesomeIcon icon={faCopy} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Matricule</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={studentCredentials.matricule}
+                        readOnly
+                        className="flex-1 px-4 py-3 bg-white border-2 border-blue-300 rounded-lg text-slate-800 font-mono text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(studentCredentials.matricule)
+                          success('Matricule copié dans le presse-papiers')
+                        }}
+                        className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        title="Copier"
+                      >
+                        <FontAwesomeIcon icon={faCopy} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Mot de passe</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={studentCredentials.password}
+                        readOnly
+                        className="flex-1 px-4 py-3 bg-white border-2 border-green-300 rounded-lg text-slate-800 font-mono text-sm font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(studentCredentials.password)
+                          success('Mot de passe copié dans le presse-papiers')
+                        }}
+                        className="px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        title="Copier"
+                      >
+                        <FontAwesomeIcon icon={faCopy} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
+                <p className="text-sm text-amber-800">
+                  <strong>⚠️ Important :</strong> Ces identifiants sont affichés une seule fois. Assurez-vous de les noter ou de les copier avant de fermer cette fenêtre.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    // Copier tous les identifiants dans le presse-papiers
+                    const text = `Identifiants de connexion - ${studentCredentials.nom}\n\nEmail: ${studentCredentials.email}\nMatricule: ${studentCredentials.matricule}\nMot de passe: ${studentCredentials.password}`
+                    navigator.clipboard.writeText(text)
+                    success('Tous les identifiants copiés dans le presse-papiers')
+                  }}
+                  className="px-6 py-3 bg-slate-600 hover:bg-slate-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
+                >
+                  <FontAwesomeIcon icon={faCopy} />
+                  Copier tout
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCredentialsModal(false)
+                    setStudentCredentials(null)
+                  }}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import SidebarSP from '../common/SidebarSP'
 import SidebarScolarite from '../common/SidebarScolarite'
 import SidebarChef from '../common/SidebarChef'
+import SidebarChefDepartement from '../common/SidebarChefDepartement'
 import HeaderSP from '../common/HeaderSP'
 import HeaderScolarite from '../common/HeaderScolarite'
 import HeaderChef from '../common/HeaderChef'
@@ -18,8 +19,9 @@ const AdminLayout = ({ children }) => {
       case 'AGENT_SCOLARITE':
         return <SidebarScolarite />
       case 'CHEF_SERVICE_SCOLARITE':
-      case 'CHEF_DEPARTEMENT':
         return <SidebarChef />
+      case 'CHEF_DEPARTEMENT':
+        return <SidebarChefDepartement />
       default:
         return <SidebarSP />
     }

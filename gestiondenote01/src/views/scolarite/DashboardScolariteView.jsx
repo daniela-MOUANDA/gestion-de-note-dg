@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUsers,
@@ -11,47 +12,76 @@ import {
   faArchive,
   faFileAlt,
   faEnvelope,
-  faAward
+  faAward,
+  faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import SidebarScolarite from '../../components/common/SidebarScolarite'
 import HeaderScolarite from '../../components/common/HeaderScolarite'
 import { useAuth } from '../../contexts/AuthContext'
+import { getAgentDashboardStats } from '../../api/scolarite'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const DashboardScolariteView = () => {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
   const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Agent Scolarité'
-  const [stats] = useState({
-    candidatsAdmis: 250,
-    etudiantsInscrits: 180,
-    enAttenteInscription: 70,
-    inscriptionsAujourdhui: 5,
-    tauxInscription: 72 // (180/250) * 100
+
+  // Vérifier que l'utilisateur a le bon rôle
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      navigate('/login')
+      return
+    }
+    
+    // Si l'utilisateur n'est pas AGENT_SCOLARITE, rediriger vers le bon dashboard
+    if (user.role !== 'AGENT_SCOLARITE') {
+      console.warn('Utilisateur avec rôle incorrect sur le dashboard Agent:', user.role)
+      switch (user.role) {
+        case 'SP_SCOLARITE':
+          navigate('/sp-scolarite/dashboard')
+          break
+        case 'CHEF_SERVICE_SCOLARITE':
+          navigate('/chef-scolarite/dashboard')
+          break
+        case 'CHEF_DEPARTEMENT':
+          navigate('/chef/dashboard')
+          break
+        default:
+          navigate('/login')
+      }
+    }
+  }, [user, isAuthenticated, navigate])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    candidatsAdmis: 0,
+    etudiantsInscrits: 0,
+    enAttenteInscription: 0,
+    inscriptionsAujourdhui: 0,
+    tauxInscription: 0
   })
+  const [dataParFiliere, setDataParFiliere] = useState([])
+  const [inscriptionsParSemaine, setInscriptionsParSemaine] = useState([])
+  const [dataStatut, setDataStatut] = useState([])
 
-  // Données pour le graphique en camembert par filière
-  const dataParFiliere = [
-    { name: 'Génie Informatique', value: 95, color: '#3B82F6' },
-    { name: 'Réseau et Télécom', value: 60, color: '#10B981' },
-    { name: 'Management et Multimédias', value: 25, color: '#F59E0B' }
-  ]
-
-  // Données pour le graphique en barres (inscriptions par semaine)
-  const inscriptionsParSemaine = [
-    { semaine: 'Sem 1', inscrits: 12 },
-    { semaine: 'Sem 2', inscrits: 18 },
-    { semaine: 'Sem 3', inscrits: 25 },
-    { semaine: 'Sem 4', inscrits: 30 },
-    { semaine: 'Sem 5', inscrits: 35 },
-    { semaine: 'Sem 6', inscrits: 40 },
-    { semaine: 'Sem 7', inscrits: 20 }
-  ]
-
-  // Données pour le graphique en camembert (statut)
-  const dataStatut = [
-    { name: 'Inscrits', value: 180, color: '#10B981' },
-    { name: 'En attente', value: 70, color: '#F59E0B' }
-  ]
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setLoading(true)
+        const data = await getAgentDashboardStats()
+        setStats(data.stats)
+        setDataParFiliere(data.dataParFiliere || [])
+        setInscriptionsParSemaine(data.inscriptionsParSemaine || [])
+        setDataStatut(data.dataStatut || [])
+      } catch (error) {
+        console.error('Erreur lors du chargement des statistiques:', error)
+        // En cas d'erreur, garder les valeurs par défaut (0)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadStats()
+  }, [])
 
   const RADIAN = Math.PI / 180
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
@@ -63,6 +93,20 @@ const DashboardScolariteView = () => {
       <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs font-semibold">
         {`${(percent * 100).toFixed(0)}%`}
       </text>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarScolarite />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderScolarite scolariteName="Service Scolarité" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0 flex items-center justify-center">
+            <LoadingSpinner size="lg" text="Chargement des statistiques..." />
+          </main>
+        </div>
+      </div>
     )
   }
 
@@ -139,81 +183,97 @@ const DashboardScolariteView = () => {
             {/* Graphique en camembert - Répartition par filière */}
             <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Répartition par filière</h2>
-              <ResponsiveContainer width="100%" height={400}>
-                <PieChart>
-                  <Pie
-                    data={dataParFiliere}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={renderCustomizedLabel}
-                    outerRadius={140}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {dataParFiliere.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+              {dataParFiliere.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart>
+                      <Pie
+                        data={dataParFiliere}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={renderCustomizedLabel}
+                        outerRadius={140}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {dataParFiliere.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {dataParFiliere.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                          <span className="text-slate-600">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-slate-800">{item.value} étudiants</span>
+                      </div>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36}
-                    formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-4 space-y-2">
-                {dataParFiliere.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
-                      <span className="text-slate-600">{item.name}</span>
-                    </div>
-                    <span className="font-semibold text-slate-800">{item.value} étudiants</span>
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-96 text-slate-500">
+                  <p>Aucune donnée disponible</p>
+                </div>
+              )}
             </div>
 
             {/* Graphique en camembert - Statut */}
             <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
               <h2 className="text-lg font-bold text-slate-800 mb-4">Statut des candidats</h2>
-              <ResponsiveContainer width="100%" height={400}>
-                <PieChart>
-                  <Pie
-                    data={dataStatut}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={renderCustomizedLabel}
-                    outerRadius={140}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {dataStatut.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+              {dataStatut.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart>
+                      <Pie
+                        data={dataStatut}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={renderCustomizedLabel}
+                        outerRadius={140}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {dataStatut.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {dataStatut.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                          <span className="text-slate-600">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-slate-800">{item.value}</span>
+                      </div>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36}
-                    formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-4 space-y-2">
-                {dataStatut.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
-                      <span className="text-slate-600">{item.name}</span>
-                    </div>
-                    <span className="font-semibold text-slate-800">{item.value}</span>
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-96 text-slate-500">
+                  <p>Aucune donnée disponible</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -226,22 +286,28 @@ const DashboardScolariteView = () => {
                 <span>Taux d'inscription: <span className="font-semibold text-slate-800">{stats.tauxInscription}%</span></span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={inscriptionsParSemaine}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="semaine" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    border: '1px solid #e2e8f0', 
-                    borderRadius: '8px' 
-                  }} 
-                />
-                <Legend />
-                <Bar dataKey="inscrits" fill="#3B82F6" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {inscriptionsParSemaine.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={inscriptionsParSemaine}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="semaine" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#fff', 
+                      border: '1px solid #e2e8f0', 
+                      borderRadius: '8px' 
+                    }} 
+                  />
+                  <Legend />
+                  <Bar dataKey="inscrits" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-72 text-slate-500">
+                <p>Aucune donnée disponible</p>
+              </div>
+            )}
           </div>
 
           {/* Actions rapides et informations */}

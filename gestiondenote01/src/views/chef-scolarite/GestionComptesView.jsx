@@ -1,16 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
-  faUsers, faPlus, faEdit, faTrash, faCheckCircle, faTimesCircle, faSearch
+  faUsers, faPlus, faEdit, faTrash, faCheckCircle, faTimesCircle, faSearch, faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
+import { getAllComptes, createCompte, updateCompte, deleteCompte, toggleActif } from '../../api/comptes.js'
+import { useAlert } from '../../contexts/AlertContext'
 
 const GestionComptesView = () => {
+  const { success, error: showError } = useAlert()
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [modalType, setModalType] = useState('create') // 'create' ou 'edit'
   const [currentCompte, setCurrentCompte] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
@@ -21,13 +26,37 @@ const GestionComptesView = () => {
     actif: true
   })
 
-  const [comptes, setComptes] = useState([
-    { id: 1, nom: 'NZAMBA', prenom: 'Marie', email: 'marie.nzamba@inptic.ga', username: 'mnzamba', role: 'Agent', actif: true, dateCreation: '15/09/2024', derniereConnexion: '27/11/2024 14:32' },
-    { id: 2, nom: 'OBIANG', prenom: 'Jeanne', email: 'jeanne.obiang@inptic.ga', username: 'jobiang', role: 'SP-Scolarité', actif: true, dateCreation: '10/09/2024', derniereConnexion: '27/11/2024 09:15' },
-    { id: 3, nom: 'MBADINGA', prenom: 'Paul', email: 'paul.mbadinga@inptic.ga', username: 'pmbadinga', role: 'Agent', actif: true, dateCreation: '12/09/2024', derniereConnexion: '26/11/2024 16:45' },
-    { id: 4, nom: 'ELLA', prenom: 'Sophie', email: 'sophie.ella@inptic.ga', username: 'sella', role: 'Agent', actif: false, dateCreation: '18/09/2024', derniereConnexion: '20/11/2024 10:30' },
-    { id: 5, nom: 'ONDO', prenom: 'Pierre', email: 'pierre.ondo@inptic.ga', username: 'pondo', role: 'Agent', actif: true, dateCreation: '20/09/2024', derniereConnexion: '27/11/2024 11:20' }
-  ])
+  const [comptes, setComptes] = useState([])
+
+  // Charger les comptes au montage du composant
+  useEffect(() => {
+    loadComptes()
+  }, [])
+
+  const loadComptes = async () => {
+    try {
+      setLoading(true)
+      const result = await getAllComptes()
+      if (result.success) {
+        // Formater les dates pour l'affichage
+        const formattedComptes = result.comptes.map(compte => ({
+          ...compte,
+          dateCreation: new Date(compte.dateCreation).toLocaleDateString('fr-FR'),
+          derniereConnexion: compte.derniereConnexion 
+            ? new Date(compte.derniereConnexion).toLocaleString('fr-FR')
+            : '-'
+        }))
+        setComptes(formattedComptes)
+      } else {
+        showError(result.error || 'Erreur lors du chargement des comptes')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showError(error.message || 'Erreur lors du chargement des comptes')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleOpenModal = (type, compte = null) => {
     setModalType(type)
@@ -56,40 +85,74 @@ const GestionComptesView = () => {
     setShowModal(true)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (modalType === 'create') {
-      const nouveauCompte = {
-        id: comptes.length + 1,
-        ...formData,
-        dateCreation: new Date().toLocaleDateString('fr-FR'),
-        derniereConnexion: '-'
+    try {
+      setSubmitting(true)
+      
+      if (modalType === 'create') {
+        const result = await createCompte(formData)
+        if (result.success) {
+          success('Compte créé avec succès !')
+          setShowModal(false)
+          await loadComptes() // Recharger la liste
+        } else {
+          showError(result.error || 'Erreur lors de la création du compte')
+        }
+      } else {
+        // Pour la modification, ne pas envoyer le mot de passe s'il est vide
+        const updateData = { ...formData }
+        if (!updateData.password || updateData.password.trim() === '') {
+          delete updateData.password
+        }
+        
+        const result = await updateCompte(currentCompte.id, updateData)
+        if (result.success) {
+          success('Compte modifié avec succès !')
+          setShowModal(false)
+          await loadComptes() // Recharger la liste
+        } else {
+          showError(result.error || 'Erreur lors de la modification du compte')
+        }
       }
-      setComptes([...comptes, nouveauCompte])
-      alert('Compte créé avec succès !')
-    } else {
-      setComptes(comptes.map(c => 
-        c.id === currentCompte.id 
-          ? { ...c, ...formData, password: formData.password || c.password }
-          : c
-      ))
-      alert('Compte modifié avec succès !')
+    } catch (error) {
+      console.error('Erreur:', error)
+      showError(error.message || 'Une erreur est survenue')
+    } finally {
+      setSubmitting(false)
     }
-    
-    setShowModal(false)
   }
 
-  const handleToggleActif = (id) => {
-    setComptes(comptes.map(c => 
-      c.id === id ? { ...c, actif: !c.actif } : c
-    ))
+  const handleToggleActif = async (compte) => {
+    try {
+      const result = await toggleActif(compte.id, !compte.actif)
+      if (result.success) {
+        success(`Compte ${!compte.actif ? 'activé' : 'désactivé'} avec succès !`)
+        await loadComptes() // Recharger la liste
+      } else {
+        showError(result.error || 'Erreur lors de la modification du statut')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showError(error.message || 'Une erreur est survenue')
+    }
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce compte ?')) {
-      setComptes(comptes.filter(c => c.id !== id))
-      alert('Compte supprimé avec succès !')
+      try {
+        const result = await deleteCompte(id)
+        if (result.success) {
+          success('Compte supprimé avec succès !')
+          await loadComptes() // Recharger la liste
+        } else {
+          showError(result.error || 'Erreur lors de la suppression du compte')
+        }
+      } catch (error) {
+        console.error('Erreur:', error)
+        showError(error.message || 'Une erreur est survenue')
+      }
     }
   }
 
@@ -172,21 +235,34 @@ const GestionComptesView = () => {
 
           {/* Table des comptes */}
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b-2 border-slate-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Nom complet</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Username</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Rôle</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Statut</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Dernière connexion</th>
-                    <th className="px-6 py-3 text-center text-xs font-bold text-slate-700 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {filteredComptes.map((compte) => (
+            {loading ? (
+              <div className="flex items-center justify-center p-12">
+                <FontAwesomeIcon icon={faSpinner} className="text-blue-600 text-3xl animate-spin" />
+                <span className="ml-3 text-slate-600">Chargement des comptes...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b-2 border-slate-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Nom complet</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Username</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Rôle</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Statut</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase">Dernière connexion</th>
+                      <th className="px-6 py-3 text-center text-xs font-bold text-slate-700 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredComptes.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
+                          Aucun compte trouvé
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredComptes.map((compte) => (
                     <tr key={compte.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-slate-800">{compte.prenom} {compte.nom}</p>
@@ -205,7 +281,7 @@ const GestionComptesView = () => {
                       </td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => handleToggleActif(compte.id)}
+                          onClick={() => handleToggleActif(compte)}
                           className="flex items-center gap-2"
                         >
                           <FontAwesomeIcon 
@@ -238,11 +314,13 @@ const GestionComptesView = () => {
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </tr>
+                    ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -352,8 +430,10 @@ const GestionComptesView = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  disabled={submitting}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
+                  {submitting && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
                   {modalType === 'create' ? 'Créer' : 'Modifier'}
                 </button>
               </div>

@@ -35,6 +35,32 @@ export const getPromotions = async () => {
   return response.json()
 }
 
+export const getAgentDashboardStats = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    throw new Error('Token manquant. Veuillez vous reconnecter.')
+  }
+
+  const response = await fetch(`${API_URL}/dashboard/agent`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des statistiques' }))
+    throw new Error(error.error || 'Erreur lors de la récupération des statistiques')
+  }
+  return response.json()
+}
+
 export const getSPDashboardStats = async () => {
   const token = localStorage.getItem('token')
   if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
@@ -54,6 +80,131 @@ export const getSPDashboardStats = async () => {
     }
     const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des statistiques' }))
     throw new Error(error.error || 'Erreur lors de la récupération des statistiques')
+  }
+
+  return response.json()
+}
+
+export const getChefDashboardStats = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/dashboard/chef`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    if (response.status === 403) {
+      const error = await response.json().catch(() => ({ error: 'Accès refusé' }))
+      throw new Error(error.error || 'Accès refusé. Vous n\'avez pas les permissions nécessaires.')
+    }
+    const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des statistiques' }))
+    throw new Error(error.error || 'Erreur lors de la récupération des statistiques')
+  }
+
+  return response.json()
+}
+
+export const getChefStatistiques = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/statistiques/chef`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    if (response.status === 403) {
+      const error = await response.json().catch(() => ({ error: 'Accès refusé' }))
+      throw new Error(error.error || 'Accès refusé. Vous n\'avez pas les permissions nécessaires.')
+    }
+    const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des statistiques' }))
+    throw new Error(error.error || 'Erreur lors de la récupération des statistiques')
+  }
+
+  return response.json()
+}
+
+// ============================================
+// AUDIT
+// ============================================
+
+export const getActionsAudit = async (filters = {}) => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const queryParams = new URLSearchParams()
+  if (filters.typeAction) queryParams.append('typeAction', filters.typeAction)
+  if (filters.utilisateurId) queryParams.append('utilisateurId', filters.utilisateurId)
+  if (filters.dateDebut) queryParams.append('dateDebut', filters.dateDebut)
+  if (filters.dateFin) queryParams.append('dateFin', filters.dateFin)
+  if (filters.searchQuery) queryParams.append('searchQuery', filters.searchQuery)
+  if (filters.limit) queryParams.append('limit', filters.limit.toString())
+  if (filters.offset) queryParams.append('offset', filters.offset.toString())
+
+  const response = await fetch(`${API_URL}/audit/actions?${queryParams.toString()}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    if (response.status === 403) {
+      const error = await response.json().catch(() => ({ error: 'Accès refusé' }))
+      throw new Error(error.error || 'Accès refusé. Vous n\'avez pas les permissions nécessaires.')
+    }
+    const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des actions d\'audit' }))
+    throw new Error(error.error || 'Erreur lors de la récupération des actions d\'audit')
+  }
+
+  return response.json()
+}
+
+export const getAgentsPourFiltre = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/audit/agents`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    if (response.status === 403) {
+      const error = await response.json().catch(() => ({ error: 'Accès refusé' }))
+      throw new Error(error.error || 'Accès refusé. Vous n\'avez pas les permissions nécessaires.')
+    }
+    const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des agents' }))
+    throw new Error(error.error || 'Erreur lors de la récupération des agents')
   }
 
   return response.json()
@@ -89,6 +240,33 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
   })
   if (!response.ok) throw new Error('Erreur lors de la finalisation')
   return response.json()
+}
+
+// ============================================
+// PROFIL ÉTUDIANT
+// ============================================
+
+export const getMonProfilEtudiant = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/etudiant/mon-profil`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login-etudiant'
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    const errorData = await response.json().catch(() => ({ error: 'Erreur lors de la récupération du profil' }))
+    throw new Error(errorData.error || 'Erreur lors de la récupération du profil étudiant')
+  }
+  const data = await response.json()
+  return data.etudiant
 }
 
 // ============================================
@@ -146,11 +324,16 @@ export const getAttestationsArchivees = async (promotionId, filiereId, niveauId,
   return response.json()
 }
 
-export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId) => {
+export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId = null) => {
   const token = localStorage.getItem('token')
   if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
   
-  const response = await fetch(`${API_URL}/attestations/archives?promotionId=${promotionId}&filiereId=${filiereId}&niveauId=${niveauId}&formationId=${formationId}`, {
+  let url = `${API_URL}/attestations/archives?promotionId=${promotionId}&filiereId=${filiereId}&niveauId=${niveauId}`
+  if (formationId) {
+    url += `&formationId=${formationId}`
+  }
+  
+  const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
@@ -226,6 +409,21 @@ export const uploadDocumentInscription = async (inscriptionId, documentType, fil
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || 'Erreur lors de l\'upload')
+  }
+  return response.json()
+}
+
+export const deleteDocumentInscription = async (inscriptionId, documentType) => {
+  const token = localStorage.getItem('token')
+  const response = await fetch(`${API_URL}/inscriptions/${inscriptionId}/documents/${documentType}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Erreur lors de la suppression')
   }
   return response.json()
 }

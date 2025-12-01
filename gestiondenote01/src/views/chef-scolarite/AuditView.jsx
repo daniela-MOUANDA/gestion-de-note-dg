@@ -1,89 +1,201 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
-  faClipboardList, faSearch, faFilter, faDownload
+  faClipboardList, faSearch, faFilter, faDownload, faChevronLeft, faChevronRight
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarChef from '../../components/common/SidebarChef'
 import HeaderChef from '../../components/common/HeaderChef'
+import { useAuth } from '../../contexts/AuthContext'
+import { getActionsAudit, getAgentsPourFiltre } from '../../api/scolarite'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { useAlert } from '../../contexts/AlertContext'
 
 const AuditView = () => {
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
+  const { error: alertError } = useAlert()
+  
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [filterAgent, setFilterAgent] = useState('all')
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin, setDateFin] = useState('')
+  
+  const [activites, setActivites] = useState([])
+  const [agents, setAgents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
 
-  const [activites] = useState([
-    { id: 1, agent: 'Marie NZAMBA', action: 'Connexion', details: 'Authentification réussie', date: '27/11/2024 14:32', type: 'connexion' },
-    { id: 2, agent: 'Marie NZAMBA', action: 'Inscription validée', details: 'ANDEME MBO Lidvige - GI-1A', date: '27/11/2024 14:30', type: 'inscription' },
-    { id: 3, agent: 'Jeanne OBIANG', action: 'Connexion', details: 'Authentification réussie', date: '27/11/2024 09:15', type: 'connexion' },
-    { id: 4, agent: 'Jeanne OBIANG', action: 'Attestation générée', details: 'N°0460/INPTIC/DG/DSE/2024', date: '27/11/2024 09:15', type: 'attestation' },
-    { id: 5, agent: 'Paul MBADINGA', action: 'Bulletin distribué', details: 'RT-2A - Semestre 1', date: '26/11/2024 16:40', type: 'bulletin' },
-    { id: 6, agent: 'Marie NZAMBA', action: 'Message envoyé', details: 'Classe GI-1A (35 étudiants)', date: '26/11/2024 15:20', type: 'message' },
-    { id: 7, agent: 'Sophie ELLA', action: 'Tentative de connexion échouée', details: '3 tentatives avec mot de passe incorrect', date: '26/11/2024 11:15', type: 'error' },
-    { id: 8, agent: 'Paul MBADINGA', action: 'Diplôme distribué', details: 'DTS - RT-2024', date: '26/11/2024 10:30', type: 'diplome' },
-  ])
+  // Vérification du rôle et redirection si nécessaire
+  useEffect(() => {
+    if (isAuthenticated && user?.role !== 'CHEF_SERVICE_SCOLARITE') {
+      console.warn(`Accès non autorisé à l'audit pour le rôle: ${user?.role}. Redirection...`)
+      const role = user?.role?.trim().toUpperCase()
+      if (role === 'SP_SCOLARITE') {
+        navigate('/sp-scolarite/dashboard', { replace: true })
+      } else if (role === 'AGENT_SCOLARITE') {
+        navigate('/scolarite/dashboard', { replace: true })
+      } else {
+        navigate('/login', { replace: true })
+      }
+    }
+  }, [isAuthenticated, user, navigate])
 
-  const agents = ['Marie NZAMBA', 'Jeanne OBIANG', 'Paul MBADINGA', 'Sophie ELLA']
-
-  const filteredActivites = activites.filter(act => {
-    const matchSearch = act.agent.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                       act.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                       act.details.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchType = filterType === 'all' || act.type === filterType
-    const matchAgent = filterAgent === 'all' || act.agent === filterAgent
-    const matchDate = isInDateRange(act.date)
+  // Charger les agents pour le filtre
+  useEffect(() => {
+    const loadAgents = async () => {
+      if (user?.role === 'CHEF_SERVICE_SCOLARITE') {
+        try {
+          const agentsData = await getAgentsPourFiltre()
+          setAgents(agentsData)
+        } catch (err) {
+          console.error('Erreur lors du chargement des agents:', err)
+        }
+      }
+    }
     
-    return matchSearch && matchType && matchAgent && matchDate
-  })
+    if (isAuthenticated && user?.role === 'CHEF_SERVICE_SCOLARITE') {
+      loadAgents()
+    }
+  }, [isAuthenticated, user])
 
-  const parseDate = (dateStr) => {
-    // Format: "27/11/2024 14:32"
-    const [datePart] = dateStr.split(' ')
-    const [day, month, year] = datePart.split('/')
-    return new Date(year, month - 1, day)
+  // Charger les actions d'audit
+  useEffect(() => {
+    const loadActions = async () => {
+      if (user?.role === 'CHEF_SERVICE_SCOLARITE') {
+        try {
+          setLoading(true)
+          setError(null)
+          
+          const filters = {
+            typeAction: filterType !== 'all' ? filterType : undefined,
+            utilisateurId: filterAgent !== 'all' ? filterAgent : undefined,
+            dateDebut: dateDebut || undefined,
+            dateFin: dateFin || undefined,
+            searchQuery: searchQuery.trim() || undefined
+          }
+          
+          const actions = await getActionsAudit(filters)
+          setActivites(actions)
+          // Réinitialiser à la page 1 quand les filtres changent
+          setCurrentPage(1)
+        } catch (err) {
+          console.error('Erreur lors du chargement des actions d\'audit:', err)
+          setError(err.message || 'Erreur lors du chargement des actions d\'audit.')
+          alertError(err.message || 'Erreur lors du chargement des actions d\'audit.')
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        setLoading(false)
+      }
+    }
+    
+    // Délai pour éviter trop de requêtes lors de la saisie
+    const timeoutId = setTimeout(() => {
+      if (isAuthenticated && user?.role === 'CHEF_SERVICE_SCOLARITE') {
+        loadActions()
+      }
+    }, searchQuery ? 500 : 0) // Délai de 500ms si recherche, sinon immédiat
+    
+    return () => clearTimeout(timeoutId)
+  }, [isAuthenticated, user, filterType, filterAgent, dateDebut, dateFin, searchQuery, alertError])
+
+  // Calculs de pagination
+  const totalPages = Math.ceil(activites.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedActivites = activites.slice(startIndex, endIndex)
+
+  // Fonctions de pagination
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+      // Scroll vers le haut du tableau
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
 
-  const isInDateRange = (activityDate) => {
-    if (!dateDebut && !dateFin) return true
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      goToPage(currentPage - 1)
+    }
+  }
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      goToPage(currentPage + 1)
+    }
+  }
+
+  // Générer les numéros de page à afficher
+  const getPageNumbers = () => {
+    const pages = []
+    const maxPagesToShow = 7
     
-    const actDate = parseDate(activityDate)
-    
-    if (dateDebut && !dateFin) {
-      const debut = new Date(dateDebut)
-      return actDate >= debut
+    if (totalPages <= maxPagesToShow) {
+      // Afficher toutes les pages si moins de maxPagesToShow
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      // Afficher avec ellipses
+      if (currentPage <= 3) {
+        // Début
+        for (let i = 1; i <= 5; i++) {
+          pages.push(i)
+        }
+        pages.push('...')
+        pages.push(totalPages)
+      } else if (currentPage >= totalPages - 2) {
+        // Fin
+        pages.push(1)
+        pages.push('...')
+        for (let i = totalPages - 4; i <= totalPages; i++) {
+          pages.push(i)
+        }
+      } else {
+        // Milieu
+        pages.push(1)
+        pages.push('...')
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i)
+        }
+        pages.push('...')
+        pages.push(totalPages)
+      }
     }
     
-    if (!dateDebut && dateFin) {
-      const fin = new Date(dateFin)
-      fin.setHours(23, 59, 59, 999)
-      return actDate <= fin
-    }
-    
-    const debut = new Date(dateDebut)
-    const fin = new Date(dateFin)
-    fin.setHours(23, 59, 59, 999)
-    
-    return actDate >= debut && actDate <= fin
+    return pages
   }
 
   const handleExportCSV = () => {
+    if (activites.length === 0) {
+      alertError('Aucune donnée à exporter')
+      return
+    }
+
     // Créer les en-têtes du CSV
     const headers = ['Date & Heure', 'Agent', 'Action', 'Détails', 'Type']
     
-    // Créer les lignes de données
-    const rows = filteredActivites.map(act => [
+    // Créer les lignes de données (exporter toutes les données filtrées, pas seulement la page actuelle)
+    const rows = activites.map(act => [
       act.date,
       act.agent,
       act.action,
-      act.details,
+      act.details || '',
       act.type
     ])
     
     // Construire le CSV
     let csvContent = headers.join(',') + '\n'
     rows.forEach(row => {
-      csvContent += row.map(cell => `"${cell}"`).join(',') + '\n'
+      csvContent += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n'
     })
     
     // Créer le blob et télécharger
@@ -116,6 +228,22 @@ const AuditView = () => {
     }
   }
 
+  if (loading && activites.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarChef />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderChef />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+            <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
+              <LoadingSpinner size="lg" text="Chargement des actions d'audit..." />
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <SidebarChef />
@@ -131,6 +259,13 @@ const AuditView = () => {
               Historique complet des actions des agents
             </p>
           </div>
+
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
+              <strong className="font-bold">Erreur!</strong>
+              <span className="block sm:inline"> {error}</span>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-md p-6 mb-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
@@ -171,7 +306,7 @@ const AuditView = () => {
                 >
                   <option value="all">Tous les agents</option>
                   {agents.map(agent => (
-                    <option key={agent} value={agent}>{agent}</option>
+                    <option key={agent.id} value={agent.id}>{agent.nom}</option>
                   ))}
                 </select>
               </div>
@@ -222,10 +357,15 @@ const AuditView = () => {
             {/* Résumé des résultats */}
             <div className="mt-4 pt-4 border-t border-slate-200">
               <p className="text-sm text-slate-600">
-                <span className="font-semibold text-slate-800">{filteredActivites.length}</span> activité(s) trouvée(s)
+                <span className="font-semibold text-slate-800">{activites.length}</span> activité(s) trouvée(s)
                 {dateDebut && dateFin && (
                   <span className="ml-2">
                     du <span className="font-semibold">{dateDebut}</span> au <span className="font-semibold">{dateFin}</span>
+                  </span>
+                )}
+                {activites.length > 0 && (
+                  <span className="ml-2">
+                    (Page {currentPage} sur {totalPages})
                   </span>
                 )}
               </p>
@@ -245,24 +385,109 @@ const AuditView = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {filteredActivites.map((act) => (
-                    <tr key={act.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-800">{act.agent}</p>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-800">{act.action}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{act.details}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{act.date}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTypeColor(act.type)}`}>
-                          {act.type}
-                        </span>
+                  {loading && activites.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-12 text-center">
+                        <LoadingSpinner size="md" text="Chargement des actions..." />
                       </td>
                     </tr>
-                  ))}
+                  ) : paginatedActivites.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                        Aucune action trouvée pour les critères sélectionnés
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedActivites.map((act) => (
+                      <tr key={act.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-slate-800">{act.agent}</p>
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-slate-800">{act.action}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{act.details || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">{act.date}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTypeColor(act.type)}`}>
+                            {act.type}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+            
+            {/* Pagination */}
+            {activites.length > 0 && totalPages > 1 && (
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-slate-600">
+                    Affichage de <span className="font-semibold text-slate-800">{startIndex + 1}</span> à{' '}
+                    <span className="font-semibold text-slate-800">
+                      {Math.min(endIndex, activites.length)}
+                    </span>{' '}
+                    sur <span className="font-semibold text-slate-800">{activites.length}</span> résultat(s)
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {/* Bouton Précédent */}
+                    <button
+                      onClick={goToPreviousPage}
+                      disabled={currentPage === 1}
+                      className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${
+                        currentPage === 1
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faChevronLeft} />
+                      Précédent
+                    </button>
+                    
+                    {/* Numéros de page */}
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers().map((page, index) => {
+                        if (page === '...') {
+                          return (
+                            <span key={`ellipsis-${index}`} className="px-2 text-slate-400">
+                              ...
+                            </span>
+                          )
+                        }
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => goToPage(page)}
+                            className={`px-3 py-2 rounded-lg font-semibold transition-colors min-w-[40px] ${
+                              currentPage === page
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Bouton Suivant */}
+                    <button
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                      className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${
+                        currentPage === totalPages
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      Suivant
+                      <FontAwesomeIcon icon={faChevronRight} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

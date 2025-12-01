@@ -16,6 +16,11 @@ import AideView from './views/student/AideView'
 
 // Routes Chef de Département
 import DashboardChefView from './views/chef/DashboardChefView'
+import ClassesChefDepartementView from './views/chef-departement/ClassesView'
+import ModulesChefDepartementView from './views/chef-departement/ModulesView'
+import EnseignantsChefDepartementView from './views/chef-departement/EnseignantsView'
+import EtudiantsInscritsView from './views/chef-departement/EtudiantsInscritsView'
+import RepartitionClasseView from './views/chef-departement/RepartitionClasseView'
 import MessagerieChefView from './views/chef/MessagerieChefView'
 import GererClassesView from './views/chef/GererClassesView'
 import GererEnseignantsView from './views/chef/GererEnseignantsView'
@@ -46,6 +51,21 @@ import MessagerieSPView from './views/sp-scolarite/MessagerieSPView'
 import AttestationsScolariteView from './views/scolarite/AttestationsScolariteView'
 import ArchivesAttestationsScolariteView from './views/scolarite/ArchivesAttestationsScolariteView'
 
+// Routes DG (Directeur Général)
+import DashboardDGView from './views/dg/DashboardDGView'
+
+// Routes DEP (Directeur des Études Pédagogiques)
+import DashboardDEPView from './views/dep/DashboardDEPView'
+import ChefsDepartementView from './views/dep/ChefsDepartementView'
+import DepartementsView from './views/dep/DepartementsView'
+import ConseilsView from './views/dep/ConseilsView'
+import VisasView from './views/dep/VisasView'
+import ProcesVerbauxDEPView from './views/dep/ProcesVerbauxView'
+import RapportsView from './views/dep/RapportsView'
+import StatistiquesDEPView from './views/dep/StatistiquesView'
+import EtudiantsView from './views/dep/EtudiantsView'
+import MeilleursEtudiantsView from './views/dep/MeilleursEtudiantsView'
+
 // Routes communes Administration
 import ProfilAdminView from './views/admin/ProfilAdminView'
 import ParametresAdminView from './views/admin/ParametresAdminView'
@@ -59,7 +79,7 @@ import MessagerieChefScolariteView from './views/chef-scolarite/MessagerieChefVi
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_relativeSplatPath: true }}>
       <Routes>
         {/* Pages de connexion */}
         <Route path="/login" element={<LoginView />} />
@@ -78,11 +98,12 @@ function App() {
         {/* Routes Chef de Département */}
         <Route path="/chef/dashboard" element={<DashboardChefView />} />
         <Route path="/chef/messagerie" element={<MessagerieChefView />} />
-        <Route path="/chef/classes" element={<GererClassesView />} />
-        <Route path="/chef/enseignants" element={<GererEnseignantsView />} />
+        <Route path="/chef/classes" element={<ClassesChefDepartementView />} />
+        <Route path="/chef/modules" element={<ModulesChefDepartementView />} />
+        <Route path="/chef/enseignants" element={<EnseignantsChefDepartementView />} />
+        <Route path="/chef/etudiants" element={<EtudiantsInscritsView />} />
+        <Route path="/chef/repartition" element={<RepartitionClasseView />} />
         <Route path="/chef/notes/ajouter" element={<AjouterNotesView />} />
-        <Route path="/chef/modules" element={<GererModulesView />} />
-        <Route path="/chef/etudiants" element={<GererEtudiantsView />} />
         <Route path="/chef/rattrapages" element={<GererRattrapagesView />} />
         <Route path="/chef/unites-enseignement" element={<PublierUnitesEnseignementView />} />
         <Route path="/chef/bulletins" element={<PublierBulletinsView />} />
@@ -127,6 +148,21 @@ function App() {
         <Route path="/chef-scolarite/diplomes" element={<DiplomesView />} />
         <Route path="/chef-scolarite/proces-verbaux" element={<ProcesVerbauxView />} />
         <Route path="/chef-scolarite/archivage" element={<ArchivageView />} />
+        
+        {/* Route DG - Prévisualisation sans authentification */}
+        <Route path="/dg/dashboard" element={<DashboardDGView />} />
+        
+        {/* Routes DEP (Directeur des Études Pédagogiques) */}
+        <Route path="/dep/dashboard" element={<DashboardDEPView />} />
+        <Route path="/dep/chefs-departement" element={<ChefsDepartementView />} />
+        <Route path="/dep/departements" element={<DepartementsView />} />
+        <Route path="/dep/conseils" element={<ConseilsView />} />
+        <Route path="/dep/visas" element={<VisasView />} />
+        <Route path="/dep/proces-verbaux" element={<ProcesVerbauxDEPView />} />
+        <Route path="/dep/rapports" element={<RapportsView />} />
+        <Route path="/dep/statistiques" element={<StatistiquesDEPView />} />
+        <Route path="/dep/etudiants" element={<EtudiantsView />} />
+        <Route path="/dep/meilleurs-etudiants" element={<MeilleursEtudiantsView />} />
         
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login-admin" element={<Navigate to="/login" replace />} />

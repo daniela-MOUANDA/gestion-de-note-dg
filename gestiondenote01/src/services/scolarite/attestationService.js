@@ -200,19 +200,26 @@ export const archiverAttestation = async (attestationId) => {
   }
 }
 
-// Récupérer les attestations archivées par filière et niveau (sans classe)
-export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId) => {
+// Récupérer les attestations archivées par filière et niveau (sans classe, sans formation)
+export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId = null) => {
   try {
     console.log('Recherche des inscriptions avec les paramètres:', { promotionId, filiereId, niveauId, formationId });
     
+    // Construire la condition where
+    const whereCondition = {
+      promotionId,
+      filiereId,
+      niveauId,
+      statut: 'INSCRIT'
+    }
+    
+    // Ajouter formationId seulement si fourni
+    if (formationId) {
+      whereCondition.formationId = formationId
+    }
+    
     const inscriptions = await prisma.inscription.findMany({
-      where: {
-        promotionId,
-        filiereId,
-        niveauId,
-        formationId,
-        statut: 'INSCRIT'
-      },
+      where: whereCondition,
       include: {
         etudiant: true,
         formation: true,
@@ -247,12 +254,11 @@ export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, fili
       const inscription = inscriptions.find(i => i.etudiantId === attestation.etudiantId)
       return {
         id: attestation.id,
-        etudiant: `${attestation.etudiant.nom} ${attestation.etudiant.prenom}`,
+        etudiant: inscription?.etudiant || attestation.etudiant,
         matricule: attestation.etudiant.matricule,
-        formation: inscription?.formation.nom || '',
-        filiere: inscription?.filiere.nom || '',
-        niveau: inscription?.niveau.ordinal || '',
-        niveauFull: inscription?.niveau.nom || '',
+        formation: inscription?.formation?.nom || '',
+        filiere: inscription?.filiere?.nom || '',
+        niveau: inscription?.niveau?.nom || inscription?.niveau?.code || '',
         dateGeneration: attestation.dateGeneration.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
         dateGenerationISO: attestation.dateGeneration.toISOString(),
         numero: attestation.numero,

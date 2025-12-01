@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma.js'
+import bcrypt from 'bcrypt'
 
 // Récupérer toutes les formations
 export const getFormations = async () => {
@@ -113,6 +114,7 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
       prenom: inscription.etudiant.prenom,
       email: inscription.etudiant.email,
       telephone: inscription.etudiant.telephone,
+      photo: inscription.etudiant.photo || null,
       dateNaissance: inscription.etudiant.dateNaissance ? 
         inscription.etudiant.dateNaissance.toISOString().split('T')[0] : null,
       lieuNaissance: inscription.etudiant.lieuNaissance || null,
@@ -127,7 +129,9 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
         acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copieActeNaissance } : null,
         photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photoIdentite } : null,
         quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true, url: inscription.quittance } : null,
-        pieceIdentite: inscription.copieReleve ? { nom: 'cni.pdf', uploaded: true, url: inscription.copieReleve } : null
+        pieceIdentite: inscription.pieceIdentite ? { nom: 'cni.pdf', uploaded: true, url: inscription.pieceIdentite } : null,
+        releveBac: inscription.copieReleve ? { nom: 'releve_bac.pdf', uploaded: true, url: inscription.copieReleve } : null,
+        attestationReussiteBac: inscription.copieDiplome ? { nom: 'attestation_reussite_bac.pdf', uploaded: true, url: inscription.copieDiplome } : null
       }
     }))
   } catch (error) {
@@ -166,6 +170,7 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
       prenom: inscription.etudiant.prenom,
       email: inscription.etudiant.email,
       telephone: inscription.etudiant.telephone,
+      photo: inscription.etudiant.photo || null,
       dateNaissance: inscription.etudiant.dateNaissance ? 
         inscription.etudiant.dateNaissance.toISOString().split('T')[0] : null,
       lieuNaissance: inscription.etudiant.lieuNaissance || null,
@@ -180,7 +185,9 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
         acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copieActeNaissance } : null,
         photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photoIdentite } : null,
         quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true, url: inscription.quittance } : null,
-        pieceIdentite: inscription.copieReleve ? { nom: 'cni.pdf', uploaded: true, url: inscription.copieReleve } : null
+        pieceIdentite: inscription.pieceIdentite ? { nom: 'cni.pdf', uploaded: true, url: inscription.pieceIdentite } : null,
+        releveBac: inscription.copieReleve ? { nom: 'releve_bac.pdf', uploaded: true, url: inscription.copieReleve } : null,
+        attestationReussiteBac: inscription.copieDiplome ? { nom: 'attestation_reussite_bac.pdf', uploaded: true, url: inscription.copieDiplome } : null
       }
     }))
   } catch (error) {
@@ -206,10 +213,109 @@ export const validerInscription = async (inscriptionId, agentId) => {
   }
 }
 
+// Générer un mot de passe aléatoire sécurisé
+const generatePassword = () => {
+  const length = 12
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*'
+  let password = ''
+  
+  // S'assurer qu'il y a au moins une majuscule, une minuscule, un chiffre et un caractère spécial
+  password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]
+  password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]
+  password += '0123456789'[Math.floor(Math.random() * 10)]
+  password += '!@#$%&*'[Math.floor(Math.random() * 7)]
+  
+  // Remplir le reste avec des caractères aléatoires
+  for (let i = password.length; i < length; i++) {
+    password += charset[Math.floor(Math.random() * charset.length)]
+  }
+  
+  // Mélanger les caractères
+  return password.split('').sort(() => Math.random() - 0.5).join('')
+}
+
 // Finaliser une inscription (scolarité soldée)
 export const finaliserInscription = async (inscriptionId, agentId) => {
   try {
-    return await prisma.inscription.update({
+    // Récupérer l'inscription avec les données de l'étudiant
+    const inscription = await prisma.inscription.findUnique({
+      where: { id: inscriptionId },
+      include: {
+        etudiant: true,
+        promotion: {
+          select: {
+            annee: true
+          }
+        }
+      }
+    })
+
+    if (!inscription) {
+      throw new Error('Inscription non trouvée')
+    }
+
+    if (!inscription.etudiant) {
+      throw new Error('Étudiant non trouvé pour cette inscription')
+    }
+
+    const etudiant = inscription.etudiant
+
+    // Vérifier que l'étudiant a un email
+    if (!etudiant.email || etudiant.email.trim() === '') {
+      throw new Error('L\'étudiant doit avoir une adresse email pour recevoir ses identifiants de connexion')
+    }
+
+    // Générer un mot de passe automatique
+    const generatedPassword = generatePassword()
+    console.log(`🔑 Mot de passe généré pour ${etudiant.prenom} ${etudiant.nom}: ${generatedPassword}`)
+
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10)
+
+    // Vérifier si un compte Utilisateur existe déjà pour cet étudiant
+    let utilisateur = await prisma.utilisateur.findFirst({
+      where: {
+        OR: [
+          { email: etudiant.email.trim().toLowerCase() },
+          { username: etudiant.matricule.trim() }
+        ]
+      }
+    })
+
+    // Créer ou mettre à jour le compte Utilisateur
+    if (utilisateur) {
+      // Mettre à jour le mot de passe si le compte existe déjà
+      utilisateur = await prisma.utilisateur.update({
+        where: { id: utilisateur.id },
+        data: {
+          password: hashedPassword,
+          email: etudiant.email.trim().toLowerCase(),
+          actif: true,
+          role: 'ETUDIANT'
+        }
+      })
+      console.log('✅ Compte Utilisateur mis à jour pour l\'étudiant:', utilisateur.email)
+    } else {
+      // Créer un nouveau compte Utilisateur
+      utilisateur = await prisma.utilisateur.create({
+        data: {
+          nom: etudiant.nom,
+          prenom: etudiant.prenom,
+          email: etudiant.email.trim().toLowerCase(),
+          username: etudiant.matricule.trim().toLowerCase(),
+          password: hashedPassword,
+          role: 'ETUDIANT',
+          actif: true,
+          photo: etudiant.photo || null,
+          telephone: etudiant.telephone || null,
+          adresse: etudiant.adresse || null
+        }
+      })
+      console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
+    }
+
+    // Mettre à jour le statut de l'inscription
+    const inscriptionUpdated = await prisma.inscription.update({
       where: { id: inscriptionId },
       data: {
         statut: 'INSCRIT',
@@ -217,6 +323,28 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
         agentValideurId: agentId
       }
     })
+
+    // Retourner le mot de passe généré pour l'afficher à l'utilisateur
+    // (L'envoi d'email est désactivé pour le moment)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('✅ INSCRIPTION FINALISÉE AVEC SUCCÈS')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log(`📧 Étudiant: ${etudiant.prenom} ${etudiant.nom}`)
+    console.log(`📧 Email: ${etudiant.email}`)
+    console.log(`🆔 Matricule: ${etudiant.matricule}`)
+    console.log(`🔑 Mot de passe: ${generatedPassword}`)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('💡 IMPORTANT: Notez ces identifiants et communiquez-les à l\'étudiant')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+
+    // Retourner aussi le mot de passe pour l'afficher dans l'interface
+    return {
+      ...inscriptionUpdated,
+      password: generatedPassword, // Ajouter le mot de passe dans la réponse
+      etudiantEmail: etudiant.email,
+      etudiantMatricule: etudiant.matricule,
+      etudiantNom: `${etudiant.prenom} ${etudiant.nom}`
+    }
   } catch (error) {
     console.error('Erreur lors de la finalisation de l\'inscription:', error)
     throw error

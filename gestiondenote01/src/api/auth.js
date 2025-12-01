@@ -182,6 +182,20 @@ export const getToken = () => {
   return localStorage.getItem('token')
 }
 
+// Obtenir l'utilisateur depuis localStorage
+export const getUserFromStorage = () => {
+  try {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      return JSON.parse(userStr)
+    }
+    return null
+  } catch (error) {
+    console.error('Erreur lors de la récupération de l\'utilisateur depuis localStorage:', error)
+    return null
+  }
+}
+
 
 // Uploader la photo de profil
 export const uploadProfilePhoto = async (file) => {

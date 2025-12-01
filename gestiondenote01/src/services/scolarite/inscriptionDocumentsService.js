@@ -49,6 +49,68 @@ export const deleteDocument = async (documentUrl) => {
   }
 }
 
+// Supprimer un document d'inscription
+export const deleteInscriptionDocument = async (inscriptionId, documentType) => {
+  try {
+    // Récupérer l'inscription pour obtenir l'URL du document
+    const inscription = await prisma.inscription.findUnique({
+      where: { id: inscriptionId }
+    })
+    
+    if (!inscription) {
+      throw new Error('Inscription introuvable')
+    }
+    
+    // Déterminer quel champ utiliser selon le type de document
+    let fieldName = null
+    switch (documentType) {
+      case 'acteNaissance':
+        fieldName = 'copieActeNaissance'
+        break
+      case 'photo':
+        fieldName = 'photoIdentite'
+        break
+      case 'quittance':
+        fieldName = 'quittance'
+        break
+      case 'pieceIdentite':
+        fieldName = 'pieceIdentite'
+        break
+      case 'releveBac':
+        fieldName = 'copieReleve'
+        break
+      case 'attestationReussiteBac':
+        fieldName = 'copieDiplome'
+        break
+      default:
+        throw new Error(`Type de document inconnu: ${documentType}`)
+    }
+    
+    // Récupérer l'URL du document à supprimer
+    const documentUrl = inscription[fieldName]
+    
+    if (!documentUrl) {
+      // Le document n'existe pas déjà, rien à supprimer
+      return { success: true, message: 'Document déjà absent' }
+    }
+    
+    // Supprimer le fichier physique
+    await deleteDocument(documentUrl)
+    
+    // Mettre à jour l'inscription pour supprimer la référence au document
+    const updateData = { [fieldName]: null }
+    await prisma.inscription.update({
+      where: { id: inscriptionId },
+      data: updateData
+    })
+    
+    return { success: true, message: 'Document supprimé avec succès' }
+  } catch (error) {
+    console.error('Erreur lors de la suppression du document:', error)
+    throw error
+  }
+}
+
 // Mettre à jour un document dans l'inscription
 export const updateInscriptionDocument = async (inscriptionId, documentType, documentUrl) => {
   try {
@@ -65,12 +127,11 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
         updateData.quittance = documentUrl
         break
       case 'pieceIdentite':
-        // Pour la pièce d'identité, on utilise copieReleve
-        updateData.copieReleve = documentUrl
+        // Pièce d'identité - utilise le champ dédié pieceIdentite
+        updateData.pieceIdentite = documentUrl
         break
       case 'releveBac':
-        // Copie légalisée du relevé de notes du bac - on utilise copieReleve (sera séparé plus tard si nécessaire)
-        // Pour l'instant, on stocke dans un champ JSON ou on utilise copieReleve
+        // Copie légalisée du relevé de notes du bac - utilise copieReleve
         updateData.copieReleve = documentUrl
         break
       case 'attestationReussiteBac':
@@ -94,9 +155,18 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
     }
     
     // Supprimer l'ancien document si il existe
-    const oldDocumentUrl = updateData[Object.keys(updateData)[0]]
-    if (oldDocumentUrl && inscription[Object.keys(updateData)[0]]) {
-      await deleteDocument(inscription[Object.keys(updateData)[0]])
+    const fieldName = Object.keys(updateData)[0]
+    const oldDocumentUrl = inscription[fieldName]
+    if (oldDocumentUrl) {
+      await deleteDocument(oldDocumentUrl)
+    }
+    
+    // Si on upload la photo d'identité, synchroniser avec la photo de profil de l'étudiant
+    if (documentType === 'photo' && documentUrl) {
+      await prisma.etudiant.update({
+        where: { id: inscription.etudiantId },
+        data: { photo: documentUrl }
+      })
     }
     
     // Mettre à jour l'inscription
@@ -236,6 +306,24 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
       throw new Error(`Aucune inscription trouvée pour l'étudiant ${etudiantId} avec l'ID d'inscription ${inscriptionId}`)
     }
     
+    // Synchroniser la photo : si la photo d'identité existe mais pas la photo de profil, utiliser la photo d'identité
+    let photoProfil = etudiant.photo
+    if (!photoProfil && inscription.photoIdentite) {
+      photoProfil = inscription.photoIdentite
+      // Mettre à jour la photo de profil de l'étudiant
+      await prisma.etudiant.update({
+        where: { id: etudiantId },
+        data: { photo: inscription.photoIdentite }
+      })
+    }
+    // Si la photo de profil existe mais pas la photo d'identité, synchroniser dans l'autre sens
+    else if (photoProfil && !inscription.photoIdentite) {
+      await prisma.inscription.update({
+        where: { id: inscriptionId },
+        data: { photoIdentite: photoProfil }
+      })
+    }
+    
     return {
       etudiant: {
         id: etudiant.id,
@@ -248,7 +336,7 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
         email: etudiant.email,
         telephone: etudiant.telephone,
         adresse: etudiant.adresse,
-        photo: etudiant.photo
+        photo: photoProfil || etudiant.photo
       },
       inscription: {
         id: inscription.id,
@@ -258,11 +346,11 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
         dateValidation: inscription.dateValidation,
         documents: {
           acteNaissance: inscription.copieActeNaissance,
-          photo: inscription.photoIdentite,
+          photo: inscription.photoIdentite || photoProfil,
           quittance: inscription.quittance,
-          pieceIdentite: inscription.copieReleve,
-          releveBac: inscription.copieReleve, // Pour l'instant, même champ que pieceIdentite
-          attestationReussiteBac: inscription.copieDiplome, // Pour l'instant, même champ que diplome
+          pieceIdentite: inscription.pieceIdentite,
+          releveBac: inscription.copieReleve,
+          attestationReussiteBac: inscription.copieDiplome,
           diplome: inscription.copieDiplome
         },
         promotion: inscription.promotion,

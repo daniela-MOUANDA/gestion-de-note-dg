@@ -19,7 +19,8 @@ import {
   archiverAttestation,
   getAttestationsArchiveesParFiliereNiveau
 } from '../../src/services/scolarite/attestationService.js'
-import { getSPDashboardStats } from '../../src/services/scolarite/dashboardService.js'
+import { getSPDashboardStats, getAgentDashboardStats, getChefDashboardStats, getChefStatistiques } from '../../src/services/scolarite/dashboardService.js'
+import { getActionsAudit, getAgentsPourFiltre } from '../../src/services/scolarite/auditService.js'
 import {
   getBulletinsParClasse,
   marquerBulletinRecupere
@@ -35,7 +36,8 @@ import {
   updateEtudiantInfo, 
   upsertParent, 
   getParents,
-  getDossierEtudiant
+  getDossierEtudiant,
+  deleteInscriptionDocument
 } from '../../src/services/scolarite/inscriptionDocumentsService.js'
 import { verifyToken } from '../../src/services/authService.js'
 import { authenticate } from '../middleware/auth.js'
@@ -84,10 +86,103 @@ router.get('/filieres', async (req, res) => {
 
 router.get('/dashboard/sp', authenticate, async (req, res) => {
   try {
+    // Vérifier que l'utilisateur est bien une SP
+    const userRole = req.user?.role?.trim().toUpperCase()
+    if (userRole !== 'SP_SCOLARITE') {
+      return res.status(403).json({ error: 'Accès refusé. Rôle insuffisant.' })
+    }
     const stats = await getSPDashboardStats()
     res.json(stats)
   } catch (error) {
     console.error('Erreur lors de la récupération du dashboard SP:', error)
+    res.status(500).json({ error: error.message || 'Erreur serveur' })
+  }
+})
+
+router.get('/dashboard/agent', authenticate, async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est bien un agent
+    const userRole = req.user?.role?.trim().toUpperCase()
+    if (userRole !== 'AGENT_SCOLARITE') {
+      return res.status(403).json({ error: 'Accès refusé. Rôle insuffisant.' })
+    }
+    const stats = await getAgentDashboardStats()
+    res.json(stats)
+  } catch (error) {
+    console.error('Erreur lors de la récupération du dashboard agent:', error)
+    res.status(500).json({ error: error.message || 'Erreur serveur' })
+  }
+})
+
+router.get('/dashboard/chef', authenticate, async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est bien un Chef de Service
+    const userRole = req.user?.role?.trim().toUpperCase()
+    if (userRole !== 'CHEF_SERVICE_SCOLARITE') {
+      return res.status(403).json({ error: 'Accès refusé. Rôle insuffisant.' })
+    }
+    const stats = await getChefDashboardStats()
+    res.json(stats)
+  } catch (error) {
+    console.error('Erreur lors de la récupération du dashboard Chef:', error)
+    res.status(500).json({ error: error.message || 'Erreur serveur' })
+  }
+})
+
+router.get('/statistiques/chef', authenticate, async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est bien un Chef de Service
+    const userRole = req.user?.role?.trim().toUpperCase()
+    if (userRole !== 'CHEF_SERVICE_SCOLARITE') {
+      return res.status(403).json({ error: 'Accès refusé. Rôle insuffisant.' })
+    }
+    const stats = await getChefStatistiques()
+    res.json(stats)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques:', error)
+    res.status(500).json({ error: error.message || 'Erreur serveur' })
+  }
+})
+
+// Routes Audit
+router.get('/audit/actions', authenticate, async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est bien un Chef de Service
+    const userRole = req.user?.role?.trim().toUpperCase()
+    if (userRole !== 'CHEF_SERVICE_SCOLARITE') {
+      return res.status(403).json({ error: 'Accès refusé. Rôle insuffisant.' })
+    }
+
+    const filters = {
+      typeAction: req.query.typeAction,
+      utilisateurId: req.query.utilisateurId,
+      dateDebut: req.query.dateDebut,
+      dateFin: req.query.dateFin,
+      searchQuery: req.query.searchQuery,
+      limit: req.query.limit ? parseInt(req.query.limit) : 1000,
+      offset: req.query.offset ? parseInt(req.query.offset) : 0
+    }
+
+    const actions = await getActionsAudit(filters)
+    res.json(actions)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des actions d\'audit:', error)
+    res.status(500).json({ error: error.message || 'Erreur serveur' })
+  }
+})
+
+router.get('/audit/agents', authenticate, async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est bien un Chef de Service
+    const userRole = req.user?.role?.trim().toUpperCase()
+    if (userRole !== 'CHEF_SERVICE_SCOLARITE') {
+      return res.status(403).json({ error: 'Accès refusé. Rôle insuffisant.' })
+    }
+
+    const agents = await getAgentsPourFiltre()
+    res.json(agents)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des agents:', error)
     res.status(500).json({ error: error.message || 'Erreur serveur' })
   }
 })
@@ -234,10 +329,10 @@ router.get('/attestations/archives', authenticate, async (req, res) => {
   try {
     const { promotionId, filiereId, niveauId, formationId } = req.query
     
-    if (!promotionId || !filiereId || !niveauId || !formationId) {
+    if (!promotionId || !filiereId || !niveauId) {
       return res.status(400).json({ 
-        error: 'Tous les paramètres sont requis',
-        required: ['promotionId', 'filiereId', 'niveauId', 'formationId']
+        error: 'Les paramètres promotionId, filiereId et niveauId sont requis',
+        required: ['promotionId', 'filiereId', 'niveauId']
       })
     }
     
@@ -245,14 +340,14 @@ router.get('/attestations/archives', authenticate, async (req, res) => {
       promotionId,
       filiereId,
       niveauId,
-      formationId
+      formationId: formationId || 'toutes les formations'
     });
     
     const attestations = await getAttestationsArchiveesParFiliereNiveau(
       promotionId, 
       filiereId, 
       niveauId, 
-      formationId
+      formationId || null // formationId est optionnel
     )
     
     console.log(`Nombre d'attestations trouvées: ${attestations.length}`);
@@ -437,6 +532,39 @@ router.post('/inscriptions/:id/documents/:type', authenticate, uploadDocuments.s
   }
 })
 
+// Route pour supprimer un document d'inscription
+router.delete('/inscriptions/:id/documents/:type', authenticate, async (req, res) => {
+  try {
+    const { id, type } = req.params
+    
+    // Vérifier que l'inscription existe
+    const inscription = await prisma.inscription.findUnique({
+      where: { id }
+    })
+    
+    if (!inscription) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inscription introuvable'
+      })
+    }
+    
+    // Supprimer le document
+    const result = await deleteInscriptionDocument(id, type)
+    
+    res.json({
+      success: true,
+      message: result.message || 'Document supprimé avec succès'
+    })
+  } catch (error) {
+    console.error('Erreur lors de la suppression du document:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la suppression du document'
+    })
+  }
+})
+
 // Route pour mettre à jour les informations de l'étudiant
 router.put('/etudiants/:id', authenticate, async (req, res) => {
   try {
@@ -479,8 +607,21 @@ router.post('/etudiants/:id/photo', authenticate, uploadDocuments.single('photo'
     // Sauvegarder la photo
     const photoUrl = await saveDocument(req.file, id, 'photo')
     
-    // Mettre à jour l'étudiant
+    // Mettre à jour la photo de profil de l'étudiant
     await updateEtudiantInfo(id, { photo: photoUrl })
+    
+    // Synchroniser avec la photo d'identité dans l'inscription (si une inscription existe)
+    const inscription = await prisma.inscription.findFirst({
+      where: { etudiantId: id },
+      orderBy: { dateInscription: 'desc' } // Prendre la plus récente
+    })
+    
+    if (inscription) {
+      await prisma.inscription.update({
+        where: { id: inscription.id },
+        data: { photoIdentite: photoUrl }
+      })
+    }
     
     res.json({
       success: true,
@@ -552,6 +693,34 @@ router.get('/dossiers/:etudiantId/:inscriptionId', authenticate, async (req, res
     res.status(500).json({
       success: false,
       error: error.message || 'Erreur lors de la récupération du dossier'
+    })
+  }
+})
+
+// Route pour récupérer les informations de l'étudiant connecté
+router.get('/etudiant/mon-profil', authenticate, async (req, res) => {
+  try {
+    const { getEtudiantByUserId } = await import('../../src/services/scolarite/etudiantService.js')
+    
+    // Vérifier que l'utilisateur est bien un étudiant
+    if (req.user.role !== 'ETUDIANT') {
+      return res.status(403).json({
+        success: false,
+        error: 'Accès refusé. Cette route est réservée aux étudiants.'
+      })
+    }
+
+    const etudiant = await getEtudiantByUserId(req.user.id)
+    
+    res.json({
+      success: true,
+      etudiant
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération du profil étudiant:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la récupération du profil'
     })
   }
 })

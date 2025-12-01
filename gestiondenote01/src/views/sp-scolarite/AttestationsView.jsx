@@ -152,6 +152,9 @@ const AttestationsView = () => {
       setAttestationGenerated(attestation)
       markAttestationAsGenerated(etudiant.id, attestationData)
       success('Attestation générée avec succès')
+      
+      // Déclencher un événement pour rafraîchir le dashboard
+      window.dispatchEvent(new CustomEvent('attestationGenerated'))
     } catch (error) {
       console.error('Erreur lors de la génération de l\'attestation:', error)
       alertError(error.message || 'Erreur lors de la génération de l\'attestation')
@@ -220,6 +223,9 @@ const AttestationsView = () => {
       }
 
       success(`${etudiantsDisponibles.length} attestation(s) générée(s) et envoyée(s) dans les archives !`)
+      
+      // Déclencher un événement pour rafraîchir le dashboard
+      window.dispatchEvent(new CustomEvent('attestationGenerated'))
     } catch (error) {
       console.error('Erreur lors de la génération en masse:', error)
       alertError(error.message || 'Erreur lors de la génération en masse')

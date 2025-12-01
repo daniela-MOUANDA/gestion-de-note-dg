@@ -43,7 +43,13 @@ export const requireRole = (...roles) => {
       })
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = req.user.role
+    // Normaliser le rôle pour la comparaison (enlever les espaces, mettre en majuscules)
+    const normalizedUserRole = userRole?.trim().toUpperCase()
+    const normalizedRoles = roles.map(r => r?.trim().toUpperCase())
+    
+    if (!normalizedRoles.includes(normalizedUserRole)) {
+      console.log('Accès refusé par requireRole. Rôle utilisateur:', normalizedUserRole, 'Rôles autorisés:', normalizedRoles)
       return res.status(403).json({
         success: false,
         error: 'Accès refusé. Rôle insuffisant.'

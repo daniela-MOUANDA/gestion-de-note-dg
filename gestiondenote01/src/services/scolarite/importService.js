@@ -57,25 +57,52 @@ const parseDateNaissance = (dateString) => {
   return { date: null, lieu: null }
 }
 
-// Générer un matricule unique
-const generateMatricule = async (anneeAcademique) => {
-  // Extraire l'année (ex: "2024-2025" -> "2025" ou "2025" -> "2025")
-  let annee
+// Générer un matricule unique au format: {anneeFin}{3chiffres}
+// Exemple: 26001 pour l'année académique 2025-2026 (fin de première année = 2026)
+export const generateMatricule = async (anneeAcademique) => {
+  // Extraire l'année de fin de la première année
+  // Exemple: "2025-2026" -> "26" (les 2 derniers chiffres de 2026)
+  let anneeFin
   if (anneeAcademique.includes('-')) {
-    annee = anneeAcademique.split('-')[1] // Prendre la deuxième partie
+    const anneeFinComplete = anneeAcademique.split('-')[1] // Prendre la deuxième partie (ex: "2026")
+    // Prendre les 2 derniers chiffres de manière robuste
+    anneeFin = anneeFinComplete.length >= 2 
+      ? anneeFinComplete.slice(-2) // slice(-2) prend les 2 derniers caractères
+      : anneeFinComplete
   } else {
-    annee = anneeAcademique.substring(0, 4)
+    // Si format "2025", on suppose que c'est l'année de début
+    const anneeDebut = parseInt(anneeAcademique.substring(0, 4))
+    const anneeFinComplete = String(anneeDebut + 1) // Année suivante
+    anneeFin = anneeFinComplete.slice(-2) // Les 2 derniers chiffres
   }
   
-  const count = await prisma.etudiant.count({
-    where: {
-      matricule: {
-        startsWith: `INPTIC${annee}-`
-      }
-    }
-  })
-  const numero = String(count + 1).padStart(4, '0')
-  return `INPTIC${annee}-${numero}`
+  
+  // Générer un matricule unique avec 3 chiffres aléatoires
+  let matricule
+  let exists = true
+  let attempts = 0
+  const maxAttempts = 100 // Limite de sécurité pour éviter une boucle infinie
+  
+  while (exists && attempts < maxAttempts) {
+    // Générer 3 chiffres aléatoires entre 001 et 999
+    const randomNum = Math.floor(Math.random() * 999) + 1
+    const troisChiffres = String(randomNum).padStart(3, '0')
+    matricule = `${anneeFin}${troisChiffres}`
+    
+    // Vérifier si ce matricule existe déjà
+    const existing = await prisma.etudiant.findUnique({
+      where: { matricule }
+    })
+    
+    exists = existing !== null
+    attempts++
+  }
+  
+  if (attempts >= maxAttempts) {
+    throw new Error('Impossible de générer un matricule unique après plusieurs tentatives')
+  }
+  
+  return matricule
 }
 
 // Parser un fichier Excel et extraire les données par feuille

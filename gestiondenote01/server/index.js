@@ -5,6 +5,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import authRoutes from './routes/auth.js'
 import scolariteRoutes from './routes/scolarite.js'
+import comptesRoutes from './routes/comptes.js'
 
 dotenv.config()
 
@@ -24,7 +25,6 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions))
-app.options('*', cors(corsOptions)) // Pré-requête OPTIONS
 app.use(express.json())
 
 // Servir les fichiers statiques (photos de profil et documents d'inscription)
@@ -35,6 +35,7 @@ app.use('/api/auth', authRoutes)
 
 // Routes protégées
 app.use('/api/scolarite', scolariteRoutes)
+app.use('/api/comptes', comptesRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

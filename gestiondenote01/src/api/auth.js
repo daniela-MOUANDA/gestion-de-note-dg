@@ -26,6 +26,17 @@ export const login = async (email, password, matricule = null) => {
     // Stocker uniquement le token dans localStorage
     if (data.token) {
       localStorage.setItem('token', data.token)
+      console.log('✅ Token stocké dans localStorage après connexion:', data.token.substring(0, 20) + '...')
+      
+      // Vérifier que le token est bien stocké
+      const storedToken = localStorage.getItem('token')
+      if (!storedToken) {
+        console.error('❌ ERREUR CRITIQUE: Le token n\'a pas été stocké correctement')
+        throw new Error('Erreur lors du stockage du token')
+      }
+    } else {
+      console.error('❌ ERREUR: Aucun token reçu du serveur')
+      throw new Error('Aucun token reçu du serveur')
     }
 
     return data
@@ -44,7 +55,8 @@ export const verifyToken = async (shouldRefresh = false) => {
       return { valid: false, error: 'Token manquant' }
     }
 
-    // Vérifier si le token est proche de l'expiration (moins de 10 secondes)
+    // Vérifier si le token est proche de l'expiration (moins de 1 heure)
+    // Renouveler proactivement pour éviter les déconnexions
     try {
       const tokenParts = token.split('.')
       if (tokenParts.length === 3) {
@@ -52,10 +64,12 @@ export const verifyToken = async (shouldRefresh = false) => {
         if (payload.exp) {
           const currentTime = Math.floor(Date.now() / 1000)
           const timeUntilExpiry = payload.exp - currentTime
+          const oneHour = 3600 // 1 heure en secondes
           
-          // Si le token expire dans moins de 10 secondes, demander un renouvellement
-          if (timeUntilExpiry < 10) {
+          // Si le token expire dans moins d'1 heure, demander un renouvellement
+          if (timeUntilExpiry < oneHour && timeUntilExpiry > 0) {
             shouldRefresh = true
+            console.log('🔄 Token proche de l\'expiration, renouvellement demandé')
           }
         }
       }
@@ -95,9 +109,13 @@ export const verifyToken = async (shouldRefresh = false) => {
     
     if (!data.valid) {
       // Token invalide mais ne pas supprimer si c'est une erreur réseau
-      if (data.error && data.error.includes('expiré')) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+      // Ne supprimer que si c'est vraiment une expiration ou une erreur d'authentification
+      if (data.error && (data.error.includes('expiré') || data.error.includes('Token expiré') || data.error.includes('invalide'))) {
+        // Vérifier que ce n'est pas juste une erreur réseau
+        if (!data.error.includes('réseau') && !data.error.includes('timeout')) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+        }
       }
       return { valid: false, error: data.error || 'Token invalide' }
     }
@@ -105,17 +123,22 @@ export const verifyToken = async (shouldRefresh = false) => {
     // Si un nouveau token a été renvoyé, le mettre à jour
     if (data.token) {
       localStorage.setItem('token', data.token)
+      console.log('✅ Nouveau token reçu et stocké')
     }
 
-    // Mettre à jour les informations utilisateur
-    if (data.user) {
-      localStorage.setItem('user', JSON.stringify(data.user))
-    }
+    // NE PAS stocker l'utilisateur dans localStorage
+    // Toujours récupérer les données depuis le serveur pour garantir la cohérence
+    // localStorage.removeItem('user') // Supprimer si présent
 
     return data
   } catch (error) {
     console.error('Erreur réseau lors de la vérification du token:', error)
-    // En cas d'erreur réseau, ne pas supprimer le localStorage
+    // En cas d'erreur réseau, ne pas supprimer le localStorage et ne pas déconnecter
+    // Retourner une erreur qui indique que c'est temporaire
+    return { 
+      valid: false, 
+      error: 'Erreur réseau temporaire. Veuillez réessayer.' 
+    }
     // L'utilisateur pourra continuer à utiliser l'application
     return { valid: false, error: 'Erreur réseau. Vérification impossible.' }
   }
@@ -137,7 +160,7 @@ export const logout = async () => {
 
     // Supprimer le token et les données utilisateur
     localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    localStorage.removeItem('user') // Supprimer si présent
     
     return { success: true }
   } catch (error) {

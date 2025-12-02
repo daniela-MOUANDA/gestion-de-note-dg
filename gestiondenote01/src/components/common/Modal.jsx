@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faTimes, faCheckCircle, faExclamationTriangle, faInfoCircle } from '@fortawesome/free-solid-svg-icons'
 
-const Modal = ({ isOpen, onClose, type = 'info', title, message, children }) => {
+const Modal = ({ isOpen, onClose, type = 'info', title, message, children, size = 'md' }) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -54,6 +54,15 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children }) => 
   }
 
   const styles = getStyles()
+  
+  const sizeClasses = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl'
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -64,7 +73,7 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children }) => 
       />
       
       {/* Modal avec animation */}
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all animate-scale-in">
+      <div className={`relative bg-white rounded-2xl shadow-2xl ${sizeClasses[size] || sizeClasses.md} w-full transform transition-all animate-scale-in`}>
         {/* Header */}
         <div className={`flex items-center justify-between p-6 border-b-2 ${styles.border}`}>
           <div className="flex items-center gap-4">

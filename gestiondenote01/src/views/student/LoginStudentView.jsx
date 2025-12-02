@@ -37,6 +37,9 @@ const LoginStudentView = () => {
       case 'CHEF_DEPARTEMENT':
         navigate('/chef/dashboard')
         break
+      case 'DEP':
+        navigate('/dep/dashboard')
+        break
       default:
         console.warn('Rôle non reconnu:', role)
     }

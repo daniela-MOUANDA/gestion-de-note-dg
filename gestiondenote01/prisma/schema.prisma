@@ -14,6 +14,21 @@ datasource db {
 // MODÈLES UTILISATEURS ET AUTHENTIFICATION
 // ============================================
 
+model Role {
+  id            String   @id @default(uuid())
+  code          String   @unique // Code unique du rôle (ex: AGENT_SCOLARITE, DEP, etc.)
+  nom           String   // Nom affiché du rôle (ex: "Agent Scolarité", "DEP", etc.)
+  description   String?  // Description du rôle
+  routeDashboard String? // Route du dashboard pour ce rôle (ex: /dep/dashboard)
+  actif         Boolean  @default(true)
+  dateCreation  DateTime @default(now())
+  
+  // Relations
+  utilisateurs  Utilisateur[]
+  
+  @@map("roles")
+}
+
 model Utilisateur {
   id            String   @id @default(uuid())
   nom           String
@@ -25,12 +40,15 @@ model Utilisateur {
   photo         String?  // URL de la photo de profil
   telephone     String?  // Numéro de téléphone
   adresse       String?  // Adresse
-  role          RoleUtilisateur
+  roleId        String   // ID du rôle (relation avec la table Role)
   actif         Boolean  @default(true)
   dateCreation  DateTime @default(now())
   derniereConnexion DateTime?
+  departementId String?  // ID du département (pour les chefs de département)
   
   // Relations
+  role          Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  departement   Departement? @relation(fields: [departementId], references: [id], onDelete: SetNull)
   actionsAudit  ActionAudit[]
   messagesEnvoyes Message[] @relation("MessagesEnvoyes")
   messagesRecus Message[] @relation("MessagesRecus")
@@ -38,14 +56,18 @@ model Utilisateur {
   @@map("utilisateurs")
 }
 
-enum RoleUtilisateur {
-  AGENT_SCOLARITE
-  SP_SCOLARITE
-  CHEF_SERVICE_SCOLARITE
-  CHEF_DEPARTEMENT
-  ETUDIANT
-  ENSEIGNANT
-  ADMIN
+model Departement {
+  id          String   @id @default(uuid())
+  nom         String   @unique
+  code        String   @unique
+  description String?
+  actif       Boolean  @default(true)
+  dateCreation DateTime @default(now())
+  
+  // Relations
+  chefs       Utilisateur[] // Les chefs de département associés
+  
+  @@map("departements")
 }
 
 // ============================================

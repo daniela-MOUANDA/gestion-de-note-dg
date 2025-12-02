@@ -30,12 +30,31 @@ const GestionComptesView = () => {
 
   // Charger les comptes au montage du composant
   useEffect(() => {
+    // Vérifier le token au chargement
+    const token = localStorage.getItem('token')
+    console.log('🔍 GestionComptesView - Token présent:', !!token)
+    if (token) {
+      console.log('   Token (premiers 20 caractères):', token.substring(0, 20) + '...')
+    } else {
+      console.error('❌ GestionComptesView - Aucun token trouvé!')
+    }
+    
     loadComptes()
   }, [])
 
   const loadComptes = async () => {
     try {
       setLoading(true)
+      
+      // Vérifier que le token existe
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.error('❌ Token manquant dans localStorage')
+        showError('Token d\'authentification manquant. Veuillez vous reconnecter.')
+        setLoading(false)
+        return
+      }
+
       const result = await getAllComptes()
       if (result.success) {
         // Formater les dates pour l'affichage
@@ -49,10 +68,22 @@ const GestionComptesView = () => {
         setComptes(formattedComptes)
       } else {
         showError(result.error || 'Erreur lors du chargement des comptes')
+        // Si le token est invalide, rediriger vers la page de connexion
+        if (result.error && result.error.includes('session') || result.error.includes('Token')) {
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 2000)
+        }
       }
     } catch (error) {
       console.error('Erreur:', error)
       showError(error.message || 'Erreur lors du chargement des comptes')
+      // Si le token est invalide, rediriger vers la page de connexion
+      if (error.message && (error.message.includes('Token') || error.message.includes('session'))) {
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      }
     } finally {
       setLoading(false)
     }
@@ -91,6 +122,17 @@ const GestionComptesView = () => {
     try {
       setSubmitting(true)
       
+      // Vérifier que le token existe
+      const token = localStorage.getItem('token')
+      if (!token) {
+        showError('Token d\'authentification manquant. Veuillez vous reconnecter.')
+        setSubmitting(false)
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+        return
+      }
+
       if (modalType === 'create') {
         const result = await createCompte(formData)
         if (result.success) {
@@ -99,6 +141,11 @@ const GestionComptesView = () => {
           await loadComptes() // Recharger la liste
         } else {
           showError(result.error || 'Erreur lors de la création du compte')
+          if (result.error && (result.error.includes('session') || result.error.includes('Token'))) {
+            setTimeout(() => {
+              window.location.href = '/login'
+            }, 2000)
+          }
         }
       } else {
         // Pour la modification, ne pas envoyer le mot de passe s'il est vide
@@ -114,6 +161,11 @@ const GestionComptesView = () => {
           await loadComptes() // Recharger la liste
         } else {
           showError(result.error || 'Erreur lors de la modification du compte')
+          if (result.error && (result.error.includes('session') || result.error.includes('Token'))) {
+            setTimeout(() => {
+              window.location.href = '/login'
+            }, 2000)
+          }
         }
       }
     } catch (error) {
@@ -126,32 +178,70 @@ const GestionComptesView = () => {
 
   const handleToggleActif = async (compte) => {
     try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        showError('Token d\'authentification manquant. Veuillez vous reconnecter.')
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+        return
+      }
+
       const result = await toggleActif(compte.id, !compte.actif)
       if (result.success) {
         success(`Compte ${!compte.actif ? 'activé' : 'désactivé'} avec succès !`)
         await loadComptes() // Recharger la liste
       } else {
         showError(result.error || 'Erreur lors de la modification du statut')
+        if (result.error && (result.error.includes('session') || result.error.includes('Token'))) {
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 2000)
+        }
       }
     } catch (error) {
       console.error('Erreur:', error)
       showError(error.message || 'Une erreur est survenue')
+      if (error.message && (error.message.includes('Token') || error.message.includes('session'))) {
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      }
     }
   }
 
   const handleDelete = async (id) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce compte ?')) {
       try {
+        const token = localStorage.getItem('token')
+        if (!token) {
+          showError('Token d\'authentification manquant. Veuillez vous reconnecter.')
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 2000)
+          return
+        }
+
         const result = await deleteCompte(id)
         if (result.success) {
           success('Compte supprimé avec succès !')
           await loadComptes() // Recharger la liste
         } else {
           showError(result.error || 'Erreur lors de la suppression du compte')
+          if (result.error && (result.error.includes('session') || result.error.includes('Token'))) {
+            setTimeout(() => {
+              window.location.href = '/login'
+            }, 2000)
+          }
         }
       } catch (error) {
         console.error('Erreur:', error)
         showError(error.message || 'Une erreur est survenue')
+        if (error.message && (error.message.includes('Token') || error.message.includes('session'))) {
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 2000)
+        }
       }
     }
   }

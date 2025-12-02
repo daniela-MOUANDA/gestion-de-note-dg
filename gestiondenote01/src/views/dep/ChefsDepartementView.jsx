@@ -1,57 +1,145 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faUserTie, faBuilding, faSearch } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faUserTie, faBuilding, faSearch, faEye, faEyeSlash, faKey, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import SidebarDEP from '../../components/common/SidebarDEP'
 import HeaderDEP from '../../components/common/HeaderDEP'
 import Modal from '../../components/common/Modal'
+import { getAllChefsDepartement, createChefDepartement, updateChefDepartement, deleteChefDepartement } from '../../api/chefsDepartement.js'
+import { getAllDepartements } from '../../api/departements.js'
 
 const ChefsDepartementView = () => {
-  const [chefs, setChefs] = useState([
-    { id: 1, nom: 'KAMDEM', prenom: 'Jean', email: 'jean.kamdem@inptic.cm', telephone: '+237 6XX XXX XXX', departement: 'Génie Informatique', actif: true },
-    { id: 2, nom: 'MBALLA', prenom: 'Marie', email: 'marie.mballa@inptic.cm', telephone: '+237 6XX XXX XXX', departement: 'Réseaux et Télécommunications', actif: true },
-  ])
-  const [departements] = useState(['Génie Informatique', 'Réseaux et Télécommunications', 'Électronique', 'Autres'])
+  const [chefs, setChefs] = useState([])
+  const [departements, setDepartements] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editingChef, setEditingChef] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
     email: '',
     telephone: '',
-    departement: '',
+    departementId: '',
+    motDePasse: '',
     actif: true
   })
+  const [showPassword, setShowPassword] = useState(false)
+
+  // Charger les chefs de département et les départements depuis l'API
+  useEffect(() => {
+    loadChefs()
+    loadDepartements()
+  }, [])
+
+  const loadChefs = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await getAllChefsDepartement()
+      if (response.success) {
+        setChefs(response.chefs)
+      } else {
+        setError(response.error || 'Erreur lors du chargement des chefs de département')
+      }
+    } catch (err) {
+      console.error('Erreur:', err)
+      setError(err.message || 'Erreur lors du chargement des chefs de département')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadDepartements = async () => {
+    try {
+      const response = await getAllDepartements()
+      if (response.success) {
+        setDepartements(response.departements)
+      }
+    } catch (err) {
+      console.error('Erreur lors du chargement des départements:', err)
+    }
+  }
 
   const handleAdd = () => {
     setEditingChef(null)
-    setFormData({ nom: '', prenom: '', email: '', telephone: '', departement: '', actif: true })
+    setFormData({ nom: '', prenom: '', email: '', telephone: '', departementId: '', motDePasse: '', actif: true })
+    setShowPassword(false)
     setShowModal(true)
   }
 
   const handleEdit = (chef) => {
     setEditingChef(chef)
-    setFormData(chef)
+    setFormData({ ...chef, motDePasse: '' }) // Ne pas afficher le mot de passe existant
+    setShowPassword(false)
+    setError(null)
     setShowModal(true)
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce chef de département ?')) {
-      setChefs(chefs.filter(c => c.id !== id))
+      try {
+        setError(null)
+        const response = await deleteChefDepartement(id)
+        if (response.success) {
+          await loadChefs() // Recharger la liste
+        } else {
+          setError(response.error || 'Erreur lors de la suppression')
+        }
+      } catch (err) {
+        console.error('Erreur:', err)
+        setError(err.message || 'Erreur lors de la suppression')
+      }
     }
   }
 
-  const handleSave = () => {
-    if (editingChef) {
-      setChefs(chefs.map(c => c.id === editingChef.id ? { ...formData, id: editingChef.id } : c))
-    } else {
-      setChefs([...chefs, { ...formData, id: Date.now() }])
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      setError(null)
+
+      // Validation
+      if (!formData.nom || !formData.prenom || !formData.email || !formData.departementId) {
+        setError('Veuillez remplir tous les champs obligatoires')
+        setSaving(false)
+        return
+      }
+
+      if (!editingChef && !formData.motDePasse) {
+        setError('Le mot de passe est obligatoire pour un nouveau chef de département')
+        setSaving(false)
+        return
+      }
+
+      let response
+      if (editingChef) {
+        // Mise à jour
+        response = await updateChefDepartement(editingChef.id, formData)
+      } else {
+        // Création
+        response = await createChefDepartement(formData)
+      }
+
+      if (response.success) {
+        setShowModal(false)
+        await loadChefs() // Recharger la liste
+        // Réinitialiser le formulaire
+        setFormData({ nom: '', prenom: '', email: '', telephone: '', departementId: '', motDePasse: '', actif: true })
+        setEditingChef(null)
+      } else {
+        setError(response.error || 'Erreur lors de l\'enregistrement')
+      }
+    } catch (err) {
+      console.error('Erreur:', err)
+      setError(err.message || 'Erreur lors de l\'enregistrement')
+    } finally {
+      setSaving(false)
     }
-    setShowModal(false)
   }
 
   const filteredChefs = chefs.filter(chef => 
-    `${chef.nom} ${chef.prenom} ${chef.email} ${chef.departement}`.toLowerCase().includes(searchQuery.toLowerCase())
+    `${chef.nom} ${chef.prenom} ${chef.email} ${chef.departement?.nom || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   return (
@@ -88,8 +176,25 @@ const ChefsDepartementView = () => {
             </div>
           </div>
 
+          {/* Message d'erreur */}
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              {error}
+            </div>
+          )}
+
           {/* Tableau */}
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center">
+                <FontAwesomeIcon icon={faSpinner} className="animate-spin text-blue-600 text-2xl mb-2" />
+                <p className="text-slate-600">Chargement des chefs de département...</p>
+              </div>
+            ) : filteredChefs.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                {searchQuery ? 'Aucun résultat trouvé' : 'Aucun chef de département enregistré'}
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
@@ -120,7 +225,7 @@ const ChefsDepartementView = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                           <FontAwesomeIcon icon={faBuilding} className="mr-1" />
-                          {chef.departement}
+                          {chef.departement?.nom || 'Non assigné'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -153,6 +258,7 @@ const ChefsDepartementView = () => {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {/* Modal d'ajout/modification */}
@@ -160,9 +266,15 @@ const ChefsDepartementView = () => {
             isOpen={showModal}
             onClose={() => setShowModal(false)}
             title={editingChef ? 'Modifier le chef de département' : 'Ajouter un chef de département'}
+            size="2xl"
           >
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-6">
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
                   <input
@@ -181,47 +293,104 @@ const ChefsDepartementView = () => {
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
-                <input
-                  type="tel"
-                  value={formData.telephone}
-                  onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Département</label>
-                <select
-                  value={formData.departement}
-                  onChange={(e) => setFormData({ ...formData, departement: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sélectionner un département</option>
-                  {departements.map((dept) => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="actif"
-                  checked={formData.actif}
-                  onChange={(e) => setFormData({ ...formData, actif: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                />
-                <label htmlFor="actif" className="text-sm text-slate-700">Actif</label>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={formData.telephone}
+                    onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Département <span className="text-red-500">*</span></label>
+                  <select
+                    value={formData.departementId}
+                    onChange={(e) => setFormData({ ...formData, departementId: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Sélectionner un département</option>
+                    {departements.map((dept) => {
+                      // Vérifier si le département est déjà assigné à un autre chef
+                      const isAssigned = chefs.some(chef => 
+                        chef.departementId === dept.id && 
+                        chef.id !== editingChef?.id && 
+                        chef.actif
+                      )
+                      const assignedChef = isAssigned ? chefs.find(chef => 
+                        chef.departementId === dept.id && 
+                        chef.id !== editingChef?.id && 
+                        chef.actif
+                      ) : null
+                      
+                      return (
+                        <option 
+                          key={dept.id} 
+                          value={dept.id}
+                          disabled={isAssigned}
+                          style={isAssigned ? { color: '#999', fontStyle: 'italic' } : {}}
+                        >
+                          {dept.nom} ({dept.code})
+                          {isAssigned && assignedChef && ` - Déjà assigné à ${assignedChef.prenom} ${assignedChef.nom}`}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  {formData.departementId && chefs.some(chef => 
+                    chef.departementId === formData.departementId && 
+                    chef.id !== editingChef?.id && 
+                    chef.actif
+                  ) && (
+                    <p className="mt-1 text-xs text-red-600">
+                      ⚠️ Ce département est déjà assigné à un autre chef de département
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <FontAwesomeIcon icon={faKey} className="mr-1 text-blue-600" />
+                    Mot de passe {!editingChef && <span className="text-red-500">*</span>}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.motDePasse}
+                      onChange={(e) => setFormData({ ...formData, motDePasse: e.target.value })}
+                      className="w-full px-4 py-2 pr-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Entrez le mot de passe"
+                      required={!editingChef}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-end">
+                  <div className="flex items-center gap-2 w-full">
+                    <input
+                      type="checkbox"
+                      id="actif"
+                      checked={formData.actif}
+                      onChange={(e) => setFormData({ ...formData, actif: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="actif" className="text-sm text-slate-700">Actif</label>
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <button
@@ -232,8 +401,10 @@ const ChefsDepartementView = () => {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
+                  {saving && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
                   {editingChef ? 'Modifier' : 'Ajouter'}
                 </button>
               </div>

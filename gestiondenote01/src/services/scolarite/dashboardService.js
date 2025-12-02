@@ -24,10 +24,18 @@ const getAcademicYear = (referenceDate = new Date()) => {
 // Statistiques pour le Chef de Service de la Scolarité
 export const getChefDashboardStats = async () => {
   try {
+    // Récupérer les IDs des rôles
+    const roleAgent = await prisma.role.findUnique({ where: { code: 'AGENT_SCOLARITE' } })
+    const roleSP = await prisma.role.findUnique({ where: { code: 'SP_SCOLARITE' } })
+    
+    if (!roleAgent || !roleSP) {
+      throw new Error('Rôles AGENT_SCOLARITE ou SP_SCOLARITE non trouvés dans la base de données')
+    }
+
     // Compter les agents actifs
     const totalAgents = await prisma.utilisateur.count({
       where: {
-        role: 'AGENT_SCOLARITE',
+        roleId: roleAgent.id,
         actif: true
       }
     })
@@ -35,7 +43,7 @@ export const getChefDashboardStats = async () => {
     // Compter les SP actives
     const totalSP = await prisma.utilisateur.count({
       where: {
-        role: 'SP_SCOLARITE',
+        roleId: roleSP.id,
         actif: true
       }
     })
@@ -90,8 +98,8 @@ export const getChefDashboardStats = async () => {
     // Récupérer les dernières connexions (agents et SP)
     const dernieresConnexions = await prisma.utilisateur.findMany({
       where: {
-        role: {
-          in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+        roleId: {
+          in: [roleAgent.id, roleSP.id]
         },
         derniereConnexion: {
           not: null
@@ -101,7 +109,11 @@ export const getChefDashboardStats = async () => {
         id: true,
         nom: true,
         prenom: true,
-        role: true,
+        role: {
+          select: {
+            code: true
+          }
+        },
         derniereConnexion: true,
         actif: true
       },
@@ -115,8 +127,8 @@ export const getChefDashboardStats = async () => {
     const actionsRecentes = await prisma.actionAudit.findMany({
       where: {
         utilisateur: {
-          role: {
-            in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+          roleId: {
+            in: [roleAgent.id, roleSP.id]
           }
         }
       },
@@ -200,8 +212,8 @@ export const getChefDashboardStats = async () => {
     const totalUsers = totalAgents + totalSP
     const usersActifs7Jours = await prisma.utilisateur.count({
       where: {
-        role: {
-          in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+        roleId: {
+          in: [roleAgent.id, roleSP.id]
         },
         derniereConnexion: {
           gte: sevenDaysAgo
@@ -219,8 +231,8 @@ export const getChefDashboardStats = async () => {
     
     const usersActifsSemainePrecedente = await prisma.utilisateur.count({
       where: {
-        role: {
-          in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+        roleId: {
+          in: [roleAgent.id, roleSP.id]
         },
         derniereConnexion: {
           gte: fourteenDaysAgo,
@@ -251,8 +263,8 @@ export const getChefDashboardStats = async () => {
       // Compter les connexions uniques dans cette tranche horaire
       const connexions = await prisma.utilisateur.findMany({
         where: {
-          role: {
-            in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+          roleId: {
+            in: [roleAgent.id, roleSP.id]
           },
           derniereConnexion: {
             gte: heureDebut,
@@ -289,7 +301,7 @@ export const getChefDashboardStats = async () => {
       dernieresConnexions: dernieresConnexions.map(u => ({
         id: u.id,
         nom: `${u.prenom} ${u.nom}`,
-        role: u.role === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité',
+        role: u.role?.code === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité',
         date: u.derniereConnexion ? u.derniereConnexion.toLocaleDateString('fr-FR') : 'N/A',
         heure: u.derniereConnexion ? u.derniereConnexion.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
         statut: u.actif ? 'actif' : 'inactif'

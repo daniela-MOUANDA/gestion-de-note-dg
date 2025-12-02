@@ -1,18 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faBuilding, faSearch, faUsers } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faBuilding, faSearch, faUsers, faGraduationCap, faSpinner, faCheckCircle, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons'
 import SidebarDEP from '../../components/common/SidebarDEP'
 import HeaderDEP from '../../components/common/HeaderDEP'
 import Modal from '../../components/common/Modal'
-
+import { getAllDepartements, createDepartement, updateDepartement, deleteDepartement } from '../../api/departements'
 const DepartementsView = () => {
-  const [departements, setDepartements] = useState([
-    { id: 1, nom: 'Génie Informatique', code: 'GI', description: 'Département de Génie Informatique', nombreClasses: 8, nombreEtudiants: 520, actif: true },
-    { id: 2, nom: 'Réseaux et Télécommunications', code: 'RT', description: 'Département de Réseaux et Télécommunications', nombreClasses: 6, nombreEtudiants: 380, actif: true },
-    { id: 3, nom: 'Électronique', code: 'ELEC', description: 'Département d\'Électronique', nombreClasses: 5, nombreEtudiants: 250, actif: true },
-    { id: 4, nom: 'Autres', code: 'AUT', description: 'Autres départements', nombreClasses: 5, nombreEtudiants: 100, actif: true },
-  ])
+  const [departements, setDepartements] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [deptToDelete, setDeptToDelete] = useState(null)
   const [editingDept, setEditingDept] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [formData, setFormData] = useState({
@@ -22,31 +26,134 @@ const DepartementsView = () => {
     actif: true
   })
 
+  // Charger les départements depuis la base de données
+  useEffect(() => {
+    loadDepartements()
+  }, [])
+
+  const loadDepartements = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const result = await getAllDepartements()
+      if (result.success) {
+        setDepartements(result.departements || [])
+      } else {
+        setError(result.error || 'Erreur lors du chargement des départements')
+      }
+    } catch (err) {
+      console.error('Erreur lors du chargement des départements:', err)
+      setError(err.message || 'Erreur lors du chargement des départements')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleAdd = () => {
     setEditingDept(null)
     setFormData({ nom: '', code: '', description: '', actif: true })
+    setError(null)
     setShowModal(true)
   }
 
   const handleEdit = (dept) => {
     setEditingDept(dept)
-    setFormData({ nom: dept.nom, code: dept.code, description: dept.description, actif: dept.actif })
+    setFormData({ 
+      nom: dept.nom || '', 
+      code: dept.code || '', 
+      description: dept.description || '', 
+      actif: dept.actif !== undefined ? dept.actif : true 
+    })
+    setError(null)
     setShowModal(true)
   }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce département ?')) {
-      setDepartements(departements.filter(d => d.id !== id))
+  const handleDelete = (dept) => {
+    setDeptToDelete(dept)
+    setShowConfirmModal(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deptToDelete) return
+
+    try {
+      setLoading(true)
+      setShowConfirmModal(false)
+      const result = await deleteDepartement(deptToDelete.id)
+      if (result.success) {
+        setSuccessMessage(`Le département "${deptToDelete.nom}" a été supprimé avec succès.`)
+        setShowSuccessModal(true)
+        // Recharger les départements depuis la base de données
+        await loadDepartements()
+        // Fermer le modal après 2 secondes
+        setTimeout(() => {
+          setShowSuccessModal(false)
+        }, 2000)
+      } else {
+        setErrorMessage(result.error || 'Erreur lors de la suppression du département')
+        setShowErrorModal(true)
+      }
+    } catch (err) {
+      console.error('Erreur lors de la suppression:', err)
+      setErrorMessage(err.message || 'Erreur lors de la suppression du département')
+      setShowErrorModal(true)
+    } finally {
+      setLoading(false)
+      setDeptToDelete(null)
     }
   }
 
-  const handleSave = () => {
-    if (editingDept) {
-      setDepartements(departements.map(d => d.id === editingDept.id ? { ...formData, id: editingDept.id, nombreClasses: editingDept.nombreClasses, nombreEtudiants: editingDept.nombreEtudiants } : d))
-    } else {
-      setDepartements([...departements, { ...formData, id: Date.now(), nombreClasses: 0, nombreEtudiants: 0 }])
+  const handleSave = async () => {
+      if (!formData.nom || !formData.code) {
+      setError('Le nom et le code sont obligatoires')
+      setErrorMessage('Le nom et le code sont obligatoires')
+      setShowErrorModal(true)
+      return
     }
-    setShowModal(false)
+
+    try {
+      setSaving(true)
+      setError(null)
+      setErrorMessage('')
+
+      let result
+      if (editingDept) {
+        // Mise à jour
+        result = await updateDepartement(editingDept.id, formData)
+        if (result.success) {
+          setSuccessMessage(`Le département "${formData.nom}" a été modifié avec succès.`)
+          setShowSuccessModal(true)
+        }
+      } else {
+        // Création
+        result = await createDepartement(formData)
+        if (result.success) {
+          setSuccessMessage(`Le département "${formData.nom}" a été créé avec succès.`)
+          setShowSuccessModal(true)
+        }
+      }
+
+      if (result.success) {
+        setShowModal(false)
+        // Recharger les départements depuis la base de données
+        await loadDepartements()
+        // Fermer le modal de succès après 2 secondes
+        setTimeout(() => {
+          setShowSuccessModal(false)
+        }, 2000)
+      } else {
+        setError(result.error || 'Erreur lors de la sauvegarde')
+        setErrorMessage(result.error || 'Erreur lors de la sauvegarde du département')
+        setShowErrorModal(true)
+      }
+    } catch (err) {
+      console.error('Erreur lors de la sauvegarde:', err)
+      setError(err.message || 'Erreur lors de la sauvegarde du département')
+      setErrorMessage(err.message || 'Erreur lors de la sauvegarde du département')
+      setShowErrorModal(true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const filteredDepartements = departements.filter(dept => 
@@ -73,6 +180,13 @@ const DepartementsView = () => {
             </button>
           </div>
 
+          {/* Messages d'erreur */}
+          {error && !showModal && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              {error}
+            </div>
+          )}
+
           {/* Barre de recherche */}
           <div className="mb-6">
             <div className="relative">
@@ -87,8 +201,17 @@ const DepartementsView = () => {
             </div>
           </div>
 
+          {/* État de chargement */}
+          {loading && !showModal && (
+            <div className="flex items-center justify-center py-12">
+              <FontAwesomeIcon icon={faSpinner} className="text-3xl text-blue-600 animate-spin" />
+              <span className="ml-3 text-slate-600">Chargement des départements...</span>
+            </div>
+          )}
+
           {/* Grille des départements */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {filteredDepartements.map((dept) => (
               <div key={dept.id} className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
                 <div className="flex items-start justify-between mb-4">
@@ -108,15 +231,21 @@ const DepartementsView = () => {
                   </span>
                 </div>
                 <p className="text-sm text-slate-600 mb-4">{dept.description}</p>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <FontAwesomeIcon icon={faUsers} className="text-sm" />
-                    <span className="text-sm">{dept.nombreEtudiants} étudiants</span>
+                {dept.filieres && dept.filieres.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FontAwesomeIcon icon={faGraduationCap} className="text-sm text-purple-600" />
+                      <span className="text-xs font-semibold text-slate-700">Filières :</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {dept.filieres.map((filiere) => (
+                        <span key={filiere.id || filiere} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-md text-xs font-medium">
+                          {filiere.nom || filiere}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-slate-600">
-                    <span className="text-sm">{dept.nombreClasses} classes</span>
-                  </div>
-                </div>
+                )}
                 <div className="flex gap-2 pt-4 border-t border-slate-200">
                   <button
                     onClick={() => handleEdit(dept)}
@@ -126,7 +255,7 @@ const DepartementsView = () => {
                     Modifier
                   </button>
                   <button
-                    onClick={() => handleDelete(dept.id)}
+                    onClick={() => handleDelete(dept)}
                     className="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                   >
                     <FontAwesomeIcon icon={faTrash} />
@@ -134,7 +263,18 @@ const DepartementsView = () => {
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          )}
+
+          {/* Message si aucun département */}
+          {!loading && filteredDepartements.length === 0 && (
+            <div className="text-center py-12">
+              <FontAwesomeIcon icon={faBuilding} className="text-4xl text-slate-300 mb-4" />
+              <p className="text-slate-500">
+                {searchQuery ? 'Aucun département ne correspond à votre recherche' : 'Aucun département enregistré'}
+              </p>
+            </div>
+          )}
 
           {/* Modal d'ajout/modification */}
           <Modal
@@ -143,6 +283,12 @@ const DepartementsView = () => {
             title={editingDept ? 'Modifier le département' : 'Ajouter un département'}
           >
             <div className="p-6 space-y-4">
+              {/* Message d'erreur dans le modal */}
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nom du département</label>
                 <input
@@ -193,11 +339,63 @@ const DepartementsView = () => {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
+                  {saving && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
                   {editingDept ? 'Modifier' : 'Ajouter'}
                 </button>
               </div>
+            </div>
+          </Modal>
+
+          {/* Modal de succès */}
+          <Modal
+            isOpen={showSuccessModal}
+            onClose={() => setShowSuccessModal(false)}
+            type="success"
+            title="Succès"
+            message={successMessage}
+          />
+
+          {/* Modal d'erreur */}
+          <Modal
+            isOpen={showErrorModal}
+            onClose={() => setShowErrorModal(false)}
+            type="error"
+            title="Erreur"
+            message={errorMessage}
+          />
+
+          {/* Modal de confirmation de suppression */}
+          <Modal
+            isOpen={showConfirmModal}
+            onClose={() => {
+              setShowConfirmModal(false)
+              setDeptToDelete(null)
+            }}
+            type="warning"
+            title="Confirmer la suppression"
+            message={deptToDelete ? `Êtes-vous sûr de vouloir supprimer le département "${deptToDelete.nom}" ? Cette action est irréversible.` : ''}
+          >
+            <div className="flex justify-end gap-3 pt-4">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false)
+                  setDeptToDelete(null)
+                }}
+                className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={loading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
+                Supprimer
+              </button>
             </div>
           </Modal>
         </main>

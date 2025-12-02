@@ -26,19 +26,21 @@ const LoginView = () => {
   const [successMessage, setSuccessMessage] = useState('')
 
   // Fonction pour rediriger selon le rôle
-  const redirectByRole = (role) => {
-    console.log('Redirection pour le rôle:', role)
-    // Vérifier que le rôle est bien défini et valide
-    if (!role) {
-      console.error('❌ Rôle non défini lors de la redirection')
+  const redirectByRole = (user) => {
+    console.log('Redirection pour l\'utilisateur:', user)
+    
+    // Utiliser la route du dashboard depuis roleDetails si disponible
+    if (user.roleDetails && user.roleDetails.routeDashboard) {
+      console.log('✅ Redirection vers:', user.roleDetails.routeDashboard)
+      navigate(user.roleDetails.routeDashboard, { replace: true })
       return
     }
     
-    // Normaliser le rôle (enlever les espaces, mettre en majuscules)
-    const normalizedRole = role.trim().toUpperCase()
-    console.log('Rôle normalisé:', normalizedRole)
+    // Fallback: utiliser le code du rôle pour la redirection
+    const roleCode = user.role || 'UNKNOWN'
+    console.log('Redirection par code de rôle:', roleCode)
     
-    switch (normalizedRole) {
+    switch (roleCode) {
       case 'ETUDIANT':
         navigate('/dashboard', { replace: true })
         break
@@ -55,8 +57,12 @@ const LoginView = () => {
       case 'CHEF_DEPARTEMENT':
         navigate('/chef/dashboard', { replace: true })
         break
+      case 'DEP':
+        console.log('✅ Redirection vers /dep/dashboard pour DEP')
+        navigate('/dep/dashboard', { replace: true })
+        break
       default:
-        console.warn('⚠️ Rôle non reconnu:', normalizedRole, '(rôle original:', role, ')')
+        console.warn('⚠️ Rôle non reconnu:', roleCode)
         // En cas de rôle non reconnu, rediriger vers la page de login
         navigate('/login', { replace: true })
     }
@@ -86,7 +92,8 @@ const LoginView = () => {
         
         // Rediriger après un court délai pour voir le modal
         setTimeout(() => {
-          redirectByRole(result.user.role)
+          setShowSuccessModal(false)
+          redirectByRole(result.user)
         }, 1500)
       } else {
         const errorMsg = result.error || 'Erreur lors de la connexion'

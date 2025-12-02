@@ -111,10 +111,18 @@ export const getActionsAudit = async (filters = {}) => {
 // Récupérer la liste des agents/SP pour les filtres
 export const getAgentsPourFiltre = async () => {
   try {
+    // Récupérer les IDs des rôles
+    const roleAgent = await prisma.role.findUnique({ where: { code: 'AGENT_SCOLARITE' } })
+    const roleSP = await prisma.role.findUnique({ where: { code: 'SP_SCOLARITE' } })
+    
+    if (!roleAgent || !roleSP) {
+      throw new Error('Rôles AGENT_SCOLARITE ou SP_SCOLARITE non trouvés dans la base de données')
+    }
+
     const utilisateurs = await prisma.utilisateur.findMany({
       where: {
-        role: {
-          in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+        roleId: {
+          in: [roleAgent.id, roleSP.id]
         },
         actif: true
       },
@@ -122,7 +130,11 @@ export const getAgentsPourFiltre = async () => {
         id: true,
         nom: true,
         prenom: true,
-        role: true
+        role: {
+          select: {
+            code: true
+          }
+        }
       },
       orderBy: {
         nom: 'asc'
@@ -132,7 +144,7 @@ export const getAgentsPourFiltre = async () => {
     return utilisateurs.map(u => ({
       id: u.id,
       nom: `${u.prenom} ${u.nom}`,
-      role: u.role === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité'
+      role: u.role?.code === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité'
     }))
   } catch (error) {
     console.error('Erreur lors de la récupération des agents:', error)

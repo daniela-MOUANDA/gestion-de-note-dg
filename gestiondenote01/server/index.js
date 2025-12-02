@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url'
 import authRoutes from './routes/auth.js'
 import scolariteRoutes from './routes/scolarite.js'
 import comptesRoutes from './routes/comptes.js'
+import chefsDepartementRoutes from './routes/chefsDepartement.js'
+import departementsRoutes from './routes/departements.js'
 
 dotenv.config()
 
@@ -36,6 +38,8 @@ app.use('/api/auth', authRoutes)
 // Routes protégées
 app.use('/api/scolarite', scolariteRoutes)
 app.use('/api/comptes', comptesRoutes)
+app.use('/api/chefs-departement', chefsDepartementRoutes)
+app.use('/api/departements', departementsRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

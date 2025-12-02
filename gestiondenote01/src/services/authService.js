@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'votre-secret-jwt-tres-securise-changez-moi-en-production'
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h' // 8 heures de validité
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h' // 24 heures de validité (augmenté pour éviter les déconnexions fréquentes)
 
 // Authentifier un utilisateur
 export const authenticateUser = async (email, password, matricule = null) => {
@@ -65,7 +65,8 @@ export const authenticateUser = async (email, password, matricule = null) => {
             { email: normalizedEmail },
             { username: matricule.trim() }
           ]
-        }
+        },
+        include: { role: true }
       })
 
       // Si aucun compte Utilisateur n'existe, le créer
@@ -85,6 +86,19 @@ export const authenticateUser = async (email, password, matricule = null) => {
         // Hasher le mot de passe
         const hashedPassword = await bcrypt.hash(password, 10)
 
+        // Récupérer le rôle ETUDIANT
+        const roleEtudiant = await prisma.role.findUnique({
+          where: { code: 'ETUDIANT' }
+        })
+
+        if (!roleEtudiant) {
+          console.log('❌ Rôle ETUDIANT non trouvé')
+          return {
+            success: false,
+            error: 'Erreur de configuration: rôle étudiant introuvable'
+          }
+        }
+
         // Créer le compte Utilisateur
         utilisateur = await prisma.utilisateur.create({
           data: {
@@ -93,12 +107,13 @@ export const authenticateUser = async (email, password, matricule = null) => {
             email: normalizedEmail || `${matricule.trim()}@etudiant.inptic.ga`,
             username: username,
             password: hashedPassword,
-            role: 'ETUDIANT',
+            roleId: roleEtudiant.id,
             actif: true,
             photo: etudiant.photo || null,
             telephone: etudiant.telephone || null,
             adresse: etudiant.adresse || null
-          }
+          },
+          include: { role: true }
         })
 
         console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
@@ -113,7 +128,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
         }
       } else {
         // Vérifier que c'est bien un compte étudiant
-        if (utilisateur.role !== 'ETUDIANT') {
+        if (!utilisateur.role || utilisateur.role.code !== 'ETUDIANT') {
           console.log('❌ Le compte trouvé n\'est pas un compte étudiant')
           return {
             success: false,
@@ -137,7 +152,8 @@ export const authenticateUser = async (email, password, matricule = null) => {
       // Trouver l'utilisateur par email (insensible à la casse)
       // On essaie d'abord avec l'email normalisé, puis avec l'email original
       utilisateur = await prisma.utilisateur.findUnique({
-        where: { email: normalizedEmail }
+        where: { email: normalizedEmail },
+        include: { role: true }
       })
       
       // Si pas trouvé, essayer avec l'email original (trim seulement)
@@ -146,7 +162,8 @@ export const authenticateUser = async (email, password, matricule = null) => {
         if (trimmedEmail !== normalizedEmail) {
           console.log('🔍 Essai avec l\'email original (trim):', trimmedEmail)
           utilisateur = await prisma.utilisateur.findUnique({
-            where: { email: trimmedEmail }
+            where: { email: trimmedEmail },
+            include: { role: true }
           })
         }
       }
@@ -177,7 +194,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
       }
     }
 
-    console.log('✅ Utilisateur trouvé:', utilisateur.email, 'Rôle:', utilisateur.role)
+    console.log('✅ Utilisateur trouvé:', utilisateur.email, 'Rôle:', utilisateur.role?.code || 'N/A')
 
     // Vérifier si le compte est actif
     if (!utilisateur.actif) {
@@ -229,18 +246,20 @@ export const authenticateUser = async (email, password, matricule = null) => {
 
 
     // Créer un token JWT
+    const roleCode = utilisateur.role?.code || 'UNKNOWN'
     const token = jwt.sign(
       {
         id: utilisateur.id,
         email: utilisateur.email,
-        role: utilisateur.role,
+        role: roleCode,
         username: utilisateur.username
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     )
 
-    // Stocker le token dans la base de données pour cet utilisateur
+    // IMPORTANT: Invalider tous les autres tokens de cet utilisateur avant de créer un nouveau
+    // Cela garantit qu'une seule session active existe par utilisateur
     await prisma.utilisateur.update({
       where: { id: utilisateur.id },
       data: { 
@@ -249,12 +268,14 @@ export const authenticateUser = async (email, password, matricule = null) => {
       }
     })
 
+    console.log('✅ Token stocké pour l\'utilisateur:', utilisateur.email, 'ID:', utilisateur.id)
+
     // Enregistrer l'action dans l'audit
     await prisma.actionAudit.create({
       data: {
         utilisateurId: utilisateur.id,
         action: 'Connexion',
-        details: `Connexion réussie - ${utilisateur.role}`,
+        details: `Connexion réussie - ${roleCode}`,
         typeAction: 'CONNEXION',
         dateAction: new Date()
       }
@@ -272,7 +293,13 @@ export const authenticateUser = async (email, password, matricule = null) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
-        role: userWithoutPassword.role,
+        role: roleCode, // Utiliser le code du rôle
+        roleDetails: userWithoutPassword.role ? {
+          id: userWithoutPassword.role.id,
+          code: userWithoutPassword.role.code,
+          nom: userWithoutPassword.role.nom,
+          routeDashboard: userWithoutPassword.role.routeDashboard
+        } : null,
         actif: userWithoutPassword.actif,
         photo: userWithoutPassword.photo || null,
         telephone: userWithoutPassword.telephone || null,
@@ -294,7 +321,8 @@ export const authenticateUser = async (email, password, matricule = null) => {
 export const refreshUserToken = async (userId) => {
   try {
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId }
+      where: { id: userId },
+      include: { role: true }
     })
 
     if (!utilisateur || !utilisateur.actif) {
@@ -304,12 +332,14 @@ export const refreshUserToken = async (userId) => {
       }
     }
 
+    const roleCode = utilisateur.role?.code || 'UNKNOWN'
+
     // Créer un nouveau token
     const newToken = jwt.sign(
       {
         id: utilisateur.id,
         email: utilisateur.email,
-        role: utilisateur.role,
+        role: roleCode,
         username: utilisateur.username
       },
       JWT_SECRET,
@@ -317,27 +347,50 @@ export const refreshUserToken = async (userId) => {
     )
 
     // Mettre à jour le token dans la base de données
+    // Vérifier d'abord que l'ancien token correspond toujours
+    const currentUser = await prisma.utilisateur.findUnique({
+      where: { id: userId },
+      include: { role: true }
+    })
+
+    if (!currentUser || !currentUser.token) {
+      return {
+        success: false,
+        error: 'Session invalide. Veuillez vous reconnecter.'
+      }
+    }
+
     await prisma.utilisateur.update({
       where: { id: userId },
       data: { token: newToken }
     })
 
+    console.log('✅ Token renouvelé pour l\'utilisateur:', currentUser.email)
+
+    const { password: _, ...userWithoutPassword } = utilisateur
+
     return {
       success: true,
       token: newToken,
       user: {
-        id: utilisateur.id,
-        nom: utilisateur.nom,
-        prenom: utilisateur.prenom,
-        email: utilisateur.email,
-        username: utilisateur.username,
-        role: utilisateur.role,
-        actif: utilisateur.actif,
-        photo: utilisateur.photo || null,
-        telephone: utilisateur.telephone || null,
-        adresse: utilisateur.adresse || null,
-        dateCreation: utilisateur.dateCreation,
-        derniereConnexion: utilisateur.derniereConnexion || null
+        id: userWithoutPassword.id,
+        nom: userWithoutPassword.nom,
+        prenom: userWithoutPassword.prenom,
+        email: userWithoutPassword.email,
+        username: userWithoutPassword.username,
+        role: roleCode,
+        roleDetails: userWithoutPassword.role ? {
+          id: userWithoutPassword.role.id,
+          code: userWithoutPassword.role.code,
+          nom: userWithoutPassword.role.nom,
+          routeDashboard: userWithoutPassword.role.routeDashboard
+        } : null,
+        actif: userWithoutPassword.actif,
+        photo: userWithoutPassword.photo || null,
+        telephone: userWithoutPassword.telephone || null,
+        adresse: userWithoutPassword.adresse || null,
+        dateCreation: userWithoutPassword.dateCreation,
+        derniereConnexion: userWithoutPassword.derniereConnexion || null
       }
     }
   } catch (error) {
@@ -381,29 +434,136 @@ export const verifyToken = async (token, shouldRefresh = false) => {
     
     // Vérifier que l'utilisateur existe toujours et est actif
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: decoded.id }
+      where: { id: decoded.id },
+      include: { role: true }
     })
     
     if (!utilisateur) {
+      console.error('❌ Utilisateur introuvable pour ID:', decoded.id)
       return {
         valid: false,
         error: 'Utilisateur introuvable'
       }
     }
 
-    // Vérifier que le token correspond à celui stocké dans la base de données
+    // VÉRIFICATIONS CRITIQUES AVANT TOUT : S'assurer que l'utilisateur récupéré correspond au token
+    // Ces vérifications empêchent le basculement vers un autre utilisateur
+    
+    // 1. Vérifier que l'ID correspond (déjà fait par la requête, mais on double-vérifie)
+    if (utilisateur.id !== decoded.id) {
+      console.error('❌ ERREUR CRITIQUE: L\'utilisateur récupéré ne correspond pas à l\'ID du token!')
+      console.error('   ID dans le token:', decoded.id)
+      console.error('   ID de l\'utilisateur récupéré:', utilisateur.id)
+      console.error('   Email de l\'utilisateur récupéré:', utilisateur.email)
+      return {
+        valid: false,
+        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
+      }
+    }
+
+    // 2. Vérifier que l'email correspond (AVANT de vérifier le token)
+    if (decoded.email && decoded.email.toLowerCase() !== utilisateur.email.toLowerCase()) {
+      console.error('❌ ERREUR CRITIQUE: L\'email dans le token ne correspond pas à l\'utilisateur récupéré!')
+      console.error('   Email dans le token:', decoded.email)
+      console.error('   Email de l\'utilisateur récupéré:', utilisateur.email)
+      console.error('   ID dans le token:', decoded.id)
+      console.error('   ID de l\'utilisateur récupéré:', utilisateur.id)
+      return {
+        valid: false,
+        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
+      }
+    }
+
+    // 3. Vérifier que le token correspond à celui stocké dans la base de données
     if (!utilisateur.token) {
+      console.error('❌ Aucun token stocké pour l\'utilisateur:', utilisateur.email)
       return {
         valid: false,
         error: 'Session expirée. Veuillez vous reconnecter.'
       }
     }
-    
-    // Comparer les tokens de manière sécurisée
+
+    // Comparer les tokens de manière sécurisée (CRITIQUE pour la sécurité)
+    // Si les tokens ne correspondent pas, cela signifie qu'une autre session est active
+    // Dans ce cas, on doit IMMÉDIATEMENT rejeter la requête pour éviter le basculement
     if (utilisateur.token !== token) {
+      // Si on est en train de renouveler le token, c'est normal que les tokens ne correspondent pas
+      // MAIS on doit vérifier que l'ID correspond toujours
+      if (shouldRefresh && utilisateur.id === decoded.id) {
+        console.log('🔄 Renouvellement du token en cours, tokens différents attendus')
+        // Renouveler le token SEULEMENT si l'ID correspond
+        const refreshResult = await refreshUserToken(decoded.id)
+        if (refreshResult.success) {
+          // Mettre à jour les données utilisateur
+          const { password: _, ...userWithoutPassword } = utilisateur
+          return {
+            valid: true,
+            user: {
+              id: utilisateur.id,
+              nom: utilisateur.nom,
+              prenom: utilisateur.prenom,
+              email: utilisateur.email,
+              username: utilisateur.username,
+              role: roleCode,
+              roleDetails: utilisateur.role ? {
+                id: utilisateur.role.id,
+                code: utilisateur.role.code,
+                nom: utilisateur.role.nom,
+                routeDashboard: utilisateur.role.routeDashboard
+              } : null,
+              actif: utilisateur.actif,
+              photo: utilisateur.photo || null,
+              telephone: utilisateur.telephone || null,
+              adresse: utilisateur.adresse || null,
+              dateCreation: utilisateur.dateCreation,
+              derniereConnexion: utilisateur.derniereConnexion || null
+            },
+            newToken: refreshResult.token
+          }
+        }
+      }
+      
+      // Si les tokens ne correspondent pas et qu'on n'est pas en train de renouveler,
+      // c'est qu'une autre session est active - REJETER IMMÉDIATEMENT
+      console.error('❌ Token mismatch pour l\'utilisateur:', utilisateur.email)
+      console.error('   ID dans le token:', decoded.id)
+      console.error('   ID de l\'utilisateur:', utilisateur.id)
+      console.error('   Token reçu:', token.substring(0, 20) + '...')
+      console.error('   Token attendu:', utilisateur.token ? utilisateur.token.substring(0, 20) + '...' : 'NULL')
+      console.error('   ⚠️ ATTENTION: Une autre session est active pour cet utilisateur ou un autre utilisateur!')
+      
       return {
         valid: false,
         error: 'Token invalide. Une autre session est active. Veuillez vous reconnecter.'
+      }
+    }
+
+    // Vérifier la cohérence entre le token décodé et l'utilisateur récupéré
+    // Vérifier l'email
+    if (decoded.email && decoded.email.toLowerCase() !== utilisateur.email.toLowerCase()) {
+      console.error('❌ Email mismatch:', decoded.email, 'vs', utilisateur.email)
+      return {
+        valid: false,
+        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
+      }
+    }
+
+    // Vérifier le username
+    if (decoded.username && decoded.username !== utilisateur.username) {
+      console.error('❌ Username mismatch:', decoded.username, 'vs', utilisateur.username)
+      return {
+        valid: false,
+        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
+      }
+    }
+
+    // Vérifier le rôle
+    const roleCode = utilisateur.role?.code || 'UNKNOWN'
+    if (decoded.role && decoded.role !== roleCode) {
+      console.error('❌ Role mismatch:', decoded.role, 'vs', roleCode)
+      return {
+        valid: false,
+        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
       }
     }
     
@@ -414,7 +574,13 @@ export const verifyToken = async (token, shouldRefresh = false) => {
       prenom: utilisateur.prenom,
       email: utilisateur.email,
       username: utilisateur.username,
-      role: utilisateur.role,
+      role: roleCode,
+      roleDetails: utilisateur.role ? {
+        id: utilisateur.role.id,
+        code: utilisateur.role.code,
+        nom: utilisateur.role.nom,
+        routeDashboard: utilisateur.role.routeDashboard
+      } : null,
       actif: utilisateur.actif,
       photo: utilisateur.photo || null,
       telephone: utilisateur.telephone || null,
@@ -492,12 +658,15 @@ export const getUserById = async (userId) => {
   try {
     // Récupérer tous les champs (sans select pour éviter les erreurs si des champs n'existent pas encore)
     const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId }
+      where: { id: userId },
+      include: { role: true }
     })
 
     if (!utilisateur) {
       return null
     }
+
+    const roleCode = utilisateur.role?.code || 'UNKNOWN'
 
     // Extraire uniquement les champs nécessaires (en gérant les champs optionnels)
     return {
@@ -506,7 +675,13 @@ export const getUserById = async (userId) => {
       prenom: utilisateur.prenom,
       email: utilisateur.email,
       username: utilisateur.username,
-      role: utilisateur.role,
+      role: roleCode,
+      roleDetails: utilisateur.role ? {
+        id: utilisateur.role.id,
+        code: utilisateur.role.code,
+        nom: utilisateur.role.nom,
+        routeDashboard: utilisateur.role.routeDashboard
+      } : null,
       actif: utilisateur.actif,
       photo: utilisateur.photo || null,
       telephone: utilisateur.telephone || null,

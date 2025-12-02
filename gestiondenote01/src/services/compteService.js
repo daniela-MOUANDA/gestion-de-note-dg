@@ -1,8 +1,16 @@
 import bcrypt from 'bcrypt'
 import prisma from '../lib/prisma.js'
 
-// Mapper les rôles de l'interface vers les rôles de la base de données
-const mapRoleToEnum = (role) => {
+// Obtenir le roleId à partir d'un code de rôle
+const getRoleIdByCode = async (roleCode) => {
+  const role = await prisma.role.findUnique({
+    where: { code: roleCode }
+  })
+  return role?.id || null
+}
+
+// Mapper les rôles de l'interface vers les codes de rôle
+const mapRoleToCode = (role) => {
   const roleMap = {
     'Agent': 'AGENT_SCOLARITE',
     'SP-Scolarité': 'SP_SCOLARITE',
@@ -12,13 +20,13 @@ const mapRoleToEnum = (role) => {
   return roleMap[role] || role
 }
 
-// Mapper les rôles de la base de données vers l'interface
-const mapRoleToDisplay = (role) => {
+// Mapper les codes de rôle vers l'interface
+const mapRoleToDisplay = (roleCode) => {
   const roleMap = {
     'AGENT_SCOLARITE': 'Agent',
     'SP_SCOLARITE': 'SP-Scolarité'
   }
-  return roleMap[role] || role
+  return roleMap[roleCode] || roleCode
 }
 
 // Créer un nouveau compte
@@ -64,8 +72,16 @@ export const createCompte = async (data, createdBy) => {
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Mapper le rôle
-    const roleEnum = mapRoleToEnum(role)
+    // Mapper le rôle et obtenir le roleId
+    const roleCode = mapRoleToCode(role)
+    const roleId = await getRoleIdByCode(roleCode)
+
+    if (!roleId) {
+      return {
+        success: false,
+        error: `Rôle ${roleCode} introuvable`
+      }
+    }
 
     // Créer l'utilisateur
     const utilisateur = await prisma.utilisateur.create({
@@ -75,9 +91,10 @@ export const createCompte = async (data, createdBy) => {
         email: normalizedEmail,
         username: username.trim(),
         password: hashedPassword,
-        role: roleEnum,
+        roleId: roleId,
         actif: actif !== undefined ? actif : true
-      }
+      },
+      include: { role: true }
     })
 
     // Enregistrer dans l'audit
@@ -86,7 +103,7 @@ export const createCompte = async (data, createdBy) => {
         data: {
           utilisateurId: createdBy,
           action: 'Création de compte',
-          details: `Compte créé pour ${prenom} ${nom} (${roleEnum})`,
+          details: `Compte créé pour ${prenom} ${nom} (${roleCode})`,
           typeAction: 'CONNEXION',
           dateAction: new Date()
         }
@@ -104,7 +121,7 @@ export const createCompte = async (data, createdBy) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
-        role: mapRoleToDisplay(userWithoutPassword.role),
+        role: mapRoleToDisplay(userWithoutPassword.role?.code || 'UNKNOWN'),
         actif: userWithoutPassword.actif,
         dateCreation: userWithoutPassword.dateCreation,
         derniereConnexion: userWithoutPassword.derniereConnexion
@@ -122,25 +139,28 @@ export const createCompte = async (data, createdBy) => {
 // Obtenir tous les comptes (agents et SP-Scolarité uniquement)
 export const getAllComptes = async () => {
   try {
+    // Récupérer les IDs des rôles
+    const roleAgent = await prisma.role.findUnique({ where: { code: 'AGENT_SCOLARITE' } })
+    const roleSP = await prisma.role.findUnique({ where: { code: 'SP_SCOLARITE' } })
+
+    if (!roleAgent || !roleSP) {
+      return {
+        success: false,
+        error: 'Rôles introuvables'
+      }
+    }
+
     const utilisateurs = await prisma.utilisateur.findMany({
       where: {
-        role: {
-          in: ['AGENT_SCOLARITE', 'SP_SCOLARITE']
+        roleId: {
+          in: [roleAgent.id, roleSP.id]
         }
+      },
+      include: {
+        role: true
       },
       orderBy: {
         dateCreation: 'desc'
-      },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        username: true,
-        role: true,
-        actif: true,
-        dateCreation: true,
-        derniereConnexion: true
       }
     })
 
@@ -150,7 +170,7 @@ export const getAllComptes = async () => {
       prenom: u.prenom,
       email: u.email,
       username: u.username,
-      role: mapRoleToDisplay(u.role),
+      role: mapRoleToDisplay(u.role?.code || 'UNKNOWN'),
       actif: u.actif,
       dateCreation: u.dateCreation,
       derniereConnexion: u.derniereConnexion
@@ -224,8 +244,16 @@ export const updateCompte = async (id, data, updatedBy) => {
     if (prenom) updateData.prenom = prenom.trim()
     if (normalizedEmail) updateData.email = normalizedEmail
     if (username) updateData.username = username.trim()
-    if (role) updateData.role = mapRoleToEnum(role)
     if (actif !== undefined) updateData.actif = actif
+
+    // Mettre à jour le rôle si fourni
+    if (role) {
+      const roleCode = mapRoleToCode(role)
+      const roleId = await getRoleIdByCode(roleCode)
+      if (roleId) {
+        updateData.roleId = roleId
+      }
+    }
 
     // Hasher le nouveau mot de passe si fourni
     if (password && password.trim() !== '') {
@@ -235,7 +263,8 @@ export const updateCompte = async (id, data, updatedBy) => {
     // Mettre à jour le compte
     const utilisateur = await prisma.utilisateur.update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: { role: true }
     })
 
     // Enregistrer dans l'audit
@@ -262,7 +291,7 @@ export const updateCompte = async (id, data, updatedBy) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
-        role: mapRoleToDisplay(userWithoutPassword.role),
+        role: mapRoleToDisplay(userWithoutPassword.role?.code || 'UNKNOWN'),
         actif: userWithoutPassword.actif,
         dateCreation: userWithoutPassword.dateCreation,
         derniereConnexion: userWithoutPassword.derniereConnexion

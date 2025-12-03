@@ -33,7 +33,7 @@ const Header = ({ studentName = 'Daniel MOMBO' }) => {
   }
 
   return (
-    <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 lg:top-0 z-30 lg:z-40">
+    <header className="bg-white shadow-sm border-b border-slate-200 sticky top-0 lg:top-0 z-30 lg:z-40 mb-4">
       <div className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
         <div className="flex justify-between items-center">
           <h2 className="text-lg sm:text-xl font-semibold text-slate-800">

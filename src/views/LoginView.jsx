@@ -29,22 +29,27 @@ const LoginView = () => {
   const redirectByRole = (user) => {
     console.log('Redirection pour l\'utilisateur:', user)
     
-    // Utiliser la route du dashboard depuis roleDetails si disponible
-    if (user.roleDetails && user.roleDetails.routeDashboard) {
+    // Utiliser le code du rôle pour la redirection (priorité sur roleDetails)
+    const roleCode = user.role || 'UNKNOWN'
+    console.log('Redirection par code de rôle:', roleCode)
+    
+    // Pour certains rôles critiques, forcer la redirection par code plutôt que par routeDashboard
+    const criticalRoles = ['CHEF_DEPARTEMENT', 'CHEF_SERVICE_SCOLARITE', 'DEP', 'SP_SCOLARITE']
+    const useRouteDashboard = !criticalRoles.includes(roleCode) && user.roleDetails && user.roleDetails.routeDashboard
+    
+    if (useRouteDashboard) {
       console.log('✅ Redirection vers:', user.roleDetails.routeDashboard)
       navigate(user.roleDetails.routeDashboard, { replace: true })
       return
     }
     
-    // Fallback: utiliser le code du rôle pour la redirection
-    const roleCode = user.role || 'UNKNOWN'
-    console.log('Redirection par code de rôle:', roleCode)
-    
+    // Redirection par code de rôle (pour les rôles critiques ou si routeDashboard n'est pas disponible)
     switch (roleCode) {
       case 'ETUDIANT':
         navigate('/dashboard', { replace: true })
         break
       case 'CHEF_SERVICE_SCOLARITE':
+        console.log('✅ Redirection vers /chef-scolarite/dashboard pour CHEF_SERVICE_SCOLARITE')
         navigate('/chef-scolarite/dashboard', { replace: true })
         break
       case 'AGENT_SCOLARITE':
@@ -55,7 +60,8 @@ const LoginView = () => {
         navigate('/sp-scolarite/dashboard', { replace: true })
         break
       case 'CHEF_DEPARTEMENT':
-        navigate('/chef/dashboard', { replace: true })
+        console.log('✅ Redirection vers /chef/departement/dashboard pour CHEF_DEPARTEMENT')
+        navigate('/chef/departement/dashboard', { replace: true })
         break
       case 'DEP':
         console.log('✅ Redirection vers /dep/dashboard pour DEP')
@@ -63,8 +69,12 @@ const LoginView = () => {
         break
       default:
         console.warn('⚠️ Rôle non reconnu:', roleCode)
-        // En cas de rôle non reconnu, rediriger vers la page de login
-        navigate('/login', { replace: true })
+        // En cas de rôle non reconnu, utiliser routeDashboard si disponible, sinon login
+        if (user.roleDetails && user.roleDetails.routeDashboard) {
+          navigate(user.roleDetails.routeDashboard, { replace: true })
+        } else {
+          navigate('/login', { replace: true })
+        }
     }
   }
 

@@ -26,7 +26,7 @@ VALUES
     (gen_random_uuid()::text, 'AGENT_SCOLARITE', 'Agent Scolarité', 'Agent du service scolarité', '/scolarite/dashboard', true, NOW()),
     (gen_random_uuid()::text, 'SP_SCOLARITE', 'SP-Scolarité', 'Secrétaire Particulière du service scolarité', '/sp-scolarite/dashboard', true, NOW()),
     (gen_random_uuid()::text, 'CHEF_SERVICE_SCOLARITE', 'Chef de Service Scolarité', 'Chef du service scolarité', '/chef-scolarite/dashboard', true, NOW()),
-    (gen_random_uuid()::text, 'CHEF_DEPARTEMENT', 'Chef de Département', 'Chef d''un département académique', '/chef/dashboard', true, NOW()),
+    (gen_random_uuid()::text, 'CHEF_DEPARTEMENT', 'Chef de Département', 'Chef d''un département académique', '/chef/departement/dashboard', true, NOW()),
     (gen_random_uuid()::text, 'DEP', 'Directeur des Études et de la Pédagogie', 'Directeur des Études et de la Pédagogie', '/dep/dashboard', true, NOW()),
     (gen_random_uuid()::text, 'ETUDIANT', 'Étudiant', 'Étudiant inscrit', '/dashboard', true, NOW()),
     (gen_random_uuid()::text, 'ENSEIGNANT', 'Enseignant', 'Enseignant', '/login', true, NOW()),

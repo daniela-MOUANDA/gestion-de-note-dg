@@ -545,7 +545,7 @@ const ProcesVerbauxView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             {/* Notification des nouveaux PV */}
             {nouveauxPV > 0 && (
               <div className="mb-6 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl p-4 shadow-md animate-pulse">
@@ -636,7 +636,7 @@ const ProcesVerbauxView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -679,7 +679,7 @@ const ProcesVerbauxView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -723,7 +723,7 @@ const ProcesVerbauxView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -771,7 +771,7 @@ const ProcesVerbauxView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -824,7 +824,7 @@ const ProcesVerbauxView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -903,7 +903,7 @@ const ProcesVerbauxView = () => {
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour

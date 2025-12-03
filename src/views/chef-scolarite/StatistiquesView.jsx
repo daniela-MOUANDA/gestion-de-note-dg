@@ -72,7 +72,7 @@ const StatistiquesView = () => {
         <SidebarChef />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
             <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
               <LoadingSpinner size="lg" text="Chargement des statistiques..." />
             </div>
@@ -88,7 +88,7 @@ const StatistiquesView = () => {
         <SidebarChef />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
               <strong className="font-bold">Erreur!</strong>
               <span className="block sm:inline"> {error}</span>
@@ -104,7 +104,7 @@ const StatistiquesView = () => {
       <SidebarChef />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderChef />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
               <FontAwesomeIcon icon={faChartLine} className="text-blue-600" />

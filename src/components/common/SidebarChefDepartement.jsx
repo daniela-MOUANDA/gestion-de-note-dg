@@ -20,7 +20,9 @@ import {
   faFileExcel,
   faUserGraduate,
   faUser,
-  faCog
+  faCog,
+  faCalendarAlt,
+  faStickyNote
 } from '@fortawesome/free-solid-svg-icons'
 
 const SidebarChefDepartement = () => {
@@ -49,13 +51,14 @@ const SidebarChefDepartement = () => {
   }
 
   const menuItems = [
-    { path: '/chef/dashboard', icon: faHome, label: 'Tableau de bord' },
+    { path: '/chef/departement/dashboard', icon: faHome, label: 'Tableau de bord' },
     { path: '/chef/classes', icon: faGraduationCap, label: 'Classes' },
     { path: '/chef/modules', icon: faBook, label: 'Modules' },
     { path: '/chef/enseignants', icon: faChalkboardTeacher, label: 'Enseignants' },
     { path: '/chef/etudiants', icon: faUserGraduate, label: 'Étudiants inscrits' },
     { path: '/chef/repartition', icon: faUsers, label: 'Répartition par classe' },
-    { path: '/chef/notes/ajouter', icon: faClipboardList, label: 'Ajouter notes' },
+    { path: '/chef/emplois-temps', icon: faCalendarAlt, label: 'Emploi du temps' },
+    { path: '/chef/notes', icon: faStickyNote, label: 'Notes' },
     { path: '/chef/messagerie', icon: faEnvelope, label: 'Messagerie' },
     { path: '/admin/profil', icon: faUser, label: 'Profil' },
     { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },

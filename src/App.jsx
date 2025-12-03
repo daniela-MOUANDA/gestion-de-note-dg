@@ -21,6 +21,8 @@ import ModulesChefDepartementView from './views/chef-departement/ModulesView'
 import EnseignantsChefDepartementView from './views/chef-departement/EnseignantsView'
 import EtudiantsInscritsView from './views/chef-departement/EtudiantsInscritsView'
 import RepartitionClasseView from './views/chef-departement/RepartitionClasseView'
+import EmploiDuTempsChefDepartementView from './views/chef-departement/EmploiDuTempsView'
+import NotesChefDepartementView from './views/chef-departement/NotesView'
 import MessagerieChefView from './views/chef/MessagerieChefView'
 import GererClassesView from './views/chef/GererClassesView'
 import GererEnseignantsView from './views/chef/GererEnseignantsView'
@@ -96,18 +98,20 @@ function App() {
         <Route path="/aide" element={<AideView />} />
         
         {/* Routes Chef de Département */}
-        <Route path="/chef/dashboard" element={<DashboardChefView />} />
+        <Route path="/chef/departement/dashboard" element={<DashboardChefView />} />
+        <Route path="/chef/dashboard" element={<DashboardChefView />} /> {/* Route de compatibilité */}
         <Route path="/chef/messagerie" element={<MessagerieChefView />} />
         <Route path="/chef/classes" element={<ClassesChefDepartementView />} />
         <Route path="/chef/modules" element={<ModulesChefDepartementView />} />
         <Route path="/chef/enseignants" element={<EnseignantsChefDepartementView />} />
         <Route path="/chef/etudiants" element={<EtudiantsInscritsView />} />
         <Route path="/chef/repartition" element={<RepartitionClasseView />} />
+        <Route path="/chef/notes" element={<NotesChefDepartementView />} />
         <Route path="/chef/notes/ajouter" element={<AjouterNotesView />} />
+        <Route path="/chef/emplois-temps" element={<EmploiDuTempsChefDepartementView />} />
         <Route path="/chef/rattrapages" element={<GererRattrapagesView />} />
         <Route path="/chef/unites-enseignement" element={<PublierUnitesEnseignementView />} />
         <Route path="/chef/bulletins" element={<PublierBulletinsView />} />
-        <Route path="/chef/emplois-temps" element={<GererEmploisTempsView />} />
         
         {/* Routes Service Scolarité */}
         <Route path="/scolarite/dashboard" element={<DashboardScolariteView />} />

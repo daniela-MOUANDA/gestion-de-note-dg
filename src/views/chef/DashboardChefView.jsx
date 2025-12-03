@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUsers,
@@ -14,13 +15,33 @@ import {
   faEnvelope
 } from '@fortawesome/free-solid-svg-icons'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
+import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
 import { useAuth } from '../../contexts/AuthContext'
 
 const DashboardChefView = () => {
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
   const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Chef de Département'
+
+  // Vérification du rôle et redirection si nécessaire
+  useEffect(() => {
+    if (isAuthenticated && user?.role !== 'CHEF_DEPARTEMENT') {
+      console.warn(`Accès non autorisé au dashboard Chef de Département pour le rôle: ${user?.role}. Redirection...`)
+      const role = user?.role?.trim().toUpperCase()
+      if (role === 'CHEF_SERVICE_SCOLARITE') {
+        navigate('/chef-scolarite/dashboard', { replace: true })
+      } else if (role === 'SP_SCOLARITE') {
+        navigate('/sp-scolarite/dashboard', { replace: true })
+      } else if (role === 'AGENT_SCOLARITE') {
+        navigate('/scolarite/dashboard', { replace: true })
+      } else if (role === 'DEP') {
+        navigate('/dep/dashboard', { replace: true })
+      } else {
+        navigate('/login', { replace: true })
+      }
+    }
+  }, [isAuthenticated, user, navigate])
   const [stats] = useState({
     totalClasses: 12,
     totalEnseignants: 45,
@@ -86,13 +107,15 @@ const DashboardChefView = () => {
     return colors[type] || 'text-slate-600 bg-slate-100'
   }
 
+  const departementChef = user?.departement?.nom || 'Département'
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarChef />
+      <SidebarChefDepartement />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef chefName="Dr. Jean KAMDEM" />
+        <HeaderChefDepartement chefName={nomComplet} />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">

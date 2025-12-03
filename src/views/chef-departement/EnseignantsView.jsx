@@ -1,70 +1,157 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faChalkboardTeacher, faSearch, faBook, faUserTie } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faChalkboardTeacher, faSearch, faBook, faUserTie, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
-import HeaderChef from '../../components/common/HeaderChef'
+import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import { 
+  getEnseignants, 
+  createEnseignant, 
+  updateEnseignant, 
+  deleteEnseignant,
+  affecterModulesEnseignant 
+} from '../../api/chefDepartement.js'
+import { getModules } from '../../api/chefDepartement.js'
 
 const EnseignantsView = () => {
   const { user } = useAuth()
-  const [departementChef] = useState('Génie Informatique')
-  
-  const [enseignants, setEnseignants] = useState([
-    { id: 1, nom: 'DUPONT', prenom: 'Pierre', email: 'pierre.dupont@inptic.edu', telephone: '+237 6XX XXX XXX', modules: ['BDD-301', 'PW-301'], statut: 'Actif' },
-    { id: 2, nom: 'MARTIN', prenom: 'Marie', email: 'marie.martin@inptic.edu', telephone: '+237 6XX XXX XXX', modules: ['RES-301'], statut: 'Actif' },
-    { id: 3, nom: 'BERNARD', prenom: 'Jean', email: 'jean.bernard@inptic.edu', telephone: '+237 6XX XXX XXX', modules: ['BDD-301'], statut: 'Actif' },
-  ])
-  const [modules] = useState([
-    { id: 1, code: 'BDD-301', nom: 'Base de données' },
-    { id: 2, code: 'PW-301', nom: 'Programmation web' },
-    { id: 3, code: 'RES-301', nom: 'Réseaux' },
-  ])
+  const { showAlert } = useAlert()
+  const [departementChef, setDepartementChef] = useState('')
+  const [enseignants, setEnseignants] = useState([])
+  const [modules, setModules] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editingEnseignant, setEditingEnseignant] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
     email: '',
     telephone: '',
     modules: [],
-    statut: 'Actif'
+    actif: true
   })
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Charger les enseignants
+      const enseignantsResult = await getEnseignants()
+      if (enseignantsResult.success) {
+        setEnseignants(enseignantsResult.enseignants)
+      } else {
+        showAlert('error', enseignantsResult.error || 'Erreur lors du chargement des enseignants')
+      }
+
+      // Charger les modules
+      const modulesResult = await getModules()
+      if (modulesResult.success) {
+        setModules(modulesResult.modules)
+      }
+
+      // Récupérer le nom du département
+      if (user?.departement) {
+        setDepartementChef(user.departement.nom)
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors du chargement des données')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAdd = () => {
     setEditingEnseignant(null)
-    setFormData({ nom: '', prenom: '', email: '', telephone: '', modules: [], statut: 'Actif' })
+    setFormData({ nom: '', prenom: '', email: '', telephone: '', modules: [], actif: true })
     setShowModal(true)
   }
 
   const handleEdit = (enseignant) => {
     setEditingEnseignant(enseignant)
-    setFormData(enseignant)
+    setFormData({
+      nom: enseignant.nom,
+      prenom: enseignant.prenom,
+      email: enseignant.email,
+      telephone: enseignant.telephone || '',
+      modules: enseignant.modules.map(m => m.id),
+      actif: enseignant.actif
+    })
     setShowModal(true)
   }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer cet enseignant ?')) {
-      setEnseignants(enseignants.filter(e => e.id !== id))
+  const handleDelete = async (id) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cet enseignant ?')) {
+      return
+    }
+
+    try {
+      const result = await deleteEnseignant(id)
+      if (result.success) {
+        showAlert('success', 'Enseignant supprimé avec succès')
+        loadData()
+      } else {
+        showAlert('error', result.error || 'Erreur lors de la suppression')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors de la suppression')
     }
   }
 
-  const handleSave = () => {
-    if (editingEnseignant) {
-      setEnseignants(enseignants.map(e => e.id === editingEnseignant.id ? { ...formData, id: editingEnseignant.id } : e))
-    } else {
-      setEnseignants([...enseignants, { ...formData, id: Date.now() }])
+  const handleSave = async () => {
+    if (!formData.nom || !formData.prenom || !formData.email) {
+      showAlert('error', 'Veuillez remplir tous les champs obligatoires')
+      return
     }
-    setShowModal(false)
+
+    try {
+      setSaving(true)
+      let result
+
+      if (editingEnseignant) {
+        result = await updateEnseignant(editingEnseignant.id, formData)
+        if (result.success && formData.modules.length > 0) {
+          // Mettre à jour les affectations de modules
+          await affecterModulesEnseignant(editingEnseignant.id, formData.modules)
+        }
+      } else {
+        result = await createEnseignant(formData)
+        if (result.success && formData.modules.length > 0) {
+          // Affecter les modules
+          await affecterModulesEnseignant(result.enseignant.id, formData.modules)
+        }
+      }
+
+      if (result.success) {
+        showAlert('success', editingEnseignant ? 'Enseignant modifié avec succès' : 'Enseignant créé avec succès')
+        setShowModal(false)
+        loadData()
+      } else {
+        showAlert('error', result.error || 'Erreur lors de la sauvegarde')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors de la sauvegarde')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleModuleToggle = (moduleCode) => {
+  const handleModuleToggle = (moduleId) => {
     setFormData(prev => ({
       ...prev,
-      modules: prev.modules.includes(moduleCode)
-        ? prev.modules.filter(m => m !== moduleCode)
-        : [...prev.modules, moduleCode]
+      modules: prev.modules.includes(moduleId)
+        ? prev.modules.filter(m => m !== moduleId)
+        : [...prev.modules, moduleId]
     }))
   }
 
@@ -72,12 +159,29 @@ const EnseignantsView = () => {
     `${enseignant.nom} ${enseignant.prenom} ${enseignant.email}`.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarChefDepartement />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
+            <div className="text-center">
+              <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin mb-4" />
+              <p className="text-slate-600">Chargement des enseignants...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <SidebarChefDepartement />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef chefName={`Chef de Département - ${departementChef}`} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-20">
+        <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Gestion des Enseignants</h1>
@@ -121,60 +225,69 @@ const EnseignantsView = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {filteredEnseignants.map((enseignant) => (
-                    <tr key={enseignant.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <FontAwesomeIcon icon={faUserTie} className="text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-slate-800">{enseignant.prenom} {enseignant.nom}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-600">{enseignant.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-600">{enseignant.telephone}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          {enseignant.modules.map((moduleCode) => (
-                            <span key={moduleCode} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                              <FontAwesomeIcon icon={faBook} className="mr-1" />
-                              {moduleCode}
-                            </span>
-                          ))}
-                          {enseignant.modules.length === 0 && (
-                            <span className="text-xs text-slate-400">Aucun module</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          enseignant.statut === 'Actif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {enseignant.statut}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(enseignant)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Modifier"
-                          >
-                            <FontAwesomeIcon icon={faEdit} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(enseignant.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Supprimer"
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                          </button>
-                        </div>
+                  {filteredEnseignants.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                        Aucun enseignant trouvé
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredEnseignants.map((enseignant) => (
+                      <tr key={enseignant.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <FontAwesomeIcon icon={faUserTie} className="text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-800">{enseignant.prenom} {enseignant.nom}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">{enseignant.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">{enseignant.telephone || '-'}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {enseignant.modules && enseignant.modules.length > 0 ? (
+                              enseignant.modules.map((module) => (
+                                <span key={module.id} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  <FontAwesomeIcon icon={faBook} className="mr-1" />
+                                  {module.code}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-400">Aucun module</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            enseignant.actif ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {enseignant.actif ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(enseignant)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Modifier"
+                            >
+                              <FontAwesomeIcon icon={faEdit} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(enseignant.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Supprimer"
+                            >
+                              <FontAwesomeIcon icon={faTrash} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -189,7 +302,7 @@ const EnseignantsView = () => {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
                   <input
                     type="text"
                     value={formData.nom}
@@ -198,7 +311,7 @@ const EnseignantsView = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Prénom</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Prénom *</label>
                   <input
                     type="text"
                     value={formData.prenom}
@@ -208,7 +321,7 @@ const EnseignantsView = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
                 <input
                   type="email"
                   value={formData.email}
@@ -228,24 +341,28 @@ const EnseignantsView = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Modules assignés</label>
                 <div className="border border-slate-300 rounded-lg p-4 max-h-48 overflow-y-auto">
-                  {modules.map((module) => (
-                    <label key={module.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.modules.includes(module.code)}
-                        onChange={() => handleModuleToggle(module.code)}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-slate-700">{module.code} - {module.nom}</span>
-                    </label>
-                  ))}
+                  {modules.length === 0 ? (
+                    <p className="text-sm text-slate-400">Aucun module disponible</p>
+                  ) : (
+                    modules.map((module) => (
+                      <label key={module.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.modules.includes(module.id)}
+                          onChange={() => handleModuleToggle(module.id)}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-slate-700">{module.code} - {module.nom} ({module.classe})</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Statut</label>
                 <select
-                  value={formData.statut}
-                  onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
+                  value={formData.actif ? 'Actif' : 'Inactif'}
+                  onChange={(e) => setFormData({ ...formData, actif: e.target.value === 'Actif' })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="Actif">Actif</option>
@@ -255,14 +372,17 @@ const EnseignantsView = () => {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors disabled:opacity-50"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
+                  {saving && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
                   {editingEnseignant ? 'Modifier' : 'Ajouter'}
                 </button>
               </div>
@@ -275,4 +395,3 @@ const EnseignantsView = () => {
 }
 
 export default EnseignantsView
-

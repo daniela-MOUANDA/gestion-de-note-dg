@@ -165,7 +165,7 @@ const PublierBulletinsView = () => {
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef chefName="Dr. Jean KAMDEM" />
           
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <div className="flex justify-between items-start">
                 <div>
@@ -296,7 +296,7 @@ const PublierBulletinsView = () => {
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef chefName="Dr. Jean KAMDEM" />
           
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button
                 onClick={handleBack}
@@ -350,7 +350,7 @@ const PublierBulletinsView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderChef chefName="Dr. Jean KAMDEM" />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           <div className="mb-6">
             <button
               onClick={handleBack}

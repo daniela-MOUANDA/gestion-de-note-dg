@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faGraduationCap, faSearch, faFilter, faDownload, faEye } from '@fortawesome/free-solid-svg-icons'
 import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
-import HeaderChef from '../../components/common/HeaderChef'
+import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
 import { useAuth } from '../../contexts/AuthContext'
 
 const EtudiantsInscritsView = () => {
@@ -30,8 +30,8 @@ const EtudiantsInscritsView = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <SidebarChefDepartement />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef chefName={`Chef de Département - ${departementChef}`} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-20">
+        <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Étudiants Inscrits</h1>
             <p className="text-sm text-slate-600">Liste des étudiants inscrits dans votre département : {departementChef}</p>

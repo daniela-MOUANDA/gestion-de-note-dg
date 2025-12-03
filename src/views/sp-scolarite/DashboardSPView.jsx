@@ -32,16 +32,19 @@ const DashboardSPView = () => {
       console.warn('Utilisateur avec rôle incorrect sur le dashboard SP:', user.role)
       switch (user.role) {
         case 'AGENT_SCOLARITE':
-          navigate('/scolarite/dashboard')
+          navigate('/scolarite/dashboard', { replace: true })
           break
         case 'CHEF_SERVICE_SCOLARITE':
-          navigate('/chef-scolarite/dashboard')
+          navigate('/chef-scolarite/dashboard', { replace: true })
           break
         case 'CHEF_DEPARTEMENT':
-          navigate('/chef/dashboard')
+          navigate('/chef/departement/dashboard', { replace: true })
+          break
+        case 'DEP':
+          navigate('/dep/dashboard', { replace: true })
           break
         default:
-          navigate('/login')
+          navigate('/login', { replace: true })
       }
     }
   }, [user, isAuthenticated, navigate])
@@ -123,7 +126,7 @@ const DashboardSPView = () => {
       <SidebarSP />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
           {/* Message de bienvenue */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">

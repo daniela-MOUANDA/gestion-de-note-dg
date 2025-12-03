@@ -7,7 +7,7 @@ const HeaderDEP = ({ depName }) => {
   const nomComplet = user ? `${user.prenom} ${user.nom}` : depName || 'Directeur des Études Pédagogiques'
 
   return (
-    <header className="bg-white shadow-sm border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between">
+    <header className="bg-white shadow-sm border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between mb-4">
       <div>
         <h1 className="text-lg sm:text-xl font-bold text-slate-800">Direction des Études Pédagogiques</h1>
         <p className="text-xs sm:text-sm text-slate-600">Directeur des Études Pédagogiques - Administration pédagogique</p>

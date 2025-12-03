@@ -68,7 +68,7 @@ const DashboardView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           {/* Message de bienvenue */}
           <div className="mb-6 sm:mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">

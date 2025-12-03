@@ -36,7 +36,7 @@ const MessagerieSPView = () => {
       <SidebarSP />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
           <div className="mb-6">
             <Link to="/sp-scolarite/dashboard" className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour au tableau de bord

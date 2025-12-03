@@ -39,13 +39,16 @@ const DashboardScolariteView = () => {
       console.warn('Utilisateur avec rôle incorrect sur le dashboard Agent:', user.role)
       switch (user.role) {
         case 'SP_SCOLARITE':
-          navigate('/sp-scolarite/dashboard')
+          navigate('/sp-scolarite/dashboard', { replace: true })
           break
         case 'CHEF_SERVICE_SCOLARITE':
-          navigate('/chef-scolarite/dashboard')
+          navigate('/chef-scolarite/dashboard', { replace: true })
           break
         case 'CHEF_DEPARTEMENT':
-          navigate('/chef/dashboard')
+          navigate('/chef/departement/dashboard', { replace: true })
+          break
+        case 'DEP':
+          navigate('/dep/dashboard', { replace: true })
           break
         default:
           navigate('/login')
@@ -102,7 +105,7 @@ const DashboardScolariteView = () => {
         <SidebarScolarite />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0 flex items-center justify-center">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 flex items-center justify-center">
             <LoadingSpinner size="lg" text="Chargement des statistiques..." />
           </main>
         </div>
@@ -116,7 +119,7 @@ const DashboardScolariteView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderScolarite scolariteName="Service Scolarité" />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           {/* Message de bienvenue */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">

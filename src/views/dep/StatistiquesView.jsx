@@ -42,7 +42,7 @@ const StatistiquesView = () => {
       <SidebarDEP />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderDEP />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-20">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Statistiques</h1>
             <p className="text-sm text-slate-600">Vue d'ensemble des statistiques pédagogiques</p>

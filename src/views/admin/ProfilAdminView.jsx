@@ -36,7 +36,8 @@ const ProfilAdminView = () => {
       'SP_SCOLARITE': 'Secrétaire Particulière',
       'AGENT_SCOLARITE': 'Agent Scolarité',
       'CHEF_SERVICE_SCOLARITE': 'Chef de Service Scolarité',
-      'CHEF_DEPARTEMENT': 'Chef de Département'
+      'CHEF_DEPARTEMENT': 'Chef de Département',
+      'DEP': 'Directeur des Études Pédagogiques'
     }
     return labels[role] || (typeof role === 'string' ? role.replace(/_/g, ' ') : 'Utilisateur')
   }
@@ -47,7 +48,8 @@ const ProfilAdminView = () => {
       'SP_SCOLARITE': 'Direction de la Scolarité',
       'AGENT_SCOLARITE': 'Service Scolarité',
       'CHEF_SERVICE_SCOLARITE': 'Service Scolarité',
-      'CHEF_DEPARTEMENT': 'Département'
+      'CHEF_DEPARTEMENT': 'Département',
+      'DEP': 'Administration'
     }
     return labels[role] || 'Administration'
   }

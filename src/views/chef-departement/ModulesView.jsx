@@ -1,118 +1,221 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faBook, faSearch, faUpload, faFileExcel } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faBook, faSearch, faUpload, faFileExcel, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
-import HeaderChef from '../../components/common/HeaderChef'
+import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import { getModules, createModule, updateModule, deleteModule, getClasses } from '../../api/chefDepartement.js'
 
 const ModulesView = () => {
   const { user } = useAuth()
-  const [departementChef] = useState('Génie Informatique')
-  
-  const [modules, setModules] = useState([
-    { id: 1, code: 'BDD-301', nom: 'Base de données', credit: 4, semestre: 'S6', classe: 'GI-L3-A', estActif: true },
-    { id: 2, code: 'PW-301', nom: 'Programmation web', credit: 5, semestre: 'S6', classe: 'GI-L3-A', estActif: true },
-    { id: 3, code: 'RES-301', nom: 'Réseaux', credit: 3, semestre: 'S6', classe: 'GI-L3-B', estActif: true },
-  ])
-  const [classes] = useState(['GI-L3-A', 'GI-L3-B', 'GI-L2-A', 'GI-L2-B'])
+  const { showAlert } = useAlert()
+  const [departementChef, setDepartementChef] = useState('')
+  const [modules, setModules] = useState([])
+  const [classes, setClasses] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [editingModule, setEditingModule] = useState(null)
   const [selectedClasse, setSelectedClasse] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
     code: '',
     nom: '',
     credit: '',
     semestre: '',
-    classe: '',
-    estActif: true
+    classeId: '',
+    actif: true
   })
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Charger les modules
+      const modulesResult = await getModules()
+      if (modulesResult.success) {
+        setModules(modulesResult.modules)
+      } else {
+        showAlert('error', modulesResult.error || 'Erreur lors du chargement des modules')
+      }
+
+      // Charger les classes
+      const classesResult = await getClasses()
+      if (classesResult.success) {
+        setClasses(classesResult.classes)
+      }
+
+      // Récupérer le nom du département
+      if (user?.departement) {
+        setDepartementChef(user.departement.nom)
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors du chargement des données')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAdd = () => {
     setEditingModule(null)
-    setFormData({ code: '', nom: '', credit: '', semestre: '', classe: '', estActif: true })
+    setFormData({ 
+      code: '', 
+      nom: '', 
+      credit: '', 
+      semestre: '', 
+      classeId: '', 
+      actif: true 
+    })
     setShowModal(true)
   }
 
   const handleEdit = (module) => {
     setEditingModule(module)
-    setFormData(module)
+    setFormData({
+      code: module.code,
+      nom: module.nom,
+      credit: module.credit.toString(),
+      semestre: module.semestre,
+      classeId: module.classeId,
+      actif: module.actif
+    })
     setShowModal(true)
   }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce module ?')) {
-      setModules(modules.filter(m => m.id !== id))
+  const handleDelete = async (id) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce module ?')) {
+      return
+    }
+
+    try {
+      const result = await deleteModule(id)
+      if (result.success) {
+        showAlert('success', 'Module supprimé avec succès')
+        loadData()
+      } else {
+        showAlert('error', result.error || 'Erreur lors de la suppression')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors de la suppression')
     }
   }
 
-  const handleSave = () => {
-    if (editingModule) {
-      setModules(modules.map(m => m.id === editingModule.id ? { ...formData, id: editingModule.id, credit: parseInt(formData.credit) } : m))
-    } else {
-      setModules([...modules, { ...formData, id: Date.now(), credit: parseInt(formData.credit) }])
+  const handleSave = async () => {
+    if (!formData.code || !formData.nom || !formData.credit || !formData.semestre || !formData.classeId) {
+      showAlert('error', 'Veuillez remplir tous les champs obligatoires')
+      return
     }
-    setShowModal(false)
+
+    try {
+      setSaving(true)
+      let result
+
+      if (editingModule) {
+        result = await updateModule(editingModule.id, formData)
+      } else {
+        result = await createModule(formData)
+      }
+
+      if (result.success) {
+        showAlert('success', editingModule ? 'Module modifié avec succès' : 'Module créé avec succès')
+        setShowModal(false)
+        loadData()
+      } else {
+        showAlert('error', result.error || 'Erreur lors de la sauvegarde')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors de la sauvegarde')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleFileUpload = () => {
     if (!selectedFile || !selectedClasse) {
-      alert('Veuillez sélectionner un fichier et une classe')
+      showAlert('error', 'Veuillez sélectionner un fichier et une classe')
       return
     }
-    // Ici on traiterait l'upload du fichier Excel
-    alert(`Fichier Excel "${selectedFile.name}" sera importé pour la classe ${selectedClasse}`)
+    // TODO: Implémenter l'upload Excel
+    showAlert('info', `Fichier Excel "${selectedFile.name}" sera importé pour la classe ${selectedClasse}`)
     setShowUploadModal(false)
     setSelectedFile(null)
     setSelectedClasse('')
   }
 
   const filteredModules = modules.filter(module => 
-    `${module.code} ${module.nom} ${module.classe}`.toLowerCase().includes(searchQuery.toLowerCase())
+    `${module.code} ${module.nom} ${module.classe || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarChefDepartement />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
+            <div className="text-center">
+              <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin mb-4" />
+              <p className="text-slate-600">Chargement des modules...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <SidebarChefDepartement />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef chefName={`Chef de Département - ${departementChef}`} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-20">
-          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Gestion des Modules</h1>
-              <p className="text-sm text-slate-600">Gérez les modules de votre département : {departementChef}</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                <FontAwesomeIcon icon={faUpload} />
-                Importer Excel
-              </button>
-              <button
-                onClick={handleAdd}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <FontAwesomeIcon icon={faPlus} />
-                Ajouter un module
-              </button>
+        <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+          {/* En-tête avec titre et boutons */}
+          <div className="mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Gestion des Modules</h1>
+                <p className="text-sm text-slate-600">Gérez les modules de votre département{departementChef ? ` : ${departementChef}` : ''}</p>
+              </div>
+              <div className="flex flex-wrap gap-3 justify-end">
+                <button
+                  onClick={handleAdd}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                >
+                  <FontAwesomeIcon icon={faPlus} className="text-sm" />
+                  <span>Ajouter un module</span>
+                </button>
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                >
+                  <FontAwesomeIcon icon={faUpload} className="text-sm" />
+                  <span>Importer Excel</span>
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Barre de recherche */}
           <div className="mb-6">
             <div className="relative">
-              <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm" />
               <input
                 type="text"
-                placeholder="Rechercher un module..."
+                placeholder="Rechercher un module par code, nom ou classe..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-11 pr-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-800 placeholder-slate-400"
               />
             </div>
           </div>
@@ -121,61 +224,80 @@ const ModulesView = () => {
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase">Code</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase">Nom</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase">Crédits</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase">Semestre</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase">Classe</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase">Statut</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-700 uppercase">Actions</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Code</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Nom</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Crédits</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Semestre</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Classe</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Statut</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {filteredModules.map((module) => (
-                    <tr key={module.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faBook} className="text-purple-600" />
-                          <span className="font-semibold text-slate-800">{module.code}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-800">{module.nom}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.credit} crédits</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {module.semestre}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.classe}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          module.estActif ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {module.estActif ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-2">
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {filteredModules.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-16 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <FontAwesomeIcon icon={faBook} className="text-6xl text-slate-300 mb-4" />
+                          <p className="text-lg font-medium text-slate-500 mb-2">Aucun module trouvé</p>
+                          <p className="text-sm text-slate-400 mb-4">Commencez par créer votre premier module</p>
                           <button
-                            onClick={() => handleEdit(module)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Modifier"
+                            onClick={handleAdd}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
                           >
-                            <FontAwesomeIcon icon={faEdit} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(module.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Supprimer"
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
+                            <FontAwesomeIcon icon={faPlus} />
+                            <span>Ajouter un module</span>
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredModules.map((module) => (
+                      <tr key={module.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <FontAwesomeIcon icon={faBook} className="text-purple-600" />
+                            <span className="font-semibold text-slate-800">{module.code}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-800">{module.nom}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.credit} crédits</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {module.semestre}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.classe || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            module.actif ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {module.actif ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(module)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Modifier"
+                            >
+                              <FontAwesomeIcon icon={faEdit} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(module.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Supprimer"
+                            >
+                              <FontAwesomeIcon icon={faTrash} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -189,7 +311,7 @@ const ModulesView = () => {
           >
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Code du module</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Code du module *</label>
                 <input
                   type="text"
                   value={formData.code}
@@ -199,7 +321,7 @@ const ModulesView = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nom du module</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nom du module *</label>
                 <input
                   type="text"
                   value={formData.nom}
@@ -210,17 +332,18 @@ const ModulesView = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Crédits</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Crédits *</label>
                   <input
                     type="number"
                     value={formData.credit}
                     onChange={(e) => setFormData({ ...formData, credit: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Ex: 4"
+                    min="1"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Semestre</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Semestre *</label>
                   <input
                     type="text"
                     value={formData.semestre}
@@ -231,15 +354,15 @@ const ModulesView = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Classe</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Classe *</label>
                 <select
-                  value={formData.classe}
-                  onChange={(e) => setFormData({ ...formData, classe: e.target.value })}
+                  value={formData.classeId}
+                  onChange={(e) => setFormData({ ...formData, classeId: e.target.value })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Sélectionner une classe</option>
                   {classes.map((classe) => (
-                    <option key={classe} value={classe}>{classe}</option>
+                    <option key={classe.id} value={classe.id}>{classe.code} - {classe.nom || ''}</option>
                   ))}
                 </select>
               </div>
@@ -247,8 +370,8 @@ const ModulesView = () => {
                 <input
                   type="checkbox"
                   id="estActif"
-                  checked={formData.estActif}
-                  onChange={(e) => setFormData({ ...formData, estActif: e.target.checked })}
+                  checked={formData.actif}
+                  onChange={(e) => setFormData({ ...formData, actif: e.target.checked })}
                   className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                 />
                 <label htmlFor="estActif" className="text-sm text-slate-700">Module actif</label>
@@ -256,14 +379,17 @@ const ModulesView = () => {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors disabled:opacity-50"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
+                  {saving && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
                   {editingModule ? 'Modifier' : 'Ajouter'}
                 </button>
               </div>
@@ -286,7 +412,7 @@ const ModulesView = () => {
                 >
                   <option value="">Sélectionner une classe</option>
                   {classes.map((classe) => (
-                    <option key={classe} value={classe}>{classe}</option>
+                    <option key={classe.id} value={classe.id}>{classe.code}</option>
                   ))}
                 </select>
               </div>
@@ -341,4 +467,3 @@ const ModulesView = () => {
 }
 
 export default ModulesView
-

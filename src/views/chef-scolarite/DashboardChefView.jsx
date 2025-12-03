@@ -46,12 +46,21 @@ const DashboardChefView = () => {
     if (isAuthenticated && user?.role !== 'CHEF_SERVICE_SCOLARITE') {
       console.warn(`Accès non autorisé au dashboard Chef pour le rôle: ${user?.role}. Redirection...`)
       const role = user?.role?.trim().toUpperCase()
-      if (role === 'SP_SCOLARITE') {
-        navigate('/sp-scolarite/dashboard', { replace: true })
-      } else if (role === 'AGENT_SCOLARITE') {
-        navigate('/scolarite/dashboard', { replace: true })
-      } else {
-        navigate('/login', { replace: true })
+      switch (role) {
+        case 'SP_SCOLARITE':
+          navigate('/sp-scolarite/dashboard', { replace: true })
+          break
+        case 'AGENT_SCOLARITE':
+          navigate('/scolarite/dashboard', { replace: true })
+          break
+        case 'CHEF_DEPARTEMENT':
+          navigate('/chef/departement/dashboard', { replace: true })
+          break
+        case 'DEP':
+          navigate('/dep/dashboard', { replace: true })
+          break
+        default:
+          navigate('/login', { replace: true })
       }
     }
   }, [isAuthenticated, user, navigate])
@@ -115,7 +124,7 @@ const DashboardChefView = () => {
         <SidebarChef />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
             <div className="bg-white rounded-xl shadow-md p-12 border border-slate-200 text-center">
               <LoadingSpinner size="lg" text="Chargement du tableau de bord..." />
             </div>
@@ -131,7 +140,7 @@ const DashboardChefView = () => {
         <SidebarChef />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
               <strong className="font-bold">Erreur!</strong>
               <span className="block sm:inline"> {error}</span>
@@ -147,7 +156,7 @@ const DashboardChefView = () => {
       <SidebarChef />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderChef />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-28 lg:mt-20">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
           {/* Message de bienvenue */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">

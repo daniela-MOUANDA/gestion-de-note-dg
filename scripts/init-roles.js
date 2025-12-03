@@ -29,7 +29,7 @@ const rolesData = [
     code: 'CHEF_DEPARTEMENT',
     nom: 'Chef de Département',
     description: 'Chef d\'un département académique',
-    routeDashboard: '/chef/dashboard',
+    routeDashboard: '/chef/departement/dashboard',
     actif: true
   },
   {

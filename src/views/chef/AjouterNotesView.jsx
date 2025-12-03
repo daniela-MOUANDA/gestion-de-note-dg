@@ -244,7 +244,7 @@ const AjouterNotesView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderChef chefName="Dr. Jean KAMDEM" />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           <div className="mb-6">
             <div className="flex items-center gap-4 mb-4">
               {currentStep > 1 && (

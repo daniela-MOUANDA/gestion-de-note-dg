@@ -290,7 +290,7 @@ const GererEtudiantsView = () => {
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef chefName="Dr. Jean KAMDEM" />
           
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
                 Gérer les étudiants
@@ -335,7 +335,7 @@ const GererEtudiantsView = () => {
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef chefName="Dr. Jean KAMDEM" />
           
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button
                 onClick={handleBack}
@@ -391,7 +391,7 @@ const GererEtudiantsView = () => {
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <HeaderChef chefName="Dr. Jean KAMDEM" />
           
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
             <div className="mb-6">
               <button
                 onClick={handleBack}
@@ -571,7 +571,7 @@ const GererEtudiantsView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <HeaderChef chefName="Dr. Jean KAMDEM" />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-16 lg:mt-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
           <div className="mb-6">
             <button
               onClick={handleBack}

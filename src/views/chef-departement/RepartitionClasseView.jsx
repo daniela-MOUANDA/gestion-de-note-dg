@@ -1,42 +1,73 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUsers, faGraduationCap, faArrowRight, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faGraduationCap, faArrowRight, faCheckCircle, faTimes, faSpinner } from '@fortawesome/free-solid-svg-icons'
 import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
-import HeaderChef from '../../components/common/HeaderChef'
+import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import { 
+  getEtudiantsNonRepartis, 
+  repartirEtudiant, 
+  getEtudiantsByClasse,
+  getClasses 
+} from '../../api/chefDepartement.js'
 
 const RepartitionClasseView = () => {
   const { user } = useAuth()
-  const [departementChef] = useState('Génie Informatique')
-  
-  const [etudiantsNonRepartis, setEtudiantsNonRepartis] = useState([
-    { id: 1, matricule: '26001', nom: 'MBO', prenom: 'Lidvige', filiere: 'GI', niveau: 'L3' },
-    { id: 2, matricule: '26002', nom: 'MBADINGA', prenom: 'Paul', filiere: 'GI', niveau: 'L2' },
-    { id: 3, matricule: '26003', nom: 'OBIANG', prenom: 'Sophie', filiere: 'GI', niveau: 'L1' },
-  ])
-  
-  const [classes] = useState([
-    { id: 1, code: 'GI-L3-A', niveau: 'L3', effectif: 45, capacite: 50 },
-    { id: 2, code: 'GI-L3-B', niveau: 'L3', effectif: 42, capacite: 50 },
-    { id: 3, code: 'GI-L2-A', niveau: 'L2', effectif: 48, capacite: 50 },
-    { id: 4, code: 'GI-L2-B', niveau: 'L2', effectif: 40, capacite: 50 },
-    { id: 5, code: 'GI-L1-A', niveau: 'L1', effectif: 50, capacite: 50 },
-    { id: 6, code: 'GI-L1-B', niveau: 'L1', effectif: 48, capacite: 50 },
-  ])
-
-  const [repartition, setRepartition] = useState({
-    1: [], // GI-L3-A
-    2: [], // GI-L3-B
-    3: [], // GI-L2-A
-    4: [], // GI-L2-B
-    5: [], // GI-L1-A
-    6: [], // GI-L1-B
-  })
-
+  const { showAlert } = useAlert()
+  const [departementChef, setDepartementChef] = useState('')
+  const [etudiantsNonRepartis, setEtudiantsNonRepartis] = useState([])
+  const [classes, setClasses] = useState([])
+  const [repartition, setRepartition] = useState({})
   const [showModal, setShowModal] = useState(false)
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [selectedClasse, setSelectedClasse] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Charger les étudiants non répartis
+      const etudiantsResult = await getEtudiantsNonRepartis()
+      if (etudiantsResult.success) {
+        setEtudiantsNonRepartis(etudiantsResult.etudiants)
+      } else {
+        showAlert('error', etudiantsResult.error || 'Erreur lors du chargement des étudiants')
+      }
+
+      // Charger les classes
+      const classesResult = await getClasses()
+      if (classesResult.success) {
+        setClasses(classesResult.classes)
+        // Charger les étudiants de chaque classe
+        const repartitionData = {}
+        for (const classe of classesResult.classes) {
+          const etudiantsClasseResult = await getEtudiantsByClasse(classe.id)
+          if (etudiantsClasseResult.success) {
+            repartitionData[classe.id] = etudiantsClasseResult.etudiants || []
+          }
+        }
+        setRepartition(repartitionData)
+      }
+
+      // Récupérer le nom du département
+      if (user?.departement) {
+        setDepartementChef(user.departement.nom)
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors du chargement des données')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleRepartir = (etudiant) => {
     setSelectedEtudiant(etudiant)
@@ -44,45 +75,62 @@ const RepartitionClasseView = () => {
     setShowModal(true)
   }
 
-  const handleConfirmerRepartition = () => {
+  const handleConfirmerRepartition = async () => {
     if (!selectedEtudiant || !selectedClasse) return
 
-    const classeId = parseInt(selectedClasse)
-    const classe = classes.find(c => c.id === classeId)
+    const classe = classes.find(c => c.id === selectedClasse)
 
-    if (classe.effectif >= classe.capacite) {
-      alert('Cette classe est pleine !')
+    if (!classe) {
+      showAlert('error', 'Classe introuvable')
       return
     }
 
-    // Ajouter l'étudiant à la classe
-    setRepartition(prev => ({
-      ...prev,
-      [classeId]: [...prev[classeId], selectedEtudiant]
-    }))
-
-    // Retirer l'étudiant de la liste non répartie
-    setEtudiantsNonRepartis(prev => prev.filter(e => e.id !== selectedEtudiant.id))
-
-    // Mettre à jour l'effectif de la classe
-    const updatedClasses = classes.map(c => 
-      c.id === classeId ? { ...c, effectif: c.effectif + 1 } : c
-    )
-
-    setShowModal(false)
-    alert(`Étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} réparti dans ${classe.code}`)
+    try {
+      setSaving(true)
+      const result = await repartirEtudiant(selectedEtudiant.inscriptionId, selectedClasse)
+      
+      if (result.success) {
+        showAlert('success', `Étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} réparti dans ${classe.code}`)
+        setShowModal(false)
+        loadData()
+      } else {
+        showAlert('error', result.error || 'Erreur lors de la répartition')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('error', 'Erreur lors de la répartition')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const getClassesByNiveau = (niveau) => {
-    return classes.filter(c => c.niveau === niveau && c.effectif < c.capacite)
+    return classes.filter(c => c.niveau === niveau)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <SidebarChefDepartement />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
+            <div className="text-center">
+              <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin mb-4" />
+              <p className="text-slate-600">Chargement des données...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <SidebarChefDepartement />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef chefName={`Chef de Département - ${departementChef}`} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 mt-20">
+        <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Répartition par Classe</h1>
             <p className="text-sm text-slate-600">Répartissez les étudiants inscrits dans les classes de votre département</p>
@@ -129,7 +177,7 @@ const RepartitionClasseView = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {classes.map((classe) => {
               const etudiantsClasse = repartition[classe.id] || []
-              const tauxOccupation = (classe.effectif / classe.capacite) * 100
+              const tauxOccupation = classe.effectif > 0 ? (classe.effectif / 50) * 100 : 0
               
               return (
                 <div key={classe.id} className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
@@ -143,7 +191,7 @@ const RepartitionClasseView = () => {
                       tauxOccupation >= 80 ? 'bg-amber-100 text-amber-800' :
                       'bg-green-100 text-green-800'
                     }`}>
-                      {classe.effectif}/{classe.capacite}
+                      {classe.effectif || 0}/50
                     </span>
                   </div>
                   
@@ -204,7 +252,7 @@ const RepartitionClasseView = () => {
                   <option value="">Sélectionner une classe</option>
                   {selectedEtudiant && getClassesByNiveau(selectedEtudiant.niveau).map((classe) => (
                     <option key={classe.id} value={classe.id}>
-                      {classe.code} ({classe.effectif}/{classe.capacite} places)
+                      {classe.code} ({classe.effectif || 0}/50 places)
                     </option>
                   ))}
                 </select>
@@ -212,15 +260,17 @@ const RepartitionClasseView = () => {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors disabled:opacity-50"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={handleConfirmerRepartition}
-                  disabled={!selectedClasse}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!selectedClasse || saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
+                  {saving && <FontAwesomeIcon icon={faSpinner} className="animate-spin" />}
                   Confirmer la répartition
                 </button>
               </div>
@@ -233,4 +283,3 @@ const RepartitionClasseView = () => {
 }
 
 export default RepartitionClasseView
-

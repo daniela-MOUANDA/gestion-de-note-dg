@@ -66,6 +66,9 @@ model Departement {
   
   // Relations
   chefs       Utilisateur[] // Les chefs de département associés
+  enseignants Enseignant[]
+  modules     Module[]
+  filieres    Filiere[]
   
   @@map("departements")
 }
@@ -112,8 +115,10 @@ model Filiere {
   id          String   @id @default(uuid())
   code        String   @unique // "RT", "GI", "MTIC", "AV"
   nom         String   // "Réseau et Télécom", "Génie Informatique", etc.
+  departementId String? // ID du département
   
   // Relations
+  departement Departement? @relation(fields: [departementId], references: [id], onDelete: SetNull)
   inscriptions Inscription[]
   classes      Classe[]
   procesVerbaux ProcesVerbal[]
@@ -153,6 +158,9 @@ model Classe {
   diplomes    Diplome[]
   procesVerbaux ProcesVerbal[]
   messages    Message[]
+  modules     Module[]
+  emploisTemps EmploiDuTemps[]
+  notes       Note[]
   
   @@unique([code, filiereId, niveauId])
   @@map("classes")
@@ -182,6 +190,7 @@ model Etudiant {
   diplomes        Diplome[]
   abandons        Abandon[]
   parents         Parent[]
+  notes           Note[]
   
   @@map("etudiants")
 }
@@ -239,6 +248,7 @@ model Inscription {
   filiere           Filiere @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   niveau            Niveau @relation(fields: [niveauId], references: [id], onDelete: Cascade)
   classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  notes             Note[]
   
   @@map("inscriptions")
 }
@@ -482,3 +492,116 @@ model CandidatAdmis {
   @@map("candidats_admis")
 }
 
+
+// ============================================
+// MODÈLES CHEF DE DÉPARTEMENT
+// ============================================
+
+model Enseignant {
+  id              String   @id @default(uuid())
+  nom             String
+  prenom          String
+  email           String   @unique
+  telephone       String?
+  departementId   String   // ID du département
+  actif           Boolean  @default(true)
+  dateCreation    DateTime @default(now())
+  
+  // Relations
+  departement     Departement @relation(fields: [departementId], references: [id], onDelete: Cascade)
+  affectations    AffectationModuleEnseignant[]
+  emploisTemps    EmploiDuTemps[]
+  notes           Note[]
+  
+  @@map("enseignants")
+}
+
+model Module {
+  id              String   @id @default(uuid())
+  code            String   // "BDD-301", "PW-301"
+  nom             String
+  credit          Int      // Nombre de crédits
+  semestre        String   // "S1", "S2", "S3", etc.
+  classeId       String
+  departementId   String
+  actif           Boolean  @default(true)
+  dateCreation    DateTime @default(now())
+  
+  // Relations
+  classe          Classe   @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  departement     Departement @relation(fields: [departementId], references: [id], onDelete: Cascade)
+  affectations    AffectationModuleEnseignant[]
+  emploisTemps    EmploiDuTemps[]
+  notes           Note[]
+  
+  @@unique([code, classeId])
+  @@map("modules")
+}
+
+model AffectationModuleEnseignant {
+  id              String   @id @default(uuid())
+  moduleId        String
+  enseignantId    String
+  dateAffectation DateTime @default(now())
+  
+  // Relations
+  module          Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  enseignant      Enseignant @relation(fields: [enseignantId], references: [id], onDelete: Cascade)
+  
+  @@unique([moduleId, enseignantId])
+  @@map("affectations_module_enseignant")
+}
+
+model EmploiDuTemps {
+  id              String   @id @default(uuid())
+  classeId        String
+  moduleId        String
+  enseignantId    String
+  jour            String   // "LUNDI", "MARDI", etc.
+  heureDebut      String   // "08:00"
+  heureFin        String   // "10:00"
+  salle           String?
+  semestre        String   // "S1", "S2"
+  anneeAcademique String
+  dateCreation     DateTime @default(now())
+  
+  // Relations
+  classe          Classe   @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  module          Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  enseignant      Enseignant @relation(fields: [enseignantId], references: [id], onDelete: Cascade)
+  
+  @@map("emplois_du_temps")
+}
+
+model Note {
+  id              String   @id @default(uuid())
+  etudiantId      String
+  inscriptionId   String
+  moduleId        String
+  enseignantId    String
+  classeId       String
+  typeNote        TypeNote
+  valeur          Float    // Note sur 20
+  coefficient     Float    @default(1.0)
+  semestre        String
+  anneeAcademique String
+  dateEvaluation  DateTime @default(now())
+  commentaire     String?
+  
+  // Relations
+  etudiant        Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  inscription     Inscription @relation(fields: [inscriptionId], references: [id], onDelete: Cascade)
+  module          Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  enseignant      Enseignant @relation(fields: [enseignantId], references: [id], onDelete: Cascade)
+  classe          Classe   @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  
+  @@map("notes")
+}
+
+enum TypeNote {
+  CONTINU
+  EXAMEN
+  RATTRAPAGE
+  ORAL
+  PRATIQUE
+}

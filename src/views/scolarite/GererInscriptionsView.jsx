@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
@@ -32,6 +32,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const GererInscriptionsView = () => {
   const location = useLocation()
+  const navigate = useNavigate()
   const isChefView = location.pathname.startsWith('/chef-scolarite')
   const Sidebar = isChefView ? SidebarChef : SidebarScolarite
   const Header = isChefView ? HeaderChef : HeaderScolarite
@@ -166,7 +167,7 @@ const GererInscriptionsView = () => {
           const token = localStorage.getItem('token')
           if (!token) {
             alertError('Session expirée. Veuillez vous reconnecter.')
-            window.location.href = '/login'
+            navigate('/login', { replace: true })
             return
           }
           
@@ -371,7 +372,7 @@ const GererInscriptionsView = () => {
     const token = localStorage.getItem('token')
     if (!token) {
       alertError('Session expirée. Veuillez vous reconnecter.')
-      window.location.href = '/login'
+      navigate('/login', { replace: true })
       return
     }
     
@@ -400,7 +401,7 @@ const GererInscriptionsView = () => {
     const token = localStorage.getItem('token')
     if (!token) {
       alertError('Session expirée. Veuillez vous reconnecter.')
-      window.location.href = '/login'
+      navigate('/login', { replace: true })
       return
     }
     

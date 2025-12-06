@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { login as apiLogin, logout as apiLogout, verifyToken } from '../api/auth.js'
 import { startSessionMonitoring, stopSessionMonitoring, resetSessionReferences } from '../utils/sessionManager.js'
+import { initNavigation, redirectToLogin } from '../utils/navigation.js'
 
 const AuthContext = createContext(null)
 
@@ -28,10 +29,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
     setIsAuthenticated(false)
     
-    // Rediriger vers la page de connexion
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login'
-    }
+    // Rediriger vers la page de connexion (SPA navigation)
+    redirectToLogin('Déconnexion')
   }, [])
 
   // Vérifier l'authentification au chargement de l'application

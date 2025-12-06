@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faUsers, faPlus, faEdit, faTrash, faCheckCircle, faTimesCircle, faSearch, faSpinner
@@ -9,6 +10,7 @@ import { getAllComptes, createCompte, updateCompte, deleteCompte, toggleActif } 
 import { useAlert } from '../../contexts/AlertContext'
 
 const GestionComptesView = () => {
+  const navigate = useNavigate()
   const { success, error: showError } = useAlert()
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -71,7 +73,7 @@ const GestionComptesView = () => {
         // Si le token est invalide, rediriger vers la page de connexion
         if (result.error && result.error.includes('session') || result.error.includes('Token')) {
           setTimeout(() => {
-            window.location.href = '/login'
+            navigate('/login', { replace: true })
           }, 2000)
         }
       }

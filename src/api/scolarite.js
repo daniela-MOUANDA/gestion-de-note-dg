@@ -1,5 +1,18 @@
 // Client API pour le service scolarité
+import { redirectToLogin } from '../utils/navigation'
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/scolarite'
+
+// Helper pour gérer les erreurs d'authentification
+const handleAuthError = (response) => {
+  if (response.status === 401) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    redirectToLogin('Session expirée')
+    return true
+  }
+  return false
+}
 
 // ============================================
 // INSCRIPTIONS
@@ -49,10 +62,7 @@ export const getAgentDashboardStats = async () => {
   })
 
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+    if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
     const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des statistiques' }))
@@ -72,10 +82,7 @@ export const getSPDashboardStats = async () => {
   })
 
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+    if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
     const error = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des statistiques' }))
@@ -259,7 +266,7 @@ export const getMonProfilEtudiant = async () => {
     if (response.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      window.location.href = '/login-etudiant'
+      redirectToLogin('Session expirée')
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
     const errorData = await response.json().catch(() => ({ error: 'Erreur lors de la récupération du profil' }))
@@ -445,11 +452,7 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
   })
   
   if (!response.ok) {
-    if (response.status === 401) {
-      // Token invalide ou expiré
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+    if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
     const error = await response.json().catch(() => ({ error: 'Erreur lors de la mise à jour' }))
@@ -477,11 +480,7 @@ export const uploadPhotoEtudiant = async (etudiantId, file) => {
   })
   
   if (!response.ok) {
-    if (response.status === 401) {
-      // Token invalide ou expiré
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+    if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
     const error = await response.json().catch(() => ({ error: 'Erreur lors de l\'upload de la photo' }))
@@ -532,11 +531,7 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
   })
   
   if (!response.ok) {
-    if (response.status === 401) {
-      // Token invalide ou expiré
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+    if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
     }
     const errorData = await response.json().catch(() => ({ error: 'Erreur lors de la récupération du dossier' }))

@@ -1,179 +1,677 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { Suspense, lazy, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { initNavigation } from './utils/navigation'
+import ProtectedRoute from './components/common/ProtectedRoute'
+import ErrorBoundary from './components/common/ErrorBoundary'
+import LoadingSpinner from './components/common/LoadingSpinner'
 
+// Composant pour initialiser la navigation
+const NavigationInit = () => {
+  const navigate = useNavigate()
+  
+  useEffect(() => {
+    initNavigation(navigate)
+  }, [navigate])
+  
+  return null
+}
+
+// Lazy loading des composants pour améliorer les performances
 // Formulaires de connexion
-import LoginView from './views/LoginView'
-import LoginStudentView from './views/student/LoginStudentView'
+const LoginView = lazy(() => import('./views/LoginView'))
+const LoginStudentView = lazy(() => import('./views/student/LoginStudentView'))
 
 // Routes Étudiant
-import DashboardView from './views/student/DashboardView'
-import EmploiDuTempsView from './views/student/EmploiDuTempsView'
-import NotesView from './views/student/NotesView'
-import DocumentsView from './views/student/DocumentsView'
-import ProfileView from './views/student/ProfileView'
-import NotificationsView from './views/student/NotificationsView'
-import ReclamationsView from './views/student/ReclamationsView'
-import AideView from './views/student/AideView'
+const DashboardView = lazy(() => import('./views/student/DashboardView'))
+const EmploiDuTempsView = lazy(() => import('./views/student/EmploiDuTempsView'))
+const NotesView = lazy(() => import('./views/student/NotesView'))
+const DocumentsView = lazy(() => import('./views/student/DocumentsView'))
+const ProfileView = lazy(() => import('./views/student/ProfileView'))
+const NotificationsView = lazy(() => import('./views/student/NotificationsView'))
+const ReclamationsView = lazy(() => import('./views/student/ReclamationsView'))
+const AideView = lazy(() => import('./views/student/AideView'))
 
 // Routes Chef de Département
-import DashboardChefView from './views/chef/DashboardChefView'
-import ClassesChefDepartementView from './views/chef-departement/ClassesView'
-import ModulesChefDepartementView from './views/chef-departement/ModulesView'
-import EnseignantsChefDepartementView from './views/chef-departement/EnseignantsView'
-import EtudiantsInscritsView from './views/chef-departement/EtudiantsInscritsView'
-import RepartitionClasseView from './views/chef-departement/RepartitionClasseView'
-import EmploiDuTempsChefDepartementView from './views/chef-departement/EmploiDuTempsView'
-import NotesChefDepartementView from './views/chef-departement/NotesView'
-import MessagerieChefView from './views/chef/MessagerieChefView'
-import GererClassesView from './views/chef/GererClassesView'
-import GererEnseignantsView from './views/chef/GererEnseignantsView'
-import AjouterNotesView from './views/chef/AjouterNotesView'
-import GererModulesView from './views/chef/GererModulesView'
-import GererEtudiantsView from './views/chef/GererEtudiantsView'
-import GererRattrapagesView from './views/chef/GererRattrapagesView'
-import PublierUnitesEnseignementView from './views/chef/PublierUnitesEnseignementView'
-import PublierBulletinsView from './views/chef/PublierBulletinsView'
-import GererEmploisTempsView from './views/chef/GererEmploisTempsView'
+const DashboardChefView = lazy(() => import('./views/chef/DashboardChefView'))
+const ClassesChefDepartementView = lazy(() => import('./views/chef-departement/ClassesView'))
+const ModulesChefDepartementView = lazy(() => import('./views/chef-departement/ModulesView'))
+const EnseignantsChefDepartementView = lazy(() => import('./views/chef-departement/EnseignantsView'))
+const EtudiantsInscritsView = lazy(() => import('./views/chef-departement/EtudiantsInscritsView'))
+const RepartitionClasseView = lazy(() => import('./views/chef-departement/RepartitionClasseView'))
+const EmploiDuTempsChefDepartementView = lazy(() => import('./views/chef-departement/EmploiDuTempsView'))
+const NotesChefDepartementView = lazy(() => import('./views/chef-departement/NotesView'))
+const MessagerieChefView = lazy(() => import('./views/chef/MessagerieChefView'))
+const GererClassesView = lazy(() => import('./views/chef/GererClassesView'))
+const GererEnseignantsView = lazy(() => import('./views/chef/GererEnseignantsView'))
+const AjouterNotesView = lazy(() => import('./views/chef/AjouterNotesView'))
+const GererModulesView = lazy(() => import('./views/chef/GererModulesView'))
+const GererEtudiantsView = lazy(() => import('./views/chef/GererEtudiantsView'))
+const GererRattrapagesView = lazy(() => import('./views/chef/GererRattrapagesView'))
+const PublierUnitesEnseignementView = lazy(() => import('./views/chef/PublierUnitesEnseignementView'))
+const PublierBulletinsView = lazy(() => import('./views/chef/PublierBulletinsView'))
+const GererEmploisTempsView = lazy(() => import('./views/chef/GererEmploisTempsView'))
 
 // Routes Service Scolarité
-import DashboardScolariteView from './views/scolarite/DashboardScolariteView'
-import ImporterCandidatsView from './views/scolarite/ImporterCandidatsView'
-import GererInscriptionsView from './views/scolarite/GererInscriptionsView'
-import GererEtudiantsScolariteView from './views/scolarite/GererEtudiantsScolariteView'
-import MessagerieScolareView from './views/scolarite/MessagerieScolareView'
-import BulletinsView from './views/scolarite/BulletinsView'
-import DiplomesView from './views/scolarite/DiplomesView'
-import ProcesVerbauxView from './views/scolarite/ProcesVerbauxView'
-import ArchivageView from './views/scolarite/ArchivageView'
+const DashboardScolariteView = lazy(() => import('./views/scolarite/DashboardScolariteView'))
+const ImporterCandidatsView = lazy(() => import('./views/scolarite/ImporterCandidatsView'))
+const GererInscriptionsView = lazy(() => import('./views/scolarite/GererInscriptionsView'))
+const GererEtudiantsScolariteView = lazy(() => import('./views/scolarite/GererEtudiantsScolariteView'))
+const MessagerieScolareView = lazy(() => import('./views/scolarite/MessagerieScolareView'))
+const BulletinsView = lazy(() => import('./views/scolarite/BulletinsView'))
+const DiplomesView = lazy(() => import('./views/scolarite/DiplomesView'))
+const ProcesVerbauxView = lazy(() => import('./views/scolarite/ProcesVerbauxView'))
+const ArchivageView = lazy(() => import('./views/scolarite/ArchivageView'))
+const AttestationsScolariteView = lazy(() => import('./views/scolarite/AttestationsScolariteView'))
+const ArchivesAttestationsScolariteView = lazy(() => import('./views/scolarite/ArchivesAttestationsScolariteView'))
 
-// Routes SP-Scolarité (Secrétaire Particulière)
-import DashboardSPView from './views/sp-scolarite/DashboardSPView'
-import AttestationsView from './views/sp-scolarite/AttestationsView'
-import ArchivesAttestationsView from './views/sp-scolarite/ArchivesAttestationsView'
-import MessagerieSPView from './views/sp-scolarite/MessagerieSPView'
-import AttestationsScolariteView from './views/scolarite/AttestationsScolariteView'
-import ArchivesAttestationsScolariteView from './views/scolarite/ArchivesAttestationsScolariteView'
+// Routes SP-Scolarité
+const DashboardSPView = lazy(() => import('./views/sp-scolarite/DashboardSPView'))
+const AttestationsView = lazy(() => import('./views/sp-scolarite/AttestationsView'))
+const ArchivesAttestationsView = lazy(() => import('./views/sp-scolarite/ArchivesAttestationsView'))
+const MessagerieSPView = lazy(() => import('./views/sp-scolarite/MessagerieSPView'))
 
-// Routes DG (Directeur Général)
-import DashboardDGView from './views/dg/DashboardDGView'
+// Routes DG
+const DashboardDGView = lazy(() => import('./views/dg/DashboardDGView'))
 
-// Routes DEP (Directeur des Études Pédagogiques)
-import DashboardDEPView from './views/dep/DashboardDEPView'
-import ChefsDepartementView from './views/dep/ChefsDepartementView'
-import DepartementsView from './views/dep/DepartementsView'
-import ConseilsView from './views/dep/ConseilsView'
-import VisasView from './views/dep/VisasView'
-import ProcesVerbauxDEPView from './views/dep/ProcesVerbauxView'
-import RapportsView from './views/dep/RapportsView'
-import StatistiquesDEPView from './views/dep/StatistiquesView'
-import EtudiantsView from './views/dep/EtudiantsView'
-import MeilleursEtudiantsView from './views/dep/MeilleursEtudiantsView'
+// Routes DEP
+const DashboardDEPView = lazy(() => import('./views/dep/DashboardDEPView'))
+const ChefsDepartementView = lazy(() => import('./views/dep/ChefsDepartementView'))
+const DepartementsView = lazy(() => import('./views/dep/DepartementsView'))
+const ConseilsView = lazy(() => import('./views/dep/ConseilsView'))
+const VisasView = lazy(() => import('./views/dep/VisasView'))
+const ProcesVerbauxDEPView = lazy(() => import('./views/dep/ProcesVerbauxView'))
+const RapportsView = lazy(() => import('./views/dep/RapportsView'))
+const StatistiquesDEPView = lazy(() => import('./views/dep/StatistiquesView'))
+const EtudiantsView = lazy(() => import('./views/dep/EtudiantsView'))
+const MeilleursEtudiantsView = lazy(() => import('./views/dep/MeilleursEtudiantsView'))
 
-// Routes communes Administration
-import ProfilAdminView from './views/admin/ProfilAdminView'
-import ParametresAdminView from './views/admin/ParametresAdminView'
+// Routes Administration
+const ProfilAdminView = lazy(() => import('./views/admin/ProfilAdminView'))
+const ParametresAdminView = lazy(() => import('./views/admin/ParametresAdminView'))
 
 // Routes Chef de Scolarité
-import DashboardChefScolariteView from './views/chef-scolarite/DashboardChefView'
-import GestionComptesView from './views/chef-scolarite/GestionComptesView'
-import AuditView from './views/chef-scolarite/AuditView'
-import StatistiquesView from './views/chef-scolarite/StatistiquesView'
-import MessagerieChefScolariteView from './views/chef-scolarite/MessagerieChefView'
+const DashboardChefScolariteView = lazy(() => import('./views/chef-scolarite/DashboardChefView'))
+const GestionComptesView = lazy(() => import('./views/chef-scolarite/GestionComptesView'))
+const AuditView = lazy(() => import('./views/chef-scolarite/AuditView'))
+const StatistiquesView = lazy(() => import('./views/chef-scolarite/StatistiquesView'))
+const MessagerieChefScolariteView = lazy(() => import('./views/chef-scolarite/MessagerieChefView'))
+
+// Composant de chargement pour Suspense
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <LoadingSpinner text="Chargement de la page..." />
+  </div>
+)
 
 function App() {
   return (
-    <Router future={{ v7_relativeSplatPath: true }}>
-      <Routes>
-        {/* Pages de connexion */}
-        <Route path="/login" element={<LoginView />} />
-        <Route path="/login-etudiant" element={<LoginStudentView />} />
-        
-        {/* Routes Étudiant */}
-        <Route path="/dashboard" element={<DashboardView />} />
-        <Route path="/documents" element={<DocumentsView />} />
-        <Route path="/emploi-du-temps" element={<EmploiDuTempsView />} />
-        <Route path="/notes" element={<NotesView />} />
-        <Route path="/profil" element={<ProfileView />} />
-        <Route path="/notifications" element={<NotificationsView />} />
-        <Route path="/reclamations" element={<ReclamationsView />} />
-        <Route path="/aide" element={<AideView />} />
-        
-        {/* Routes Chef de Département */}
-        <Route path="/chef/departement/dashboard" element={<DashboardChefView />} />
-        <Route path="/chef/dashboard" element={<DashboardChefView />} /> {/* Route de compatibilité */}
-        <Route path="/chef/messagerie" element={<MessagerieChefView />} />
-        <Route path="/chef/classes" element={<ClassesChefDepartementView />} />
-        <Route path="/chef/modules" element={<ModulesChefDepartementView />} />
-        <Route path="/chef/enseignants" element={<EnseignantsChefDepartementView />} />
-        <Route path="/chef/etudiants" element={<EtudiantsInscritsView />} />
-        <Route path="/chef/repartition" element={<RepartitionClasseView />} />
-        <Route path="/chef/notes" element={<NotesChefDepartementView />} />
-        <Route path="/chef/notes/ajouter" element={<AjouterNotesView />} />
-        <Route path="/chef/emplois-temps" element={<EmploiDuTempsChefDepartementView />} />
-        <Route path="/chef/rattrapages" element={<GererRattrapagesView />} />
-        <Route path="/chef/unites-enseignement" element={<PublierUnitesEnseignementView />} />
-        <Route path="/chef/bulletins" element={<PublierBulletinsView />} />
-        
-        {/* Routes Service Scolarité */}
-        <Route path="/scolarite/dashboard" element={<DashboardScolariteView />} />
-        <Route path="/scolarite/importer-candidats" element={<ImporterCandidatsView />} />
-        <Route path="/scolarite/inscriptions" element={<GererInscriptionsView />} />
-        <Route path="/scolarite/etudiants" element={<GererEtudiantsScolariteView />} />
-        <Route path="/scolarite/messagerie" element={<MessagerieScolareView />} />
-        <Route path="/scolarite/bulletins" element={<BulletinsView />} />
-        <Route path="/scolarite/diplomes" element={<DiplomesView />} />
-        <Route path="/scolarite/proces-verbaux" element={<ProcesVerbauxView />} />
-        <Route path="/scolarite/archivage" element={<ArchivageView />} />
-        <Route path="/scolarite/attestations" element={<AttestationsScolariteView />} />
-        <Route path="/scolarite/archives-attestations" element={<ArchivesAttestationsScolariteView />} />
-        
-        {/* Routes SP-Scolarité */}
-        <Route path="/sp-scolarite/dashboard" element={<DashboardSPView />} />
-        <Route path="/sp-scolarite/attestations" element={<AttestationsView />} />
-        <Route path="/sp-scolarite/archives" element={<ArchivesAttestationsView />} />
-        <Route path="/sp-scolarite/messagerie" element={<MessagerieSPView />} />
-        
-        {/* Routes communes Administration - Profil et Paramètres */}
-        <Route path="/admin/profil" element={<ProfilAdminView />} />
-        <Route path="/admin/parametres" element={<ParametresAdminView />} />
-        
-        {/* Routes Chef de Scolarité */}
-        <Route path="/chef-scolarite/dashboard" element={<DashboardChefScolariteView />} />
-        <Route path="/chef-scolarite/gestion-comptes" element={<GestionComptesView />} />
-        <Route path="/chef-scolarite/audit" element={<AuditView />} />
-        <Route path="/chef-scolarite/statistiques" element={<StatistiquesView />} />
-        <Route path="/chef-scolarite/messagerie" element={<MessagerieChefScolariteView />} />
-        
-        {/* Routes Chef de Scolarité - Actions délé guées (même interface mais avec layout Chef) */}
-        <Route path="/chef-scolarite/importer-candidats" element={<ImporterCandidatsView />} />
-        <Route path="/chef-scolarite/inscriptions" element={<GererInscriptionsView />} />
-        <Route path="/chef-scolarite/attestations" element={<AttestationsScolariteView />} />
-        <Route path="/chef-scolarite/archives-attestations" element={<ArchivesAttestationsScolariteView />} />
-        <Route path="/chef-scolarite/bulletins" element={<BulletinsView />} />
-        <Route path="/chef-scolarite/diplomes" element={<DiplomesView />} />
-        <Route path="/chef-scolarite/proces-verbaux" element={<ProcesVerbauxView />} />
-        <Route path="/chef-scolarite/archivage" element={<ArchivageView />} />
-        
-        {/* Route DG - Prévisualisation sans authentification */}
-        <Route path="/dg/dashboard" element={<DashboardDGView />} />
-        
-        {/* Routes DEP (Directeur des Études Pédagogiques) */}
-        <Route path="/dep/dashboard" element={<DashboardDEPView />} />
-        <Route path="/dep/chefs-departement" element={<ChefsDepartementView />} />
-        <Route path="/dep/departements" element={<DepartementsView />} />
-        <Route path="/dep/conseils" element={<ConseilsView />} />
-        <Route path="/dep/visas" element={<VisasView />} />
-        <Route path="/dep/proces-verbaux" element={<ProcesVerbauxDEPView />} />
-        <Route path="/dep/rapports" element={<RapportsView />} />
-        <Route path="/dep/statistiques" element={<StatistiquesDEPView />} />
-        <Route path="/dep/etudiants" element={<EtudiantsView />} />
-        <Route path="/dep/meilleurs-etudiants" element={<MeilleursEtudiantsView />} />
-        
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login-admin" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Router>
+    <ErrorBoundary>
+      <Router future={{ v7_relativeSplatPath: true }}>
+        <NavigationInit />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Pages de connexion - Accessibles sans authentification */}
+            <Route 
+              path="/login" 
+              element={
+                <ProtectedRoute requireAuth={false}>
+                  <LoginView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/login-etudiant" 
+              element={
+                <ProtectedRoute requireAuth={false}>
+                  <LoginStudentView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes Étudiant - Protégées pour le rôle ETUDIANT */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <DashboardView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/documents" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <DocumentsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/emploi-du-temps" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <EmploiDuTempsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/notes" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <NotesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/profil" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <ProfileView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/notifications" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <NotificationsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/reclamations" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <ReclamationsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/aide" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <AideView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes Chef de Département - Protégées pour le rôle CHEF_DEPARTEMENT */}
+            <Route 
+              path="/chef/departement/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <DashboardChefView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <DashboardChefView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/messagerie" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <MessagerieChefView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/classes" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <ClassesChefDepartementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/modules" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <ModulesChefDepartementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/enseignants" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <EnseignantsChefDepartementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/etudiants" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <EtudiantsInscritsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/repartition" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <RepartitionClasseView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/notes" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <NotesChefDepartementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/notes/ajouter" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <AjouterNotesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/emplois-temps" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <EmploiDuTempsChefDepartementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/rattrapages" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <GererRattrapagesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/unites-enseignement" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <PublierUnitesEnseignementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef/bulletins" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <PublierBulletinsView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes Service Scolarité - Protégées pour le rôle AGENT_SCOLARITE */}
+            <Route 
+              path="/scolarite/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <DashboardScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/importer-candidats" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <ImporterCandidatsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/inscriptions" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <GererInscriptionsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/etudiants" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <GererEtudiantsScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/messagerie" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <MessagerieScolareView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/bulletins" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <BulletinsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/diplomes" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <DiplomesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/proces-verbaux" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <ProcesVerbauxView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/archivage" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <ArchivageView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/attestations" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <AttestationsScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/scolarite/archives-attestations" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <ArchivesAttestationsScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes SP-Scolarité - Protégées pour le rôle SP_SCOLARITE */}
+            <Route 
+              path="/sp-scolarite/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
+                  <DashboardSPView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/sp-scolarite/attestations" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
+                  <AttestationsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/sp-scolarite/archives" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
+                  <ArchivesAttestationsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/sp-scolarite/messagerie" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
+                  <MessagerieSPView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes communes Administration - Protégées pour tous les rôles authentifiés */}
+            <Route 
+              path="/admin/profil" 
+              element={
+                <ProtectedRoute requireAuth={true}>
+                  <ProfilAdminView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/parametres" 
+              element={
+                <ProtectedRoute requireAuth={true}>
+                  <ParametresAdminView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes Chef de Scolarité - Protégées pour le rôle CHEF_SERVICE_SCOLARITE */}
+            <Route 
+              path="/chef-scolarite/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <DashboardChefScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/gestion-comptes" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <GestionComptesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/audit" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <AuditView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/statistiques" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <StatistiquesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/messagerie" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <MessagerieChefScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes Chef de Scolarité - Actions déléguées */}
+            <Route 
+              path="/chef-scolarite/importer-candidats" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <ImporterCandidatsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/inscriptions" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <GererInscriptionsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/attestations" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <AttestationsScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/archives-attestations" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <ArchivesAttestationsScolariteView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/bulletins" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <BulletinsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/diplomes" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <DiplomesView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/proces-verbaux" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <ProcesVerbauxView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chef-scolarite/archivage" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <ArchivageView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Route DG - Protégée pour le rôle DG */}
+            <Route 
+              path="/dg/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DG">
+                  <DashboardDGView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes DEP - Protégées pour le rôle DEP */}
+            <Route 
+              path="/dep/dashboard" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <DashboardDEPView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/chefs-departement" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <ChefsDepartementView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/departements" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <DepartementsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/conseils" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <ConseilsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/visas" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <VisasView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/proces-verbaux" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <ProcesVerbauxDEPView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/rapports" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <RapportsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/statistiques" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <StatistiquesDEPView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/etudiants" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <EtudiantsView />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dep/meilleurs-etudiants" 
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <MeilleursEtudiantsView />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Routes par défaut */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login-admin" element={<Navigate to="/login" replace />} />
+            
+            {/* Route 404 - Page non trouvée */}
+            <Route 
+              path="*" 
+              element={
+                <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                  <div className="text-center">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">404</h1>
+                    <p className="text-slate-600 mb-6">Page non trouvée</p>
+                    <Navigate to="/login" replace />
+                  </div>
+                </div>
+              } 
+            />
+          </Routes>
+        </Suspense>
+      </Router>
+    </ErrorBoundary>
   )
 }
 
 export default App
-

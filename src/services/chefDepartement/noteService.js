@@ -1,33 +1,30 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Obtenir les notes d'une classe pour un module
 export const getNotesByClasseModule = async (classeId, moduleId, semestre, departementId) => {
   try {
-    // Vérifier que la classe et le module appartiennent au département
-    const [classe, module] = await Promise.all([
-      prisma.classe.findUnique({
-        where: { id: classeId },
-        include: {
-          filiere: {
-            include: {
-              departement: true
-            }
-          }
-        }
-      }),
-      prisma.module.findUnique({
-        where: { id: moduleId }
-      })
-    ])
+    // Vérifier que la classe appartient au département
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (!module || module.departementId !== departementId) {
+    // Vérifier que le module appartient au département
+    const { data: module } = await supabaseAdmin
+      .from('modules')
+      .select('*')
+      .eq('id', moduleId)
+      .single()
+
+    if (!module || module.departement_id !== departementId) {
       return {
         success: false,
         error: 'Module introuvable ou n\'appartient pas à votre département'
@@ -35,49 +32,47 @@ export const getNotesByClasseModule = async (classeId, moduleId, semestre, depar
     }
 
     // Récupérer les inscriptions de la classe
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        classeId,
-        statut: 'VALIDEE'
-      },
-      include: {
-        etudiant: true,
-        notes: {
-          where: {
-            moduleId,
-            semestre
-          },
-          include: {
-            enseignant: true
-          }
-        }
-      }
-    })
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        notes (*, enseignants (*))
+      `)
+      .eq('classe_id', classeId)
+      .eq('statut', 'VALIDEE')
 
-    return {
-      success: true,
-      notes: inscriptions.map(ins => ({
-        etudiant: {
-          id: ins.etudiant.id,
-          matricule: ins.etudiant.matricule,
-          nom: ins.etudiant.nom,
-          prenom: ins.etudiant.prenom
-        },
-        inscriptionId: ins.id,
-        notes: ins.notes.map(note => ({
+    if (error) throw error
+
+    // Filtrer les notes pour le module et semestre
+    const result = (inscriptions || []).map(ins => ({
+      etudiant: {
+        id: ins.etudiants.id,
+        matricule: ins.etudiants.matricule,
+        nom: ins.etudiants.nom,
+        prenom: ins.etudiants.prenom
+      },
+      inscriptionId: ins.id,
+      notes: (ins.notes || [])
+        .filter(n => n.module_id === moduleId && n.semestre === semestre)
+        .map(note => ({
           id: note.id,
-          typeNote: note.typeNote,
+          typeNote: note.type_note,
           valeur: note.valeur,
           coefficient: note.coefficient,
           commentaire: note.commentaire,
-          enseignant: {
-            id: note.enseignant.id,
-            nom: note.enseignant.nom,
-            prenom: note.enseignant.prenom
-          },
-          dateEvaluation: note.dateEvaluation
+          enseignant: note.enseignants ? {
+            id: note.enseignants.id,
+            nom: note.enseignants.nom,
+            prenom: note.enseignants.prenom
+          } : null,
+          dateEvaluation: note.date_evaluation
         }))
-      }))
+    }))
+
+    return {
+      success: true,
+      notes: result
     }
   } catch (error) {
     console.error('Erreur lors de la récupération des notes:', error)
@@ -100,41 +95,42 @@ export const saveNote = async (data, departementId) => {
       }
     }
 
-    // Vérifier que tout appartient au département
-    const [classe, module, enseignant] = await Promise.all([
-      prisma.classe.findUnique({
-        where: { id: classeId },
-        include: {
-          filiere: {
-            include: {
-              departement: true
-            }
-          }
-        }
-      }),
-      prisma.module.findUnique({
-        where: { id: moduleId }
-      }),
-      prisma.enseignant.findUnique({
-        where: { id: enseignantId }
-      })
-    ])
+    // Vérifier que la classe appartient au département
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (!module || module.departementId !== departementId) {
+    // Vérifier le module
+    const { data: module } = await supabaseAdmin
+      .from('modules')
+      .select('*')
+      .eq('id', moduleId)
+      .single()
+
+    if (!module || module.departement_id !== departementId) {
       return {
         success: false,
         error: 'Module introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (!enseignant || enseignant.departementId !== departementId) {
+    // Vérifier l'enseignant
+    const { data: enseignant } = await supabaseAdmin
+      .from('enseignants')
+      .select('*')
+      .eq('id', enseignantId)
+      .single()
+
+    if (!enseignant || enseignant.departement_id !== departementId) {
       return {
         success: false,
         error: 'Enseignant introuvable ou n\'appartient pas à votre département'
@@ -142,65 +138,69 @@ export const saveNote = async (data, departementId) => {
     }
 
     // Vérifier si une note du même type existe déjà
-    const existingNote = await prisma.note.findFirst({
-      where: {
-        inscriptionId,
-        moduleId,
-        typeNote,
-        semestre
-      }
-    })
+    const { data: existingNote } = await supabaseAdmin
+      .from('notes')
+      .select('id')
+      .eq('inscription_id', inscriptionId)
+      .eq('module_id', moduleId)
+      .eq('type_note', typeNote)
+      .eq('semestre', semestre)
+      .single()
 
     let note
     if (existingNote) {
       // Mettre à jour
-      note = await prisma.note.update({
-        where: { id: existingNote.id },
-        data: {
+      const { data: updated, error } = await supabaseAdmin
+        .from('notes')
+        .update({
           valeur: parseFloat(valeur),
           coefficient: coefficient ? parseFloat(coefficient) : 1.0,
           commentaire,
-          dateEvaluation: new Date()
-        },
-        include: {
-          enseignant: true
-        }
-      })
+          date_evaluation: new Date().toISOString()
+        })
+        .eq('id', existingNote.id)
+        .select('*, enseignants (*)')
+        .single()
+
+      if (error) throw error
+      note = updated
     } else {
       // Créer
-      note = await prisma.note.create({
-        data: {
-          etudiantId,
-          inscriptionId,
-          moduleId,
-          enseignantId,
-          classeId,
-          typeNote,
+      const { data: created, error } = await supabaseAdmin
+        .from('notes')
+        .insert({
+          etudiant_id: etudiantId,
+          inscription_id: inscriptionId,
+          module_id: moduleId,
+          enseignant_id: enseignantId,
+          classe_id: classeId,
+          type_note: typeNote,
           valeur: parseFloat(valeur),
           coefficient: coefficient ? parseFloat(coefficient) : 1.0,
           semestre,
-          anneeAcademique,
+          annee_academique: anneeAcademique,
           commentaire
-        },
-        include: {
-          enseignant: true
-        }
-      })
+        })
+        .select('*, enseignants (*)')
+        .single()
+
+      if (error) throw error
+      note = created
     }
 
     return {
       success: true,
       note: {
         id: note.id,
-        typeNote: note.typeNote,
+        typeNote: note.type_note,
         valeur: note.valeur,
         coefficient: note.coefficient,
         commentaire: note.commentaire,
-        enseignant: {
-          id: note.enseignant.id,
-          nom: note.enseignant.nom,
-          prenom: note.enseignant.prenom
-        }
+        enseignant: note.enseignants ? {
+          id: note.enseignants.id,
+          nom: note.enseignants.nom,
+          prenom: note.enseignants.prenom
+        } : null
       }
     }
   } catch (error) {
@@ -215,31 +215,25 @@ export const saveNote = async (data, departementId) => {
 // Supprimer une note
 export const deleteNote = async (noteId, departementId) => {
   try {
-    const note = await prisma.note.findUnique({
-      where: { id: noteId },
-      include: {
-        classe: {
-          include: {
-            filiere: {
-              include: {
-                departement: true
-              }
-            }
-          }
-        }
-      }
-    })
+    const { data: note } = await supabaseAdmin
+      .from('notes')
+      .select('*, classes (*, filieres (*, departements (*)))')
+      .eq('id', noteId)
+      .single()
 
-    if (!note || note.classe.filiere.departement?.id !== departementId) {
+    if (!note || note.classes?.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Note introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    await prisma.note.delete({
-      where: { id: noteId }
-    })
+    const { error } = await supabaseAdmin
+      .from('notes')
+      .delete()
+      .eq('id', noteId)
+
+    if (error) throw error
 
     return {
       success: true,
@@ -253,4 +247,3 @@ export const deleteNote = async (noteId, departementId) => {
     }
   }
 }
-

@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import prisma from '../lib/prisma.js'
+import { supabaseAdmin } from '../lib/supabase.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'votre-secret-jwt-tres-securise-changez-moi-en-production'
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h' // 24 heures de validité (augmenté pour éviter les déconnexions fréquentes)
@@ -26,20 +26,20 @@ export const authenticateUser = async (email, password, matricule = null) => {
       console.log('🎓 Tentative de connexion étudiant avec matricule:', matricule)
       
       // Chercher l'étudiant par matricule
-      const etudiant = await prisma.etudiant.findUnique({
-        where: { matricule: matricule.trim() },
-        include: {
-          inscriptions: {
-            where: { statut: 'INSCRIT' },
-            take: 1,
-            include: {
-              promotion: true
-            }
-          }
-        }
-      })
+      const { data: etudiant, error: etudiantError } = await supabaseAdmin
+        .from('etudiants')
+        .select(`
+          *,
+          inscriptions!inner (
+            *,
+            promotions (*)
+          )
+        `)
+        .eq('matricule', matricule.trim())
+        .eq('inscriptions.statut', 'INSCRIT')
+        .single()
 
-      if (!etudiant) {
+      if (etudiantError || !etudiant) {
         console.log('❌ Étudiant non trouvé avec matricule:', matricule)
         return {
           success: false,
@@ -59,15 +59,13 @@ export const authenticateUser = async (email, password, matricule = null) => {
       console.log('✅ Étudiant trouvé:', etudiant.nom, etudiant.prenom)
 
       // Chercher ou créer un compte Utilisateur pour cet étudiant
-      utilisateur = await prisma.utilisateur.findFirst({
-        where: {
-          OR: [
-            { email: normalizedEmail },
-            { username: matricule.trim() }
-          ]
-        },
-        include: { role: true }
-      })
+      const { data: existingUser, error: userSearchError } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('*, roles (*)')
+        .or(`email.eq.${normalizedEmail},username.eq.${matricule.trim()}`)
+        .single()
+
+      utilisateur = existingUser
 
       // Si aucun compte Utilisateur n'existe, le créer
       if (!utilisateur) {
@@ -75,9 +73,11 @@ export const authenticateUser = async (email, password, matricule = null) => {
         
         // Générer un username unique basé sur le matricule
         let username = matricule.trim().toLowerCase()
-        let usernameExists = await prisma.utilisateur.findUnique({
-          where: { username }
-        })
+        const { data: usernameExists } = await supabaseAdmin
+          .from('utilisateurs')
+          .select('id')
+          .eq('username', username)
+          .single()
         
         if (usernameExists) {
           username = `${matricule.trim()}_${Date.now()}`
@@ -87,11 +87,13 @@ export const authenticateUser = async (email, password, matricule = null) => {
         const hashedPassword = await bcrypt.hash(password, 10)
 
         // Récupérer le rôle ETUDIANT
-        const roleEtudiant = await prisma.role.findUnique({
-          where: { code: 'ETUDIANT' }
-        })
+        const { data: roleEtudiant, error: roleError } = await supabaseAdmin
+          .from('roles')
+          .select('*')
+          .eq('code', 'ETUDIANT')
+          .single()
 
-        if (!roleEtudiant) {
+        if (roleError || !roleEtudiant) {
           console.log('❌ Rôle ETUDIANT non trouvé')
           return {
             success: false,
@@ -100,35 +102,45 @@ export const authenticateUser = async (email, password, matricule = null) => {
         }
 
         // Créer le compte Utilisateur
-        utilisateur = await prisma.utilisateur.create({
-          data: {
+        const { data: newUser, error: createError } = await supabaseAdmin
+          .from('utilisateurs')
+          .insert({
             nom: etudiant.nom,
             prenom: etudiant.prenom,
             email: normalizedEmail || `${matricule.trim()}@etudiant.inptic.ga`,
             username: username,
             password: hashedPassword,
-            roleId: roleEtudiant.id,
+            role_id: roleEtudiant.id,
             actif: true,
             photo: etudiant.photo || null,
             telephone: etudiant.telephone || null,
             adresse: etudiant.adresse || null
-          },
-          include: { role: true }
-        })
+          })
+          .select('*, roles (*)')
+          .single()
 
+        if (createError) {
+          console.error('❌ Erreur lors de la création du compte:', createError)
+          return {
+            success: false,
+            error: 'Erreur lors de la création du compte'
+          }
+        }
+
+        utilisateur = newUser
         console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
         
         // Mettre à jour l'email de l'étudiant si nécessaire
         if (etudiant.email !== normalizedEmail) {
-          await prisma.etudiant.update({
-            where: { id: etudiant.id },
-            data: { email: normalizedEmail }
-          })
+          await supabaseAdmin
+            .from('etudiants')
+            .update({ email: normalizedEmail })
+            .eq('id', etudiant.id)
           console.log('✅ Email de l\'étudiant mis à jour')
         }
       } else {
         // Vérifier que c'est bien un compte étudiant
-        if (!utilisateur.role || utilisateur.role.code !== 'ETUDIANT') {
+        if (!utilisateur.roles || utilisateur.roles.code !== 'ETUDIANT') {
           console.log('❌ Le compte trouvé n\'est pas un compte étudiant')
           return {
             success: false,
@@ -138,10 +150,10 @@ export const authenticateUser = async (email, password, matricule = null) => {
         
         // Mettre à jour l'email de l'étudiant si nécessaire
         if (etudiant.email !== normalizedEmail) {
-          await prisma.etudiant.update({
-            where: { id: etudiant.id },
-            data: { email: normalizedEmail }
-          })
+          await supabaseAdmin
+            .from('etudiants')
+            .update({ email: normalizedEmail })
+            .eq('id', etudiant.id)
           console.log('✅ Email de l\'étudiant mis à jour')
         }
       }
@@ -149,52 +161,25 @@ export const authenticateUser = async (email, password, matricule = null) => {
       // Authentification normale pour les autres utilisateurs
       console.log('🔍 Recherche de l\'utilisateur avec email:', normalizedEmail)
       
-      // Trouver l'utilisateur par email (insensible à la casse)
-      // On essaie d'abord avec l'email normalisé, puis avec l'email original
-      utilisateur = await prisma.utilisateur.findUnique({
-        where: { email: normalizedEmail },
-        include: { role: true }
-      })
-      
-      // Si pas trouvé, essayer avec l'email original (trim seulement)
-      if (!utilisateur) {
-        const trimmedEmail = email.trim()
-        if (trimmedEmail !== normalizedEmail) {
-          console.log('🔍 Essai avec l\'email original (trim):', trimmedEmail)
-          utilisateur = await prisma.utilisateur.findUnique({
-            where: { email: trimmedEmail },
-            include: { role: true }
-          })
-        }
-      }
-      
-      // Si toujours pas trouvé, utiliser une requête SQL brute pour recherche insensible à la casse
-      if (!utilisateur) {
-        console.log('🔍 Recherche insensible à la casse avec SQL...')
-        try {
-          const result = await prisma.$queryRaw`
-            SELECT * FROM utilisateurs WHERE LOWER(email) = LOWER(${normalizedEmail}) LIMIT 1
-          `
-          if (result && Array.isArray(result) && result.length > 0) {
-            utilisateur = result[0]
-            console.log('✅ Utilisateur trouvé via recherche SQL (insensible à la casse)')
-          }
-        } catch (sqlError) {
-          console.log('⚠️ Erreur lors de la recherche SQL (non bloquant):', sqlError.message)
-          // On continue avec utilisateur = null
-        }
-      }
+      // Trouver l'utilisateur par email
+      const { data: user, error: userError } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('*, roles (*)')
+        .ilike('email', normalizedEmail)
+        .single()
 
-      if (!utilisateur) {
+      if (userError || !user) {
         console.log('❌ Utilisateur non trouvé avec email:', normalizedEmail)
         return {
           success: false,
           error: 'Email ou mot de passe incorrect'
         }
       }
+
+      utilisateur = user
     }
 
-    console.log('✅ Utilisateur trouvé:', utilisateur.email, 'Rôle:', utilisateur.role?.code || 'N/A')
+    console.log('✅ Utilisateur trouvé:', utilisateur.email, 'Rôle:', utilisateur.roles?.code || 'N/A')
 
     // Vérifier si le compte est actif
     if (!utilisateur.actif) {
@@ -224,10 +209,10 @@ export const authenticateUser = async (email, password, matricule = null) => {
       }
       // Si la comparaison directe réussit, hasher le mot de passe pour la prochaine fois
       const hashedPassword = await bcrypt.hash(password, 10)
-      await prisma.utilisateur.update({
-        where: { id: utilisateur.id },
-        data: { password: hashedPassword }
-      })
+      await supabaseAdmin
+        .from('utilisateurs')
+        .update({ password: hashedPassword })
+        .eq('id', utilisateur.id)
       console.log('✅ Mot de passe hashé et mis à jour pour:', utilisateur.email)
     } else {
       // Vérifier le mot de passe avec bcrypt
@@ -246,7 +231,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
 
 
     // Créer un token JWT
-    const roleCode = utilisateur.role?.code || 'UNKNOWN'
+    const roleCode = utilisateur.roles?.code || 'UNKNOWN'
     const token = jwt.sign(
       {
         id: utilisateur.id,
@@ -260,26 +245,26 @@ export const authenticateUser = async (email, password, matricule = null) => {
 
     // IMPORTANT: Invalider tous les autres tokens de cet utilisateur avant de créer un nouveau
     // Cela garantit qu'une seule session active existe par utilisateur
-    await prisma.utilisateur.update({
-      where: { id: utilisateur.id },
-      data: { 
+    await supabaseAdmin
+      .from('utilisateurs')
+      .update({ 
         token: token,
-        derniereConnexion: new Date()
-      }
-    })
+        derniere_connexion: new Date().toISOString()
+      })
+      .eq('id', utilisateur.id)
 
     console.log('✅ Token stocké pour l\'utilisateur:', utilisateur.email, 'ID:', utilisateur.id)
 
     // Enregistrer l'action dans l'audit
-    await prisma.actionAudit.create({
-      data: {
-        utilisateurId: utilisateur.id,
+    await supabaseAdmin
+      .from('actions_audit')
+      .insert({
+        utilisateur_id: utilisateur.id,
         action: 'Connexion',
         details: `Connexion réussie - ${roleCode}`,
-        typeAction: 'CONNEXION',
-        dateAction: new Date()
-      }
-    })
+        type_action: 'CONNEXION',
+        date_action: new Date().toISOString()
+      })
 
     // Retourner les informations de l'utilisateur (sans le mot de passe)
     const { password: _, ...userWithoutPassword } = utilisateur
@@ -294,18 +279,19 @@ export const authenticateUser = async (email, password, matricule = null) => {
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
         role: roleCode, // Utiliser le code du rôle
-        roleDetails: userWithoutPassword.role ? {
-          id: userWithoutPassword.role.id,
-          code: userWithoutPassword.role.code,
-          nom: userWithoutPassword.role.nom,
-          routeDashboard: userWithoutPassword.role.routeDashboard
+        roleDetails: userWithoutPassword.roles ? {
+          id: userWithoutPassword.roles.id,
+          code: userWithoutPassword.roles.code,
+          nom: userWithoutPassword.roles.nom,
+          routeDashboard: userWithoutPassword.roles.route_dashboard
         } : null,
         actif: userWithoutPassword.actif,
         photo: userWithoutPassword.photo || null,
         telephone: userWithoutPassword.telephone || null,
         adresse: userWithoutPassword.adresse || null,
-        dateCreation: userWithoutPassword.dateCreation,
-        derniereConnexion: userWithoutPassword.derniereConnexion || null
+        departementId: userWithoutPassword.departement_id || null,
+        dateCreation: userWithoutPassword.date_creation,
+        derniereConnexion: userWithoutPassword.derniere_connexion || null
       }
     }
   } catch (error) {
@@ -320,19 +306,20 @@ export const authenticateUser = async (email, password, matricule = null) => {
 // Renouveler le token d'un utilisateur (appelé lors d'actions)
 export const refreshUserToken = async (userId) => {
   try {
-    const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId },
-      include: { role: true }
-    })
+    const { data: utilisateur, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, roles (*)')
+      .eq('id', userId)
+      .single()
 
-    if (!utilisateur || !utilisateur.actif) {
+    if (error || !utilisateur || !utilisateur.actif) {
       return {
         success: false,
         error: 'Utilisateur introuvable ou compte désactivé'
       }
     }
 
-    const roleCode = utilisateur.role?.code || 'UNKNOWN'
+    const roleCode = utilisateur.roles?.code || 'UNKNOWN'
 
     // Créer un nouveau token
     const newToken = jwt.sign(
@@ -346,26 +333,20 @@ export const refreshUserToken = async (userId) => {
       { expiresIn: JWT_EXPIRES_IN }
     )
 
-    // Mettre à jour le token dans la base de données
-    // Vérifier d'abord que l'ancien token correspond toujours
-    const currentUser = await prisma.utilisateur.findUnique({
-      where: { id: userId },
-      include: { role: true }
-    })
-
-    if (!currentUser || !currentUser.token) {
+    // Vérifier que l'ancien token correspond toujours
+    if (!utilisateur.token) {
       return {
         success: false,
         error: 'Session invalide. Veuillez vous reconnecter.'
       }
     }
 
-    await prisma.utilisateur.update({
-      where: { id: userId },
-      data: { token: newToken }
-    })
+    await supabaseAdmin
+      .from('utilisateurs')
+      .update({ token: newToken })
+      .eq('id', userId)
 
-    console.log('✅ Token renouvelé pour l\'utilisateur:', currentUser.email)
+    console.log('✅ Token renouvelé pour l\'utilisateur:', utilisateur.email)
 
     const { password: _, ...userWithoutPassword } = utilisateur
 
@@ -379,18 +360,19 @@ export const refreshUserToken = async (userId) => {
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
         role: roleCode,
-        roleDetails: userWithoutPassword.role ? {
-          id: userWithoutPassword.role.id,
-          code: userWithoutPassword.role.code,
-          nom: userWithoutPassword.role.nom,
-          routeDashboard: userWithoutPassword.role.routeDashboard
+        roleDetails: userWithoutPassword.roles ? {
+          id: userWithoutPassword.roles.id,
+          code: userWithoutPassword.roles.code,
+          nom: userWithoutPassword.roles.nom,
+          routeDashboard: userWithoutPassword.roles.route_dashboard
         } : null,
         actif: userWithoutPassword.actif,
         photo: userWithoutPassword.photo || null,
         telephone: userWithoutPassword.telephone || null,
         adresse: userWithoutPassword.adresse || null,
-        dateCreation: userWithoutPassword.dateCreation,
-        derniereConnexion: userWithoutPassword.derniereConnexion || null
+        departementId: userWithoutPassword.departement_id || null,
+        dateCreation: userWithoutPassword.date_creation,
+        derniereConnexion: userWithoutPassword.derniere_connexion || null
       }
     }
   } catch (error) {
@@ -433,12 +415,13 @@ export const verifyToken = async (token, shouldRefresh = false) => {
     }
     
     // Vérifier que l'utilisateur existe toujours et est actif
-    const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: decoded.id },
-      include: { role: true }
-    })
+    const { data: utilisateur, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, roles (*)')
+      .eq('id', decoded.id)
+      .single()
     
-    if (!utilisateur) {
+    if (error || !utilisateur) {
       console.error('❌ Utilisateur introuvable pour ID:', decoded.id)
       return {
         valid: false,
@@ -447,34 +430,24 @@ export const verifyToken = async (token, shouldRefresh = false) => {
     }
 
     // VÉRIFICATIONS CRITIQUES AVANT TOUT : S'assurer que l'utilisateur récupéré correspond au token
-    // Ces vérifications empêchent le basculement vers un autre utilisateur
-    
-    // 1. Vérifier que l'ID correspond (déjà fait par la requête, mais on double-vérifie)
     if (utilisateur.id !== decoded.id) {
       console.error('❌ ERREUR CRITIQUE: L\'utilisateur récupéré ne correspond pas à l\'ID du token!')
-      console.error('   ID dans le token:', decoded.id)
-      console.error('   ID de l\'utilisateur récupéré:', utilisateur.id)
-      console.error('   Email de l\'utilisateur récupéré:', utilisateur.email)
       return {
         valid: false,
         error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
       }
     }
 
-    // 2. Vérifier que l'email correspond (AVANT de vérifier le token)
+    // Vérifier que l'email correspond
     if (decoded.email && decoded.email.toLowerCase() !== utilisateur.email.toLowerCase()) {
       console.error('❌ ERREUR CRITIQUE: L\'email dans le token ne correspond pas à l\'utilisateur récupéré!')
-      console.error('   Email dans le token:', decoded.email)
-      console.error('   Email de l\'utilisateur récupéré:', utilisateur.email)
-      console.error('   ID dans le token:', decoded.id)
-      console.error('   ID de l\'utilisateur récupéré:', utilisateur.id)
       return {
         valid: false,
         error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
       }
     }
 
-    // 3. Vérifier que le token correspond à celui stocké dans la base de données
+    // Vérifier que le token correspond à celui stocké dans la base de données
     if (!utilisateur.token) {
       console.error('❌ Aucun token stocké pour l\'utilisateur:', utilisateur.email)
       return {
@@ -483,82 +456,29 @@ export const verifyToken = async (token, shouldRefresh = false) => {
       }
     }
 
-    // Comparer les tokens de manière sécurisée (CRITIQUE pour la sécurité)
-    // Si les tokens ne correspondent pas, cela signifie qu'une autre session est active
-    // Dans ce cas, on doit IMMÉDIATEMENT rejeter la requête pour éviter le basculement
+    // Comparer les tokens
     if (utilisateur.token !== token) {
-      // Si on est en train de renouveler le token, c'est normal que les tokens ne correspondent pas
-      // MAIS on doit vérifier que l'ID correspond toujours
       if (shouldRefresh && utilisateur.id === decoded.id) {
         console.log('🔄 Renouvellement du token en cours, tokens différents attendus')
-        // Renouveler le token SEULEMENT si l'ID correspond
         const refreshResult = await refreshUserToken(decoded.id)
         if (refreshResult.success) {
-          // Mettre à jour les données utilisateur
-          const { password: _, ...userWithoutPassword } = utilisateur
           return {
             valid: true,
-            user: {
-              id: utilisateur.id,
-              nom: utilisateur.nom,
-              prenom: utilisateur.prenom,
-              email: utilisateur.email,
-              username: utilisateur.username,
-              role: roleCode,
-              roleDetails: utilisateur.role ? {
-                id: utilisateur.role.id,
-                code: utilisateur.role.code,
-                nom: utilisateur.role.nom,
-                routeDashboard: utilisateur.role.routeDashboard
-              } : null,
-              actif: utilisateur.actif,
-              photo: utilisateur.photo || null,
-              telephone: utilisateur.telephone || null,
-              adresse: utilisateur.adresse || null,
-              dateCreation: utilisateur.dateCreation,
-              derniereConnexion: utilisateur.derniereConnexion || null
-            },
+            user: refreshResult.user,
             newToken: refreshResult.token
           }
         }
       }
       
-      // Si les tokens ne correspondent pas et qu'on n'est pas en train de renouveler,
-      // c'est qu'une autre session est active - REJETER IMMÉDIATEMENT
       console.error('❌ Token mismatch pour l\'utilisateur:', utilisateur.email)
-      console.error('   ID dans le token:', decoded.id)
-      console.error('   ID de l\'utilisateur:', utilisateur.id)
-      console.error('   Token reçu:', token.substring(0, 20) + '...')
-      console.error('   Token attendu:', utilisateur.token ? utilisateur.token.substring(0, 20) + '...' : 'NULL')
-      console.error('   ⚠️ ATTENTION: Une autre session est active pour cet utilisateur ou un autre utilisateur!')
-      
       return {
         valid: false,
         error: 'Token invalide. Une autre session est active. Veuillez vous reconnecter.'
       }
     }
 
-    // Vérifier la cohérence entre le token décodé et l'utilisateur récupéré
-    // Vérifier l'email
-    if (decoded.email && decoded.email.toLowerCase() !== utilisateur.email.toLowerCase()) {
-      console.error('❌ Email mismatch:', decoded.email, 'vs', utilisateur.email)
-      return {
-        valid: false,
-        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
-      }
-    }
-
-    // Vérifier le username
-    if (decoded.username && decoded.username !== utilisateur.username) {
-      console.error('❌ Username mismatch:', decoded.username, 'vs', utilisateur.username)
-      return {
-        valid: false,
-        error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
-      }
-    }
-
     // Vérifier le rôle
-    const roleCode = utilisateur.role?.code || 'UNKNOWN'
+    const roleCode = utilisateur.roles?.code || 'UNKNOWN'
     if (decoded.role && decoded.role !== roleCode) {
       console.error('❌ Role mismatch:', decoded.role, 'vs', roleCode)
       return {
@@ -575,18 +495,19 @@ export const verifyToken = async (token, shouldRefresh = false) => {
       email: utilisateur.email,
       username: utilisateur.username,
       role: roleCode,
-      roleDetails: utilisateur.role ? {
-        id: utilisateur.role.id,
-        code: utilisateur.role.code,
-        nom: utilisateur.role.nom,
-        routeDashboard: utilisateur.role.routeDashboard
+      roleDetails: utilisateur.roles ? {
+        id: utilisateur.roles.id,
+        code: utilisateur.roles.code,
+        nom: utilisateur.roles.nom,
+        routeDashboard: utilisateur.roles.route_dashboard
       } : null,
       actif: utilisateur.actif,
       photo: utilisateur.photo || null,
       telephone: utilisateur.telephone || null,
       adresse: utilisateur.adresse || null,
-      dateCreation: utilisateur.dateCreation,
-      derniereConnexion: utilisateur.derniereConnexion || null
+      departementId: utilisateur.departement_id || null,
+      dateCreation: utilisateur.date_creation,
+      derniereConnexion: utilisateur.derniere_connexion || null
     }
 
     if (!utilisateur.actif) {
@@ -625,21 +546,21 @@ export const verifyToken = async (token, shouldRefresh = false) => {
 export const logoutUser = async (userId) => {
   try {
     // Supprimer le token de la base de données
-    await prisma.utilisateur.update({
-      where: { id: userId },
-      data: { token: null }
-    })
+    await supabaseAdmin
+      .from('utilisateurs')
+      .update({ token: null })
+      .eq('id', userId)
 
     // Enregistrer l'action dans l'audit
-    await prisma.actionAudit.create({
-      data: {
-        utilisateurId: userId,
+    await supabaseAdmin
+      .from('actions_audit')
+      .insert({
+        utilisateur_id: userId,
         action: 'Déconnexion',
         details: 'Déconnexion réussie',
-        typeAction: 'DECONNEXION',
-        dateAction: new Date()
-      }
-    })
+        type_action: 'DECONNEXION',
+        date_action: new Date().toISOString()
+      })
 
     return {
       success: true
@@ -656,19 +577,18 @@ export const logoutUser = async (userId) => {
 // Obtenir les informations d'un utilisateur par ID
 export const getUserById = async (userId) => {
   try {
-    // Récupérer tous les champs (sans select pour éviter les erreurs si des champs n'existent pas encore)
-    const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId },
-      include: { role: true }
-    })
+    const { data: utilisateur, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, roles (*)')
+      .eq('id', userId)
+      .single()
 
-    if (!utilisateur) {
+    if (error || !utilisateur) {
       return null
     }
 
-    const roleCode = utilisateur.role?.code || 'UNKNOWN'
+    const roleCode = utilisateur.roles?.code || 'UNKNOWN'
 
-    // Extraire uniquement les champs nécessaires (en gérant les champs optionnels)
     return {
       id: utilisateur.id,
       nom: utilisateur.nom,
@@ -676,18 +596,19 @@ export const getUserById = async (userId) => {
       email: utilisateur.email,
       username: utilisateur.username,
       role: roleCode,
-      roleDetails: utilisateur.role ? {
-        id: utilisateur.role.id,
-        code: utilisateur.role.code,
-        nom: utilisateur.role.nom,
-        routeDashboard: utilisateur.role.routeDashboard
+      roleDetails: utilisateur.roles ? {
+        id: utilisateur.roles.id,
+        code: utilisateur.roles.code,
+        nom: utilisateur.roles.nom,
+        routeDashboard: utilisateur.roles.route_dashboard
       } : null,
       actif: utilisateur.actif,
       photo: utilisateur.photo || null,
       telephone: utilisateur.telephone || null,
       adresse: utilisateur.adresse || null,
-      dateCreation: utilisateur.dateCreation,
-      derniereConnexion: utilisateur.derniereConnexion || null
+      departementId: utilisateur.departement_id || null,
+      dateCreation: utilisateur.date_creation,
+      derniereConnexion: utilisateur.derniere_connexion || null
     }
   } catch (error) {
     console.error('Erreur lors de la récupération de l\'utilisateur:', error)
@@ -699,11 +620,13 @@ export const getUserById = async (userId) => {
 export const changePassword = async (userId, currentPassword, newPassword) => {
   try {
     // Récupérer l'utilisateur
-    const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId }
-    })
+    const { data: utilisateur, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*')
+      .eq('id', userId)
+      .single()
 
-    if (!utilisateur) {
+    if (error || !utilisateur) {
       return {
         success: false,
         error: 'Utilisateur introuvable'
@@ -724,21 +647,21 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10)
 
     // Mettre à jour le mot de passe
-    await prisma.utilisateur.update({
-      where: { id: userId },
-      data: { password: hashedPassword }
-    })
+    await supabaseAdmin
+      .from('utilisateurs')
+      .update({ password: hashedPassword })
+      .eq('id', userId)
 
     // Enregistrer l'action dans l'audit
-    await prisma.actionAudit.create({
-      data: {
-        utilisateurId: utilisateur.id,
+    await supabaseAdmin
+      .from('actions_audit')
+      .insert({
+        utilisateur_id: utilisateur.id,
         action: 'Changement de mot de passe',
         details: 'Mot de passe modifié avec succès',
-        typeAction: 'CONNEXION',
-        dateAction: new Date()
-      }
-    })
+        type_action: 'CONNEXION',
+        date_action: new Date().toISOString()
+      })
 
     return {
       success: true,
@@ -756,18 +679,20 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
 // Mettre à jour la photo de profil d'un utilisateur
 export const updateUserPhoto = async (userId, photoUrl) => {
   try {
-    const utilisateur = await prisma.utilisateur.findUnique({
-      where: { id: userId }
-    })
+    const { data: utilisateur, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*')
+      .eq('id', userId)
+      .single()
 
-    if (!utilisateur) {
+    if (error || !utilisateur) {
       return {
         success: false,
         error: 'Utilisateur introuvable'
       }
     }
 
-    // Supprimer l'ancienne photo si elle existe
+    // Supprimer l'ancienne photo si elle existe (gestion locale)
     if (utilisateur.photo && !utilisateur.photo.startsWith('http')) {
       try {
         const fs = await import('fs')
@@ -776,52 +701,40 @@ export const updateUserPhoto = async (userId, photoUrl) => {
         const { dirname } = await import('path')
         const __filename = fileURLToPath(import.meta.url)
         const __dirname = dirname(__filename)
-        // Le chemin de la photo est relatif comme /uploads/profiles/filename.jpg
         const photoFileName = utilisateur.photo.split('/').pop()
         const oldPhotoPath = path.join(__dirname, '..', '..', 'uploads', 'profiles', photoFileName)
         if (fs.existsSync(oldPhotoPath)) {
           fs.unlinkSync(oldPhotoPath)
         }
-      } catch (error) {
-        console.error('Erreur lors de la suppression de l\'ancienne photo:', error)
-        // Ne pas bloquer la mise à jour si la suppression échoue
+      } catch (err) {
+        console.error('Erreur lors de la suppression de l\'ancienne photo:', err)
       }
     }
 
     // Mettre à jour la photo
-    try {
-      await prisma.utilisateur.update({
-        where: { id: userId },
-        data: { photo: photoUrl }
-      })
-    } catch (dbError) {
-      console.error('Erreur SQL lors de la mise à jour de la photo:', dbError)
-      // Si le champ photo n'existe pas, retourner une erreur explicite
-      const errorMessage = dbError.message || ''
-      const errorCode = dbError.code || ''
-      
-      if (errorCode === 'P2025' || 
-          errorMessage.includes('Unknown column') || 
-          errorMessage.includes('column') && errorMessage.includes('does not exist') ||
-          errorMessage.includes('photo') && (errorMessage.includes('unknown') || errorMessage.includes('not exist'))) {
-        return {
-          success: false,
-          error: 'Le champ photo n\'existe pas dans la base de données. Veuillez exécuter la migration Prisma ou le script SQL (voir AJOUT_CHAMPS_UTILISATEUR.md).'
-        }
+    const { error: updateError } = await supabaseAdmin
+      .from('utilisateurs')
+      .update({ photo: photoUrl })
+      .eq('id', userId)
+
+    if (updateError) {
+      console.error('Erreur SQL lors de la mise à jour de la photo:', updateError)
+      return {
+        success: false,
+        error: 'Erreur lors de la mise à jour de la photo'
       }
-      throw dbError
     }
 
     // Enregistrer l'action dans l'audit
-    await prisma.actionAudit.create({
-      data: {
-        utilisateurId: utilisateur.id,
+    await supabaseAdmin
+      .from('actions_audit')
+      .insert({
+        utilisateur_id: utilisateur.id,
         action: 'Mise à jour photo de profil',
         details: 'Photo de profil modifiée',
-        typeAction: 'CONNEXION',
-        dateAction: new Date()
-      }
-    })
+        type_action: 'CONNEXION',
+        date_action: new Date().toISOString()
+      })
 
     return {
       success: true,
@@ -829,18 +742,9 @@ export const updateUserPhoto = async (userId, photoUrl) => {
     }
   } catch (error) {
     console.error('Erreur lors de la mise à jour de la photo:', error)
-    // Vérifier si c'est une erreur de champ manquant
-    const errorMessage = error.message || ''
-    if (errorMessage.includes('photo') && (errorMessage.includes('n\'existe pas') || errorMessage.includes('does not exist'))) {
-      return {
-        success: false,
-        error: errorMessage
-      }
-    }
     return {
       success: false,
       error: error.message || 'Une erreur est survenue lors de la mise à jour de la photo'
     }
   }
 }
-

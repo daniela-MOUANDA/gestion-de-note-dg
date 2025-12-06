@@ -1,46 +1,42 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Obtenir les étudiants non répartis d'un département
 export const getEtudiantsNonRepartis = async (departementId) => {
   try {
     // Récupérer les filières du département
-    const filieres = await prisma.filiere.findMany({
-      where: {
-        departement: {
-          id: departementId
-        }
-      },
-      select: { id: true }
-    })
+    const { data: filieres } = await supabaseAdmin
+      .from('filieres')
+      .select('id')
+      .eq('departement_id', departementId)
 
-    const filiereIds = filieres.map(f => f.id)
+    const filiereIds = (filieres || []).map(f => f.id)
+
+    if (filiereIds.length === 0) {
+      return { success: true, etudiants: [] }
+    }
 
     // Récupérer les inscriptions validées mais sans classe assignée
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        filiereId: { in: filiereIds },
-        statut: 'VALIDEE',
-        classeId: null
-      },
-      include: {
-        etudiant: true,
-        filiere: true,
-        niveau: true
-      }
-    })
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*, etudiants (*), filieres (*), niveaux (*)')
+      .in('filiere_id', filiereIds)
+      .eq('statut', 'VALIDEE')
+      .is('classe_id', null)
+
+    if (error) throw error
 
     return {
       success: true,
-      etudiants: inscriptions.map(ins => ({
-        id: ins.etudiant.id,
+      etudiants: (inscriptions || []).map(ins => ({
+        id: ins.etudiants.id,
         inscriptionId: ins.id,
-        matricule: ins.etudiant.matricule,
-        nom: ins.etudiant.nom,
-        prenom: ins.etudiant.prenom,
-        email: ins.etudiant.email,
-        filiere: ins.filiere.code,
-        niveau: ins.niveau.code,
-        niveauId: ins.niveauId
+        matricule: ins.etudiants.matricule,
+        nom: ins.etudiants.nom,
+        prenom: ins.etudiants.prenom,
+        email: ins.etudiants.email,
+        filiere: ins.filieres?.code,
+        niveau: ins.niveaux?.code,
+        niveauId: ins.niveau_id
       }))
     }
   } catch (error) {
@@ -56,18 +52,13 @@ export const getEtudiantsNonRepartis = async (departementId) => {
 export const repartirEtudiant = async (inscriptionId, classeId, departementId) => {
   try {
     // Vérifier que la classe appartient au département
-    const classe = await prisma.classe.findUnique({
-      where: { id: classeId },
-      include: {
-        filiere: {
-          include: {
-            departement: true
-          }
-        }
-      }
-    })
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
@@ -75,18 +66,13 @@ export const repartirEtudiant = async (inscriptionId, classeId, departementId) =
     }
 
     // Vérifier que l'inscription existe et appartient au département
-    const inscription = await prisma.inscription.findUnique({
-      where: { id: inscriptionId },
-      include: {
-        filiere: {
-          include: {
-            departement: true
-          }
-        }
-      }
-    })
+    const { data: inscription } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', inscriptionId)
+      .single()
 
-    if (!inscription || inscription.filiere.departement?.id !== departementId) {
+    if (!inscription || inscription.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Inscription introuvable ou n\'appartient pas à votre département'
@@ -94,7 +80,7 @@ export const repartirEtudiant = async (inscriptionId, classeId, departementId) =
     }
 
     // Vérifier que le niveau correspond
-    if (inscription.niveauId !== classe.niveauId) {
+    if (inscription.niveau_id !== classe.niveau_id) {
       return {
         success: false,
         error: 'Le niveau de l\'étudiant ne correspond pas au niveau de la classe'
@@ -102,22 +88,20 @@ export const repartirEtudiant = async (inscriptionId, classeId, departementId) =
     }
 
     // Mettre à jour l'inscription
-    await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: {
-        classeId
-      }
-    })
+    const { error: updateError } = await supabaseAdmin
+      .from('inscriptions')
+      .update({ classe_id: classeId })
+      .eq('id', inscriptionId)
+
+    if (updateError) throw updateError
 
     // Mettre à jour l'effectif de la classe
-    await prisma.classe.update({
-      where: { id: classeId },
-      data: {
-        effectif: {
-          increment: 1
-        }
-      }
-    })
+    const { error: effectifError } = await supabaseAdmin
+      .from('classes')
+      .update({ effectif: classe.effectif + 1 })
+      .eq('id', classeId)
+
+    if (effectifError) throw effectifError
 
     return {
       success: true,
@@ -135,31 +119,26 @@ export const repartirEtudiant = async (inscriptionId, classeId, departementId) =
 // Obtenir les étudiants d'une classe
 export const getEtudiantsByClasse = async (classeId, departementId) => {
   try {
-    const classe = await prisma.classe.findUnique({
-      where: { id: classeId },
-      include: {
-        filiere: {
-          include: {
-            departement: true
-          }
-        },
-        inscriptions: {
-          where: {
-            statut: 'VALIDEE'
-          },
-          include: {
-            etudiant: true
-          }
-        }
-      }
-    })
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
       }
     }
+
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*, etudiants (*)')
+      .eq('classe_id', classeId)
+      .eq('statut', 'VALIDEE')
+
+    if (error) throw error
 
     return {
       success: true,
@@ -168,13 +147,13 @@ export const getEtudiantsByClasse = async (classeId, departementId) => {
         code: classe.code,
         effectif: classe.effectif
       },
-      etudiants: classe.inscriptions.map(ins => ({
-        id: ins.etudiant.id,
+      etudiants: (inscriptions || []).map(ins => ({
+        id: ins.etudiants.id,
         inscriptionId: ins.id,
-        matricule: ins.etudiant.matricule,
-        nom: ins.etudiant.nom,
-        prenom: ins.etudiant.prenom,
-        email: ins.etudiant.email
+        matricule: ins.etudiants.matricule,
+        nom: ins.etudiants.nom,
+        prenom: ins.etudiants.prenom,
+        email: ins.etudiants.email
       }))
     }
   } catch (error) {
@@ -185,4 +164,3 @@ export const getEtudiantsByClasse = async (classeId, departementId) => {
     }
   }
 }
-

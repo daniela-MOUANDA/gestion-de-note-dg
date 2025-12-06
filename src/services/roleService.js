@@ -1,20 +1,19 @@
-import prisma from '../lib/prisma.js'
+import { supabaseAdmin } from '../lib/supabase.js'
 
 // Obtenir tous les rôles actifs
 export const getAllRoles = async () => {
   try {
-    const roles = await prisma.role.findMany({
-      where: {
-        actif: true
-      },
-      orderBy: {
-        nom: 'asc'
-      }
-    })
+    const { data: roles, error } = await supabaseAdmin
+      .from('roles')
+      .select('*')
+      .eq('actif', true)
+      .order('nom', { ascending: true })
+
+    if (error) throw error
 
     return {
       success: true,
-      roles
+      roles: roles || []
     }
   } catch (error) {
     console.error('Erreur lors de la récupération des rôles:', error)
@@ -28,11 +27,13 @@ export const getAllRoles = async () => {
 // Obtenir un rôle par code
 export const getRoleByCode = async (code) => {
   try {
-    const role = await prisma.role.findUnique({
-      where: { code }
-    })
+    const { data: role, error } = await supabaseAdmin
+      .from('roles')
+      .select('*')
+      .eq('code', code)
+      .single()
 
-    if (!role) {
+    if (error || !role) {
       return {
         success: false,
         error: 'Rôle introuvable'
@@ -55,11 +56,13 @@ export const getRoleByCode = async (code) => {
 // Obtenir un rôle par ID
 export const getRoleById = async (id) => {
   try {
-    const role = await prisma.role.findUnique({
-      where: { id }
-    })
+    const { data: role, error } = await supabaseAdmin
+      .from('roles')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!role) {
+    if (error || !role) {
       return {
         success: false,
         error: 'Rôle introuvable'
@@ -84,7 +87,7 @@ export const getDashboardRouteByRoleCode = async (roleCode) => {
   try {
     const result = await getRoleByCode(roleCode)
     if (result.success && result.role) {
-      return result.role.routeDashboard || '/login'
+      return result.role.route_dashboard || '/login'
     }
     return '/login'
   } catch (error) {
@@ -92,4 +95,3 @@ export const getDashboardRouteByRoleCode = async (roleCode) => {
     return '/login'
   }
 }
-

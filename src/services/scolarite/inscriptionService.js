@@ -1,12 +1,16 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 import bcrypt from 'bcrypt'
 
 // Récupérer toutes les formations
 export const getFormations = async () => {
   try {
-    return await prisma.formation.findMany({
-      orderBy: { code: 'asc' }
-    })
+    const { data, error } = await supabaseAdmin
+      .from('formations')
+      .select('*')
+      .order('code', { ascending: true })
+    
+    if (error) throw error
+    return data
   } catch (error) {
     console.error('Erreur lors de la récupération des formations:', error)
     throw error
@@ -16,9 +20,13 @@ export const getFormations = async () => {
 // Récupérer toutes les filières
 export const getFilieres = async () => {
   try {
-    return await prisma.filiere.findMany({
-      orderBy: { code: 'asc' }
-  })
+    const { data, error } = await supabaseAdmin
+      .from('filieres')
+      .select('*')
+      .order('code', { ascending: true })
+    
+    if (error) throw error
+    return data
   } catch (error) {
     console.error('Erreur lors de la récupération des filières:', error)
     throw error
@@ -28,33 +36,50 @@ export const getFilieres = async () => {
 // Récupérer les niveaux disponibles selon la formation et la filière
 export const getNiveauxDisponibles = async (formationId, filiereId) => {
   try {
-    // Pour Initial 2, tous les niveaux sauf MTIC n'ont que L1
-    // Pour MTIC Initial 2, tous les niveaux sont disponibles
-    const formation = await prisma.formation.findUnique({
-      where: { id: formationId }
-    })
+    // Récupérer la formation
+    const { data: formation, error: formError } = await supabaseAdmin
+      .from('formations')
+      .select('*')
+      .eq('id', formationId)
+      .single()
+    
+    if (formError) throw formError
     
     if (formation?.code === 'INITIAL_2') {
-      const filiere = await prisma.filiere.findUnique({
-        where: { id: filiereId }
-      })
+      // Récupérer la filière
+      const { data: filiere, error: filError } = await supabaseAdmin
+        .from('filieres')
+        .select('*')
+        .eq('id', filiereId)
+        .single()
+      
+      if (filError) throw filError
       
       if (filiere?.code === 'MTIC') {
         // MTIC Initial 2 a tous les niveaux
-        return await prisma.niveau.findMany({
-          orderBy: { code: 'asc' }
-        })
+        const { data, error } = await supabaseAdmin
+          .from('niveaux')
+          .select('*')
+          .order('code', { ascending: true })
+        if (error) throw error
+        return data
       } else {
         // Autres filières Initial 2 n'ont que L1
-        return await prisma.niveau.findMany({
-          where: { code: 'L1' }
-        })
+        const { data, error } = await supabaseAdmin
+          .from('niveaux')
+          .select('*')
+          .eq('code', 'L1')
+        if (error) throw error
+        return data
       }
     } else {
       // Initial 1 a tous les niveaux
-      return await prisma.niveau.findMany({
-        orderBy: { code: 'asc' }
-      })
+      const { data, error } = await supabaseAdmin
+        .from('niveaux')
+        .select('*')
+        .order('code', { ascending: true })
+      if (error) throw error
+      return data
     }
   } catch (error) {
     console.error('Erreur lors de la récupération des niveaux:', error)
@@ -65,17 +90,30 @@ export const getNiveauxDisponibles = async (formationId, filiereId) => {
 // Récupérer les classes d'une filière et d'un niveau
 export const getClasses = async (filiereId, niveauId) => {
   try {
-    return await prisma.classe.findMany({
-      where: {
-        filiereId,
-        niveauId
-      },
-      include: {
-        filiere: true,
-        niveau: true
-      },
-      orderBy: { code: 'asc' }
-    })
+    const { data, error } = await supabaseAdmin
+      .from('classes')
+      .select(`
+        *,
+        filieres (*),
+        niveaux (*)
+      `)
+      .eq('filiere_id', filiereId)
+      .eq('niveau_id', niveauId)
+      .order('code', { ascending: true })
+    
+    if (error) throw error
+    
+    // Mapper les noms de colonnes pour la compatibilité
+    return data.map(c => ({
+      id: c.id,
+      code: c.code,
+      nom: c.nom,
+      filiereId: c.filiere_id,
+      niveauId: c.niveau_id,
+      effectif: c.effectif,
+      filiere: c.filieres,
+      niveau: c.niveaux
+    }))
   } catch (error) {
     console.error('Erreur lors de la récupération des classes:', error)
     throw error
@@ -85,53 +123,50 @@ export const getClasses = async (filiereId, niveauId) => {
 // Récupérer les étudiants par filière et niveau (sans classe)
 export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotionId, formationId, typeInscription) => {
   try {
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        filiereId,
-        niveauId,
-        promotionId,
-        formationId,
-        typeInscription: typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION'
-      },
-      include: {
-        etudiant: true,
-        formation: true,
-        filiere: true,
-        niveau: true
-      },
-      orderBy: {
-        etudiant: {
-          nom: 'asc'
-        }
-      }
-    })
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        formations (*),
+        filieres (*),
+        niveaux (*)
+      `)
+      .eq('filiere_id', filiereId)
+      .eq('niveau_id', niveauId)
+      .eq('promotion_id', promotionId)
+      .eq('formation_id', formationId)
+      .eq('type_inscription', typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION')
+      .order('etudiants(nom)', { ascending: true })
+    
+    if (error) throw error
     
     return inscriptions.map(inscription => ({
-      id: inscription.etudiant.id,
+      id: inscription.etudiants.id,
       inscriptionId: inscription.id,
-      matricule: inscription.etudiant.matricule,
-      nom: inscription.etudiant.nom,
-      prenom: inscription.etudiant.prenom,
-      email: inscription.etudiant.email,
-      telephone: inscription.etudiant.telephone,
-      photo: inscription.etudiant.photo || null,
-      dateNaissance: inscription.etudiant.dateNaissance ? 
-        inscription.etudiant.dateNaissance.toISOString().split('T')[0] : null,
-      lieuNaissance: inscription.etudiant.lieuNaissance || null,
-      adresse: inscription.etudiant.adresse || null,
-      formation: inscription.formation.nom,
-      filiere: inscription.filiere.nom,
-      niveau: inscription.niveau.nom,
+      matricule: inscription.etudiants.matricule,
+      nom: inscription.etudiants.nom,
+      prenom: inscription.etudiants.prenom,
+      email: inscription.etudiants.email,
+      telephone: inscription.etudiants.telephone,
+      photo: inscription.etudiants.photo || null,
+      dateNaissance: inscription.etudiants.date_naissance ? 
+        inscription.etudiants.date_naissance.split('T')[0] : null,
+      lieuNaissance: inscription.etudiants.lieu_naissance || null,
+      adresse: inscription.etudiants.adresse || null,
+      formation: inscription.formations.nom,
+      filiere: inscription.filieres.nom,
+      niveau: inscription.niveaux.nom,
       inscrit: inscription.statut === 'INSCRIT',
       statut: inscription.statut,
-      dateInscription: inscription.dateInscription,
+      dateInscription: inscription.date_inscription,
       documents: {
-        acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copieActeNaissance } : null,
-        photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photoIdentite } : null,
+        acteNaissance: inscription.copie_acte_naissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copie_acte_naissance } : null,
+        photo: inscription.photo_identite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photo_identite } : null,
         quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true, url: inscription.quittance } : null,
-        pieceIdentite: inscription.pieceIdentite ? { nom: 'cni.pdf', uploaded: true, url: inscription.pieceIdentite } : null,
-        releveBac: inscription.copieReleve ? { nom: 'releve_bac.pdf', uploaded: true, url: inscription.copieReleve } : null,
-        attestationReussiteBac: inscription.copieDiplome ? { nom: 'attestation_reussite_bac.pdf', uploaded: true, url: inscription.copieDiplome } : null
+        pieceIdentite: inscription.piece_identite ? { nom: 'cni.pdf', uploaded: true, url: inscription.piece_identite } : null,
+        releveBac: inscription.copie_releve ? { nom: 'releve_bac.pdf', uploaded: true, url: inscription.copie_releve } : null,
+        attestationReussiteBac: inscription.copie_diplome ? { nom: 'attestation_reussite_bac.pdf', uploaded: true, url: inscription.copie_diplome } : null
       }
     }))
   } catch (error) {
@@ -143,51 +178,48 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
 // Récupérer les étudiants d'une classe avec leur statut d'inscription (gardé pour compatibilité)
 export const getEtudiantsParClasse = async (classeId, promotionId, typeInscription) => {
   try {
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        classeId,
-        promotionId,
-        typeInscription: typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION'
-      },
-      include: {
-        etudiant: true,
-        formation: true,
-        filiere: true,
-        niveau: true
-      },
-      orderBy: {
-        etudiant: {
-          nom: 'asc'
-        }
-      }
-    })
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        formations (*),
+        filieres (*),
+        niveaux (*)
+      `)
+      .eq('classe_id', classeId)
+      .eq('promotion_id', promotionId)
+      .eq('type_inscription', typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION')
+      .order('etudiants(nom)', { ascending: true })
+    
+    if (error) throw error
     
     return inscriptions.map(inscription => ({
-      id: inscription.etudiant.id,
+      id: inscription.etudiants.id,
       inscriptionId: inscription.id,
-      matricule: inscription.etudiant.matricule,
-      nom: inscription.etudiant.nom,
-      prenom: inscription.etudiant.prenom,
-      email: inscription.etudiant.email,
-      telephone: inscription.etudiant.telephone,
-      photo: inscription.etudiant.photo || null,
-      dateNaissance: inscription.etudiant.dateNaissance ? 
-        inscription.etudiant.dateNaissance.toISOString().split('T')[0] : null,
-      lieuNaissance: inscription.etudiant.lieuNaissance || null,
-      adresse: inscription.etudiant.adresse || null,
-      formation: inscription.formation.nom,
-      filiere: inscription.filiere.nom,
-      niveau: inscription.niveau.nom,
+      matricule: inscription.etudiants.matricule,
+      nom: inscription.etudiants.nom,
+      prenom: inscription.etudiants.prenom,
+      email: inscription.etudiants.email,
+      telephone: inscription.etudiants.telephone,
+      photo: inscription.etudiants.photo || null,
+      dateNaissance: inscription.etudiants.date_naissance ? 
+        inscription.etudiants.date_naissance.split('T')[0] : null,
+      lieuNaissance: inscription.etudiants.lieu_naissance || null,
+      adresse: inscription.etudiants.adresse || null,
+      formation: inscription.formations.nom,
+      filiere: inscription.filieres.nom,
+      niveau: inscription.niveaux.nom,
       inscrit: inscription.statut === 'INSCRIT',
       statut: inscription.statut,
-      dateInscription: inscription.dateInscription,
+      dateInscription: inscription.date_inscription,
       documents: {
-        acteNaissance: inscription.copieActeNaissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copieActeNaissance } : null,
-        photo: inscription.photoIdentite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photoIdentite } : null,
+        acteNaissance: inscription.copie_acte_naissance ? { nom: 'acte_naissance.pdf', uploaded: true, url: inscription.copie_acte_naissance } : null,
+        photo: inscription.photo_identite ? { nom: 'photo.jpg', uploaded: true, url: inscription.photo_identite } : null,
         quittance: inscription.quittance ? { nom: 'quittance.pdf', uploaded: true, url: inscription.quittance } : null,
-        pieceIdentite: inscription.pieceIdentite ? { nom: 'cni.pdf', uploaded: true, url: inscription.pieceIdentite } : null,
-        releveBac: inscription.copieReleve ? { nom: 'releve_bac.pdf', uploaded: true, url: inscription.copieReleve } : null,
-        attestationReussiteBac: inscription.copieDiplome ? { nom: 'attestation_reussite_bac.pdf', uploaded: true, url: inscription.copieDiplome } : null
+        pieceIdentite: inscription.piece_identite ? { nom: 'cni.pdf', uploaded: true, url: inscription.piece_identite } : null,
+        releveBac: inscription.copie_releve ? { nom: 'releve_bac.pdf', uploaded: true, url: inscription.copie_releve } : null,
+        attestationReussiteBac: inscription.copie_diplome ? { nom: 'attestation_reussite_bac.pdf', uploaded: true, url: inscription.copie_diplome } : null
       }
     }))
   } catch (error) {
@@ -199,14 +231,19 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
 // Valider une inscription
 export const validerInscription = async (inscriptionId, agentId) => {
   try {
-    return await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: {
+    const { data, error } = await supabaseAdmin
+      .from('inscriptions')
+      .update({
         statut: 'VALIDEE',
-        dateValidation: new Date(),
-        agentValideurId: agentId
-      }
-    })
+        date_validation: new Date().toISOString(),
+        agent_valideur_id: agentId
+      })
+      .eq('id', inscriptionId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
   } catch (error) {
     console.error('Erreur lors de la validation de l\'inscription:', error)
     throw error
@@ -238,27 +275,25 @@ const generatePassword = () => {
 export const finaliserInscription = async (inscriptionId, agentId) => {
   try {
     // Récupérer l'inscription avec les données de l'étudiant
-    const inscription = await prisma.inscription.findUnique({
-      where: { id: inscriptionId },
-      include: {
-        etudiant: true,
-        promotion: {
-          select: {
-            annee: true
-          }
-        }
-      }
-    })
+    const { data: inscription, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        promotions (annee)
+      `)
+      .eq('id', inscriptionId)
+      .single()
 
-    if (!inscription) {
+    if (inscError || !inscription) {
       throw new Error('Inscription non trouvée')
     }
 
-    if (!inscription.etudiant) {
+    if (!inscription.etudiants) {
       throw new Error('Étudiant non trouvé pour cette inscription')
     }
 
-    const etudiant = inscription.etudiant
+    const etudiant = inscription.etudiants
 
     // Vérifier que l'étudiant a un email
     if (!etudiant.email || etudiant.email.trim() === '') {
@@ -273,59 +308,82 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
     const hashedPassword = await bcrypt.hash(generatedPassword, 10)
 
     // Vérifier si un compte Utilisateur existe déjà pour cet étudiant
-    let utilisateur = await prisma.utilisateur.findFirst({
-      where: {
-        OR: [
-          { email: etudiant.email.trim().toLowerCase() },
-          { username: etudiant.matricule.trim() }
-        ]
-      }
-    })
+    const { data: existingUser } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*')
+      .or(`email.eq.${etudiant.email.trim().toLowerCase()},username.eq.${etudiant.matricule.trim()}`)
+      .single()
+
+    // Récupérer le rôle ETUDIANT
+    const { data: roleEtudiant, error: roleError } = await supabaseAdmin
+      .from('roles')
+      .select('*')
+      .eq('code', 'ETUDIANT')
+      .single()
+
+    if (roleError || !roleEtudiant) {
+      throw new Error('Rôle ETUDIANT non trouvé')
+    }
+
+    let utilisateur = existingUser
 
     // Créer ou mettre à jour le compte Utilisateur
     if (utilisateur) {
       // Mettre à jour le mot de passe si le compte existe déjà
-      utilisateur = await prisma.utilisateur.update({
-        where: { id: utilisateur.id },
-        data: {
+      const { data: updatedUser, error: updateError } = await supabaseAdmin
+        .from('utilisateurs')
+        .update({
           password: hashedPassword,
           email: etudiant.email.trim().toLowerCase(),
           actif: true,
-          role: 'ETUDIANT'
-        }
-      })
+          role_id: roleEtudiant.id
+        })
+        .eq('id', utilisateur.id)
+        .select()
+        .single()
+      
+      if (updateError) throw updateError
+      utilisateur = updatedUser
       console.log('✅ Compte Utilisateur mis à jour pour l\'étudiant:', utilisateur.email)
     } else {
       // Créer un nouveau compte Utilisateur
-      utilisateur = await prisma.utilisateur.create({
-        data: {
+      const { data: newUser, error: createError } = await supabaseAdmin
+        .from('utilisateurs')
+        .insert({
           nom: etudiant.nom,
           prenom: etudiant.prenom,
           email: etudiant.email.trim().toLowerCase(),
           username: etudiant.matricule.trim().toLowerCase(),
           password: hashedPassword,
-          role: 'ETUDIANT',
+          role_id: roleEtudiant.id,
           actif: true,
           photo: etudiant.photo || null,
           telephone: etudiant.telephone || null,
           adresse: etudiant.adresse || null
-        }
-      })
+        })
+        .select()
+        .single()
+      
+      if (createError) throw createError
+      utilisateur = newUser
       console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
     }
 
     // Mettre à jour le statut de l'inscription
-    const inscriptionUpdated = await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: {
+    const { data: inscriptionUpdated, error: updateInscError } = await supabaseAdmin
+      .from('inscriptions')
+      .update({
         statut: 'INSCRIT',
-        dateValidation: new Date(),
-        agentValideurId: agentId
-      }
-    })
+        date_validation: new Date().toISOString(),
+        agent_valideur_id: agentId
+      })
+      .eq('id', inscriptionId)
+      .select()
+      .single()
+
+    if (updateInscError) throw updateInscError
 
     // Retourner le mot de passe généré pour l'afficher à l'utilisateur
-    // (L'envoi d'email est désactivé pour le moment)
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('✅ INSCRIPTION FINALISÉE AVEC SUCCÈS')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -337,10 +395,9 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
     console.log('💡 IMPORTANT: Notez ces identifiants et communiquez-les à l\'étudiant')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
-    // Retourner aussi le mot de passe pour l'afficher dans l'interface
     return {
       ...inscriptionUpdated,
-      password: generatedPassword, // Ajouter le mot de passe dans la réponse
+      password: generatedPassword,
       etudiantEmail: etudiant.email,
       etudiantMatricule: etudiant.matricule,
       etudiantNom: `${etudiant.prenom} ${etudiant.nom}`
@@ -354,12 +411,15 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
 // Récupérer toutes les promotions
 export const getPromotions = async () => {
   try {
-    return await prisma.promotion.findMany({
-      orderBy: { annee: 'desc' }
-    })
+    const { data, error } = await supabaseAdmin
+      .from('promotions')
+      .select('*')
+      .order('annee', { ascending: false })
+    
+    if (error) throw error
+    return data
   } catch (error) {
     console.error('Erreur lors de la récupération des promotions:', error)
     throw error
   }
 }
-

@@ -1,4 +1,4 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Récupérer toutes les actions d'audit avec filtres
 export const getActionsAudit = async (filters = {}) => {
@@ -13,12 +13,15 @@ export const getActionsAudit = async (filters = {}) => {
       offset = 0
     } = filters
 
-    // Construire la condition where
-    const whereCondition = {}
+    // Construire la requête de base
+    let query = supabaseAdmin
+      .from('actions_audit')
+      .select('*, utilisateurs (id, nom, prenom, roles (code))')
+      .order('date_action', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     // Filtre par type d'action
     if (typeAction && typeAction !== 'all') {
-      // Mapper les valeurs d'affichage vers les enums Prisma
       const typeActionMap = {
         'connexion': 'CONNEXION',
         'inscription': 'INSCRIPTION',
@@ -31,76 +34,54 @@ export const getActionsAudit = async (filters = {}) => {
         'archivage': 'ARCHIVAGE'
       }
       const mappedType = typeActionMap[typeAction.toLowerCase()] || typeAction.toUpperCase()
-      whereCondition.typeAction = mappedType
+      query = query.eq('type_action', mappedType)
     }
 
     // Filtre par utilisateur
     if (utilisateurId && utilisateurId !== 'all') {
-      whereCondition.utilisateurId = utilisateurId
+      query = query.eq('utilisateur_id', utilisateurId)
     }
 
     // Filtre par date
-    if (dateDebut || dateFin) {
-      whereCondition.dateAction = {}
-      if (dateDebut) {
-        const debut = new Date(dateDebut)
-        debut.setHours(0, 0, 0, 0)
-        whereCondition.dateAction.gte = debut
-      }
-      if (dateFin) {
-        const fin = new Date(dateFin)
-        fin.setHours(23, 59, 59, 999)
-        whereCondition.dateAction.lte = fin
-      }
+    if (dateDebut) {
+      const debut = new Date(dateDebut)
+      debut.setHours(0, 0, 0, 0)
+      query = query.gte('date_action', debut.toISOString())
+    }
+    if (dateFin) {
+      const fin = new Date(dateFin)
+      fin.setHours(23, 59, 59, 999)
+      query = query.lte('date_action', fin.toISOString())
     }
 
     // Recherche dans action et details
     if (searchQuery && searchQuery.trim()) {
-      whereCondition.OR = [
-        { action: { contains: searchQuery, mode: 'insensitive' } },
-        { details: { contains: searchQuery, mode: 'insensitive' } }
-      ]
+      query = query.or(`action.ilike.%${searchQuery}%,details.ilike.%${searchQuery}%`)
     }
 
-    // Récupérer les actions avec les informations de l'utilisateur
-    const actions = await prisma.actionAudit.findMany({
-      where: whereCondition,
-      include: {
-        utilisateur: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true,
-            role: true
-          }
-        }
-      },
-      orderBy: {
-        dateAction: 'desc'
-      },
-      take: limit,
-      skip: offset
-    })
+    const { data: actions, error } = await query
+
+    if (error) throw error
 
     // Formater les données pour le frontend
-    return actions.map(action => ({
+    return (actions || []).map(action => ({
       id: action.id,
-      agent: `${action.utilisateur.prenom} ${action.utilisateur.nom}`,
-      agentId: action.utilisateur.id,
+      agent: `${action.utilisateurs?.prenom || ''} ${action.utilisateurs?.nom || ''}`.trim(),
+      agentId: action.utilisateurs?.id,
       action: action.action,
       details: action.details || '',
-      date: action.dateAction.toLocaleString('fr-FR', {
+      date: new Date(action.date_action).toLocaleString('fr-FR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
       }),
-      dateISO: action.dateAction.toISOString(),
-      type: mapTypeActionToDisplay(action.typeAction),
-      typeAction: action.typeAction,
-      ipAddress: action.ipAddress || null,
-      userAgent: action.userAgent || null
+      dateISO: action.date_action,
+      type: mapTypeActionToDisplay(action.type_action),
+      typeAction: action.type_action,
+      ipAddress: action.ip_address || null,
+      userAgent: action.user_agent || null
     }))
   } catch (error) {
     console.error('Erreur lors de la récupération des actions d\'audit:', error)
@@ -112,39 +93,35 @@ export const getActionsAudit = async (filters = {}) => {
 export const getAgentsPourFiltre = async () => {
   try {
     // Récupérer les IDs des rôles
-    const roleAgent = await prisma.role.findUnique({ where: { code: 'AGENT_SCOLARITE' } })
-    const roleSP = await prisma.role.findUnique({ where: { code: 'SP_SCOLARITE' } })
+    const { data: roleAgent } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('code', 'AGENT_SCOLARITE')
+      .single()
+    
+    const { data: roleSP } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('code', 'SP_SCOLARITE')
+      .single()
     
     if (!roleAgent || !roleSP) {
       throw new Error('Rôles AGENT_SCOLARITE ou SP_SCOLARITE non trouvés dans la base de données')
     }
 
-    const utilisateurs = await prisma.utilisateur.findMany({
-      where: {
-        roleId: {
-          in: [roleAgent.id, roleSP.id]
-        },
-        actif: true
-      },
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        role: {
-          select: {
-            code: true
-          }
-        }
-      },
-      orderBy: {
-        nom: 'asc'
-      }
-    })
+    const { data: utilisateurs, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('id, nom, prenom, roles (code)')
+      .in('role_id', [roleAgent.id, roleSP.id])
+      .eq('actif', true)
+      .order('nom', { ascending: true })
 
-    return utilisateurs.map(u => ({
+    if (error) throw error
+
+    return (utilisateurs || []).map(u => ({
       id: u.id,
       nom: `${u.prenom} ${u.nom}`,
-      role: u.role?.code === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité'
+      role: u.roles?.code === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité'
     }))
   } catch (error) {
     console.error('Erreur lors de la récupération des agents:', error)
@@ -168,4 +145,3 @@ const mapTypeActionToDisplay = (typeAction) => {
   }
   return mapping[typeAction] || 'autre'
 }
-

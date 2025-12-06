@@ -1,60 +1,55 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Récupérer les diplômes d'une classe et d'un type
 export const getDiplomesParClasse = async (promotionId, classeId, typeDiplome) => {
   try {
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        promotionId,
-        classeId,
-        statut: 'INSCRIT'
-      },
-      include: {
-        etudiant: true,
-        niveau: true
-      }
-    })
+    const { data: inscriptions, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*, etudiants (*), niveaux (*)')
+      .eq('promotion_id', promotionId)
+      .eq('classe_id', classeId)
+      .eq('statut', 'INSCRIT')
+    
+    if (inscError) throw inscError
     
     // Filtrer selon le type de diplôme (DTS pour L2, Licence pour L3)
-    const etudiantsEligibles = inscriptions.filter(inscription => {
+    const etudiantsEligibles = (inscriptions || []).filter(inscription => {
       if (typeDiplome === 'DTS') {
-        return inscription.niveau.code === 'L2'
+        return inscription.niveaux?.code === 'L2'
       } else if (typeDiplome === 'LICENCE') {
-        return inscription.niveau.code === 'L3'
+        return inscription.niveaux?.code === 'L3'
       }
       return false
     })
     
-    const diplomes = await prisma.diplome.findMany({
-      where: {
-        promotionId,
-        classeId,
-        typeDiplome
-      },
-      include: {
-        etudiant: true
-      }
-    })
+    const { data: diplomes, error: dipError } = await supabaseAdmin
+      .from('diplomes')
+      .select('*, etudiants (*)')
+      .eq('promotion_id', promotionId)
+      .eq('classe_id', classeId)
+      .eq('type_diplome', typeDiplome)
+    
+    if (dipError) throw dipError
     
     // Créer les diplômes manquants pour les étudiants éligibles
     const diplomesManquants = etudiantsEligibles
-      .filter(inscription => !diplomes.find(d => d.etudiantId === inscription.etudiantId))
+      .filter(inscription => !(diplomes || []).find(d => d.etudiant_id === inscription.etudiant_id))
       .map(inscription => ({
         id: null,
-        etudiantId: inscription.etudiantId,
-        etudiant: `${inscription.etudiant.nom} ${inscription.etudiant.prenom}`,
-        matricule: inscription.etudiant.matricule,
+        etudiantId: inscription.etudiant_id,
+        etudiant: `${inscription.etudiants.nom} ${inscription.etudiants.prenom}`,
+        matricule: inscription.etudiants.matricule,
         statut: 'NON_RECUPERE',
         dateRecuperation: null
       }))
     
-    const diplomesExistants = diplomes.map(diplome => ({
+    const diplomesExistants = (diplomes || []).map(diplome => ({
       id: diplome.id,
-      etudiantId: diplome.etudiantId,
-      etudiant: `${diplome.etudiant.nom} ${diplome.etudiant.prenom}`,
-      matricule: diplome.etudiant.matricule,
+      etudiantId: diplome.etudiant_id,
+      etudiant: `${diplome.etudiants.nom} ${diplome.etudiants.prenom}`,
+      matricule: diplome.etudiants.matricule,
       statut: diplome.statut,
-      dateRecuperation: diplome.dateRecuperation
+      dateRecuperation: diplome.date_recuperation
     }))
     
     return [...diplomesExistants, ...diplomesManquants].sort((a, b) => 
@@ -69,42 +64,49 @@ export const getDiplomesParClasse = async (promotionId, classeId, typeDiplome) =
 // Marquer un diplôme comme récupéré
 export const marquerDiplomeRecupere = async (diplomeId, etudiantId, promotionId, classeId, typeDiplome, agentId) => {
   try {
-    // Vérifier si le diplôme existe
-    let diplome = await prisma.diplome.findUnique({
-      where: { id: diplomeId }
-    })
-    
-    if (!diplome) {
-      // Créer le diplôme s'il n'existe pas
-      const promotion = await prisma.promotion.findUnique({ where: { id: promotionId } })
-      diplome = await prisma.diplome.create({
-        data: {
-          etudiantId,
-          promotionId,
-          classeId,
-          typeDiplome,
-          anneeAcademique: promotion?.annee || '',
-          statut: 'RECUPERE',
-          dateRecuperation: new Date(),
-          agentRecuperation: agentId
-        }
-      })
-    } else {
+    if (diplomeId) {
       // Mettre à jour le diplôme existant
-      diplome = await prisma.diplome.update({
-        where: { id: diplomeId },
-        data: {
+      const { data: diplome, error } = await supabaseAdmin
+        .from('diplomes')
+        .update({
           statut: 'RECUPERE',
-          dateRecuperation: new Date(),
-          agentRecuperation: agentId
-        }
-      })
+          date_recuperation: new Date().toISOString(),
+          agent_recuperation: agentId
+        })
+        .eq('id', diplomeId)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return diplome
+    } else {
+      // Créer le diplôme s'il n'existe pas
+      const { data: promotion } = await supabaseAdmin
+        .from('promotions')
+        .select('annee')
+        .eq('id', promotionId)
+        .single()
+      
+      const { data: diplome, error } = await supabaseAdmin
+        .from('diplomes')
+        .insert({
+          etudiant_id: etudiantId,
+          promotion_id: promotionId,
+          classe_id: classeId,
+          type_diplome: typeDiplome,
+          annee_academique: promotion?.annee || '',
+          statut: 'RECUPERE',
+          date_recuperation: new Date().toISOString(),
+          agent_recuperation: agentId
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      return diplome
     }
-    
-    return diplome
   } catch (error) {
     console.error('Erreur lors de la mise à jour du diplôme:', error)
     throw error
   }
 }
-

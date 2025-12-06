@@ -1,11 +1,14 @@
 import bcrypt from 'bcrypt'
-import prisma from '../lib/prisma.js'
+import { supabaseAdmin } from '../lib/supabase.js'
 
 // Obtenir le roleId à partir d'un code de rôle
 const getRoleIdByCode = async (roleCode) => {
-  const role = await prisma.role.findUnique({
-    where: { code: roleCode }
-  })
+  const { data: role, error } = await supabaseAdmin
+    .from('roles')
+    .select('id')
+    .eq('code', roleCode)
+    .single()
+  
   return role?.id || null
 }
 
@@ -46,9 +49,11 @@ export const createCompte = async (data, createdBy) => {
     const normalizedEmail = email.trim().toLowerCase()
 
     // Vérifier si l'email existe déjà
-    const emailExists = await prisma.utilisateur.findUnique({
-      where: { email: normalizedEmail }
-    })
+    const { data: emailExists } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .single()
 
     if (emailExists) {
       return {
@@ -58,9 +63,11 @@ export const createCompte = async (data, createdBy) => {
     }
 
     // Vérifier si le username existe déjà
-    const usernameExists = await prisma.utilisateur.findUnique({
-      where: { username: username.trim() }
-    })
+    const { data: usernameExists } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('id')
+      .eq('username', username.trim())
+      .single()
 
     if (usernameExists) {
       return {
@@ -84,30 +91,39 @@ export const createCompte = async (data, createdBy) => {
     }
 
     // Créer l'utilisateur
-    const utilisateur = await prisma.utilisateur.create({
-      data: {
+    const { data: utilisateur, error: createError } = await supabaseAdmin
+      .from('utilisateurs')
+      .insert({
         nom: nom.trim(),
         prenom: prenom.trim(),
         email: normalizedEmail,
         username: username.trim(),
         password: hashedPassword,
-        roleId: roleId,
+        role_id: roleId,
         actif: actif !== undefined ? actif : true
-      },
-      include: { role: true }
-    })
+      })
+      .select('*, roles (*)')
+      .single()
+
+    if (createError) {
+      console.error('Erreur lors de la création:', createError)
+      return {
+        success: false,
+        error: createError.message || 'Erreur lors de la création du compte'
+      }
+    }
 
     // Enregistrer dans l'audit
     if (createdBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: createdBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: createdBy,
           action: 'Création de compte',
           details: `Compte créé pour ${prenom} ${nom} (${roleCode})`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     // Retourner les données sans le mot de passe
@@ -121,10 +137,10 @@ export const createCompte = async (data, createdBy) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
-        role: mapRoleToDisplay(userWithoutPassword.role?.code || 'UNKNOWN'),
+        role: mapRoleToDisplay(userWithoutPassword.roles?.code || 'UNKNOWN'),
         actif: userWithoutPassword.actif,
-        dateCreation: userWithoutPassword.dateCreation,
-        derniereConnexion: userWithoutPassword.derniereConnexion
+        dateCreation: userWithoutPassword.date_creation,
+        derniereConnexion: userWithoutPassword.derniere_connexion
       }
     }
   } catch (error) {
@@ -140,8 +156,17 @@ export const createCompte = async (data, createdBy) => {
 export const getAllComptes = async () => {
   try {
     // Récupérer les IDs des rôles
-    const roleAgent = await prisma.role.findUnique({ where: { code: 'AGENT_SCOLARITE' } })
-    const roleSP = await prisma.role.findUnique({ where: { code: 'SP_SCOLARITE' } })
+    const { data: roleAgent } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('code', 'AGENT_SCOLARITE')
+      .single()
+    
+    const { data: roleSP } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('code', 'SP_SCOLARITE')
+      .single()
 
     if (!roleAgent || !roleSP) {
       return {
@@ -150,19 +175,13 @@ export const getAllComptes = async () => {
       }
     }
 
-    const utilisateurs = await prisma.utilisateur.findMany({
-      where: {
-        roleId: {
-          in: [roleAgent.id, roleSP.id]
-        }
-      },
-      include: {
-        role: true
-      },
-      orderBy: {
-        dateCreation: 'desc'
-      }
-    })
+    const { data: utilisateurs, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, roles (*)')
+      .in('role_id', [roleAgent.id, roleSP.id])
+      .order('date_creation', { ascending: false })
+
+    if (error) throw error
 
     const comptes = utilisateurs.map(u => ({
       id: u.id,
@@ -170,10 +189,10 @@ export const getAllComptes = async () => {
       prenom: u.prenom,
       email: u.email,
       username: u.username,
-      role: mapRoleToDisplay(u.role?.code || 'UNKNOWN'),
+      role: mapRoleToDisplay(u.roles?.code || 'UNKNOWN'),
       actif: u.actif,
-      dateCreation: u.dateCreation,
-      derniereConnexion: u.derniereConnexion
+      dateCreation: u.date_creation,
+      derniereConnexion: u.derniere_connexion
     }))
 
     return {
@@ -195,11 +214,13 @@ export const updateCompte = async (id, data, updatedBy) => {
     const { nom, prenom, email, username, password, role, actif } = data
 
     // Vérifier si le compte existe
-    const existingCompte = await prisma.utilisateur.findUnique({
-      where: { id }
-    })
+    const { data: existingCompte, error: fetchError } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existingCompte) {
+    if (fetchError || !existingCompte) {
       return {
         success: false,
         error: 'Compte introuvable'
@@ -211,9 +232,12 @@ export const updateCompte = async (id, data, updatedBy) => {
 
     // Vérifier si l'email est déjà utilisé par un autre compte
     if (normalizedEmail && normalizedEmail !== existingCompte.email) {
-      const emailExists = await prisma.utilisateur.findUnique({
-        where: { email: normalizedEmail }
-      })
+      const { data: emailExists } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .neq('id', id)
+        .single()
 
       if (emailExists) {
         return {
@@ -225,9 +249,12 @@ export const updateCompte = async (id, data, updatedBy) => {
 
     // Vérifier si le username est déjà utilisé par un autre compte
     if (username && username.trim() !== existingCompte.username) {
-      const usernameExists = await prisma.utilisateur.findUnique({
-        where: { username: username.trim() }
-      })
+      const { data: usernameExists } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('id')
+        .eq('username', username.trim())
+        .neq('id', id)
+        .single()
 
       if (usernameExists) {
         return {
@@ -251,7 +278,7 @@ export const updateCompte = async (id, data, updatedBy) => {
       const roleCode = mapRoleToCode(role)
       const roleId = await getRoleIdByCode(roleCode)
       if (roleId) {
-        updateData.roleId = roleId
+        updateData.role_id = roleId
       }
     }
 
@@ -261,23 +288,26 @@ export const updateCompte = async (id, data, updatedBy) => {
     }
 
     // Mettre à jour le compte
-    const utilisateur = await prisma.utilisateur.update({
-      where: { id },
-      data: updateData,
-      include: { role: true }
-    })
+    const { data: utilisateur, error: updateError } = await supabaseAdmin
+      .from('utilisateurs')
+      .update(updateData)
+      .eq('id', id)
+      .select('*, roles (*)')
+      .single()
+
+    if (updateError) throw updateError
 
     // Enregistrer dans l'audit
     if (updatedBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: updatedBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: updatedBy,
           action: 'Modification de compte',
           details: `Compte modifié pour ${utilisateur.prenom} ${utilisateur.nom}`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     // Retourner les données sans le mot de passe
@@ -291,10 +321,10 @@ export const updateCompte = async (id, data, updatedBy) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         username: userWithoutPassword.username,
-        role: mapRoleToDisplay(userWithoutPassword.role?.code || 'UNKNOWN'),
+        role: mapRoleToDisplay(userWithoutPassword.roles?.code || 'UNKNOWN'),
         actif: userWithoutPassword.actif,
-        dateCreation: userWithoutPassword.dateCreation,
-        derniereConnexion: userWithoutPassword.derniereConnexion
+        dateCreation: userWithoutPassword.date_creation,
+        derniereConnexion: userWithoutPassword.derniere_connexion
       }
     }
   } catch (error) {
@@ -310,11 +340,13 @@ export const updateCompte = async (id, data, updatedBy) => {
 export const deleteCompte = async (id, deletedBy) => {
   try {
     // Vérifier si le compte existe
-    const existingCompte = await prisma.utilisateur.findUnique({
-      where: { id }
-    })
+    const { data: existingCompte, error: fetchError } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existingCompte) {
+    if (fetchError || !existingCompte) {
       return {
         success: false,
         error: 'Compte introuvable'
@@ -322,21 +354,24 @@ export const deleteCompte = async (id, deletedBy) => {
     }
 
     // Supprimer le compte
-    await prisma.utilisateur.delete({
-      where: { id }
-    })
+    const { error: deleteError } = await supabaseAdmin
+      .from('utilisateurs')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
 
     // Enregistrer dans l'audit
     if (deletedBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: deletedBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: deletedBy,
           action: 'Suppression de compte',
           details: `Compte supprimé pour ${existingCompte.prenom} ${existingCompte.nom}`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     return {
@@ -355,22 +390,26 @@ export const deleteCompte = async (id, deletedBy) => {
 // Activer/Désactiver un compte
 export const toggleActif = async (id, actif, updatedBy) => {
   try {
-    const utilisateur = await prisma.utilisateur.update({
-      where: { id },
-      data: { actif }
-    })
+    const { data: utilisateur, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .update({ actif })
+      .eq('id', id)
+      .select('*, roles (*)')
+      .single()
+
+    if (error) throw error
 
     // Enregistrer dans l'audit
     if (updatedBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: updatedBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: updatedBy,
           action: actif ? 'Activation de compte' : 'Désactivation de compte',
           details: `Compte ${actif ? 'activé' : 'désactivé'} pour ${utilisateur.prenom} ${utilisateur.nom}`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     return {
@@ -381,10 +420,10 @@ export const toggleActif = async (id, actif, updatedBy) => {
         prenom: utilisateur.prenom,
         email: utilisateur.email,
         username: utilisateur.username,
-        role: mapRoleToDisplay(utilisateur.role),
+        role: mapRoleToDisplay(utilisateur.roles?.code || 'UNKNOWN'),
         actif: utilisateur.actif,
-        dateCreation: utilisateur.dateCreation,
-        derniereConnexion: utilisateur.derniereConnexion
+        dateCreation: utilisateur.date_creation,
+        derniereConnexion: utilisateur.derniere_connexion
       }
     }
   } catch (error) {
@@ -395,4 +434,3 @@ export const toggleActif = async (id, actif, updatedBy) => {
     }
   }
 }
-

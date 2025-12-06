@@ -1,22 +1,18 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Générer le prochain numéro d'attestation
 const genererNumeroAttestation = async (annee) => {
   try {
-    const dernierNumero = await prisma.attestation.findFirst({
-      where: {
-        numero: {
-          startsWith: `N°`
-        }
-      },
-      orderBy: {
-        numero: 'desc'
-      }
-    })
+    const { data: dernierNumero } = await supabaseAdmin
+      .from('attestations')
+      .select('numero')
+      .ilike('numero', 'N°%')
+      .order('numero', { ascending: false })
+      .limit(1)
+      .single()
     
     let numero = 1
     if (dernierNumero) {
-      // Extraire le numéro du dernier attestation (format: N°0460/INPTIC/DG/DSE/2024)
       const match = dernierNumero.numero.match(/N°(\d+)/)
       if (match) {
         numero = parseInt(match[1]) + 1
@@ -36,21 +32,22 @@ export const creerAttestation = async (etudiantId, promotionId, anneeAcademique)
     const annee = new Date().getFullYear()
     const numero = await genererNumeroAttestation(annee)
     
-    return await prisma.attestation.create({
-      data: {
+    const { data, error } = await supabaseAdmin
+      .from('attestations')
+      .insert({
         numero,
-        etudiantId,
-        promotionId,
-        anneeAcademique,
+        etudiant_id: etudiantId,
+        promotion_id: promotionId,
+        annee_academique: anneeAcademique,
         lieu: 'Libreville',
         archivee: true,
-        dateArchivage: new Date()
-      },
-      include: {
-        etudiant: true,
-        promotion: true
-      }
-    })
+        date_archivage: new Date().toISOString()
+      })
+      .select('*, etudiants (*), promotions (*)')
+      .single()
+    
+    if (error) throw error
+    return data
   } catch (error) {
     console.error('Erreur lors de la création de l\'attestation:', error)
     throw error
@@ -60,73 +57,61 @@ export const creerAttestation = async (etudiantId, promotionId, anneeAcademique)
 // Récupérer les étudiants inscrits par filière et niveau (sans classe)
 export const getEtudiantsInscritsParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId) => {
   try {
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        promotionId,
-        filiereId,
-        niveauId,
-        formationId,
-        statut: 'INSCRIT' // Seulement les étudiants inscrits
-      },
-      include: {
-        etudiant: true,
-        formation: true,
-        filiere: true,
-        niveau: true
-      },
-      orderBy: {
-        etudiant: {
-          nom: 'asc'
-        }
-      }
-    })
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        formations (*),
+        filieres (*),
+        niveaux (*)
+      `)
+      .eq('promotion_id', promotionId)
+      .eq('filiere_id', filiereId)
+      .eq('niveau_id', niveauId)
+      .eq('formation_id', formationId)
+      .eq('statut', 'INSCRIT')
+      .order('etudiants(nom)', { ascending: true })
     
-    const etudiantIds = inscriptions.map(inscription => inscription.etudiantId)
-    const attestations = etudiantIds.length
-      ? await prisma.attestation.findMany({
-          where: {
-            promotionId,
-            etudiantId: {
-              in: etudiantIds
-            }
-          },
-          select: {
-            id: true,
-            etudiantId: true,
-            promotionId: true,
-            numero: true,
-            archivee: true,
-            dateGeneration: true,
-            dateArchivage: true
-          }
-        })
-      : []
+    if (error) throw error
+    
+    const etudiantIds = (inscriptions || []).map(i => i.etudiant_id)
+    
+    let attestations = []
+    if (etudiantIds.length > 0) {
+      const { data: attData } = await supabaseAdmin
+        .from('attestations')
+        .select('id, etudiant_id, promotion_id, numero, archivee, date_generation, date_archivage')
+        .eq('promotion_id', promotionId)
+        .in('etudiant_id', etudiantIds)
+      attestations = attData || []
+    }
 
     const attestationMap = new Map()
-    attestations.forEach(attestation => {
-      attestationMap.set(`${attestation.etudiantId}-${attestation.promotionId}`, attestation)
+    attestations.forEach(a => {
+      attestationMap.set(`${a.etudiant_id}-${a.promotion_id}`, a)
     })
     
-    return inscriptions.map(inscription => {
-      const key = `${inscription.etudiantId}-${inscription.promotionId}`
+    return (inscriptions || []).map(inscription => {
+      const key = `${inscription.etudiant_id}-${inscription.promotion_id}`
       const attestation = attestationMap.get(key)
       return {
-        id: inscription.etudiant.id,
+        id: inscription.etudiants.id,
         inscriptionId: inscription.id,
-        nom: inscription.etudiant.nom,
-        prenom: inscription.etudiant.prenom,
-        matricule: inscription.etudiant.matricule,
-        formation: inscription.formation.nom,
-        filiere: inscription.filiere.nom,
-        niveau: inscription.niveau.nom,
-        niveauCode: inscription.niveau.code,
-        niveauOrdinal: inscription.niveau.ordinal,
+        nom: inscription.etudiants.nom,
+        prenom: inscription.etudiants.prenom,
+        matricule: inscription.etudiants.matricule,
+        formation: inscription.formations.nom,
+        filiere: inscription.filieres.nom,
+        niveau: inscription.niveaux.nom,
+        niveauCode: inscription.niveaux.code,
+        niveauOrdinal: inscription.niveaux.ordinal,
         estInscrit: inscription.statut === 'INSCRIT',
         attestationExiste: !!attestation,
         attestationId: attestation?.id || null,
         attestationNumero: attestation?.numero || null,
         attestationArchivee: attestation?.archivee || false,
-        attestationDate: attestation?.dateGeneration || null
+        attestationDate: attestation?.date_generation || null
       }
     })
   } catch (error) {
@@ -138,41 +123,42 @@ export const getEtudiantsInscritsParFiliereNiveau = async (promotionId, filiereI
 // Récupérer les attestations d'une classe
 export const getAttestationsParClasse = async (promotionId, filiereId, niveauId, classeId) => {
   try {
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        promotionId,
-        classeId,
-        statut: 'INSCRIT' // Seulement les étudiants inscrits
-      },
-      include: {
-        etudiant: true,
-        formation: true,
-        filiere: true,
-        niveau: true
-      }
-    })
+    const { data: inscriptions, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        formations (*),
+        filieres (*),
+        niveaux (*)
+      `)
+      .eq('promotion_id', promotionId)
+      .eq('classe_id', classeId)
+      .eq('statut', 'INSCRIT')
     
-    const attestations = await prisma.attestation.findMany({
-      where: {
-        promotionId,
-        etudiantId: {
-          in: inscriptions.map(i => i.etudiantId)
-        }
-      },
-      include: {
-        etudiant: true
-      }
-    })
+    if (error) throw error
     
-    return inscriptions.map(inscription => {
-      const attestation = attestations.find(a => a.etudiantId === inscription.etudiantId)
+    const etudiantIds = (inscriptions || []).map(i => i.etudiant_id)
+    
+    let attestations = []
+    if (etudiantIds.length > 0) {
+      const { data: attData } = await supabaseAdmin
+        .from('attestations')
+        .select('*, etudiants (*)')
+        .eq('promotion_id', promotionId)
+        .in('etudiant_id', etudiantIds)
+      attestations = attData || []
+    }
+    
+    return (inscriptions || []).map(inscription => {
+      const attestation = attestations.find(a => a.etudiant_id === inscription.etudiant_id)
       return {
         id: attestation?.id || null,
-        etudiant: `${inscription.etudiant.nom} ${inscription.etudiant.prenom}`,
-        matricule: inscription.etudiant.matricule,
-        formation: inscription.formation.nom,
-        dateGeneration: attestation?.dateGeneration ? 
-          attestation.dateGeneration.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 
+        etudiant: `${inscription.etudiants.nom} ${inscription.etudiants.prenom}`,
+        matricule: inscription.etudiants.matricule,
+        formation: inscription.formations.nom,
+        dateGeneration: attestation?.date_generation ? 
+          new Date(attestation.date_generation).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 
           null,
         numero: attestation?.numero || null,
         existe: !!attestation
@@ -187,82 +173,82 @@ export const getAttestationsParClasse = async (promotionId, filiereId, niveauId,
 // Archiver une attestation
 export const archiverAttestation = async (attestationId) => {
   try {
-    return await prisma.attestation.update({
-      where: { id: attestationId },
-      data: {
+    const { data, error } = await supabaseAdmin
+      .from('attestations')
+      .update({
         archivee: true,
-        dateArchivage: new Date()
-      }
-    })
+        date_archivage: new Date().toISOString()
+      })
+      .eq('id', attestationId)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
   } catch (error) {
     console.error('Erreur lors de l\'archivage de l\'attestation:', error)
     throw error
   }
 }
 
-// Récupérer les attestations archivées par filière et niveau (sans classe, sans formation)
+// Récupérer les attestations archivées par filière et niveau
 export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId = null) => {
   try {
-    console.log('Recherche des inscriptions avec les paramètres:', { promotionId, filiereId, niveauId, formationId });
+    console.log('Recherche des inscriptions avec les paramètres:', { promotionId, filiereId, niveauId, formationId })
     
-    // Construire la condition where
-    const whereCondition = {
-      promotionId,
-      filiereId,
-      niveauId,
-      statut: 'INSCRIT'
-    }
+    let query = supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        *,
+        etudiants (*),
+        formations (*),
+        filieres (*),
+        niveaux (*)
+      `)
+      .eq('promotion_id', promotionId)
+      .eq('filiere_id', filiereId)
+      .eq('niveau_id', niveauId)
+      .eq('statut', 'INSCRIT')
     
-    // Ajouter formationId seulement si fourni
     if (formationId) {
-      whereCondition.formationId = formationId
+      query = query.eq('formation_id', formationId)
     }
     
-    const inscriptions = await prisma.inscription.findMany({
-      where: whereCondition,
-      include: {
-        etudiant: true,
-        formation: true,
-        filiere: true,
-        niveau: true
-      }
-    })
+    const { data: inscriptions, error } = await query
     
-    console.log('Inscriptions trouvées:', inscriptions.length);
-    if (inscriptions.length === 0) {
-      console.log('Aucune inscription trouvée avec ces critères');
-      return [];
+    if (error) throw error
+    
+    console.log('Inscriptions trouvées:', (inscriptions || []).length)
+    if (!inscriptions || inscriptions.length === 0) {
+      console.log('Aucune inscription trouvée avec ces critères')
+      return []
     }
     
-    const attestations = await prisma.attestation.findMany({
-      where: {
-        promotionId,
-        archivee: true,
-        etudiantId: {
-          in: inscriptions.map(i => i.etudiantId)
-        }
-      },
-      include: {
-        etudiant: true
-      },
-      orderBy: {
-        dateGeneration: 'desc'
-      }
-    })
+    const etudiantIds = inscriptions.map(i => i.etudiant_id)
     
-    return attestations.map(attestation => {
-      const inscription = inscriptions.find(i => i.etudiantId === attestation.etudiantId)
+    const { data: attestations, error: attError } = await supabaseAdmin
+      .from('attestations')
+      .select('*, etudiants (*)')
+      .eq('promotion_id', promotionId)
+      .eq('archivee', true)
+      .in('etudiant_id', etudiantIds)
+      .order('date_generation', { ascending: false })
+    
+    if (attError) throw attError
+    
+    return (attestations || []).map(attestation => {
+      const inscription = inscriptions.find(i => i.etudiant_id === attestation.etudiant_id)
       return {
         id: attestation.id,
-        etudiant: inscription?.etudiant || attestation.etudiant,
-        matricule: attestation.etudiant.matricule,
-        formation: inscription?.formation?.nom || '',
-        filiere: inscription?.filiere?.nom || '',
-        niveau: inscription?.niveau?.nom || inscription?.niveau?.code || '',
-        dateGeneration: attestation.dateGeneration.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
-        dateGenerationISO: attestation.dateGeneration.toISOString(),
+        etudiant: inscription?.etudiants || attestation.etudiants,
+        matricule: attestation.etudiants.matricule,
+        formation: inscription?.formations?.nom || '',
+        filiere: inscription?.filieres?.nom || '',
+        niveau: inscription?.niveaux?.nom || inscription?.niveaux?.code || '',
+        dateGeneration: new Date(attestation.date_generation).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+        dateGenerationISO: attestation.date_generation,
         numero: attestation.numero,
-        anneeAcademique: attestation.anneeAcademique
+        anneeAcademique: attestation.annee_academique
       }
     })
   } catch (error) {

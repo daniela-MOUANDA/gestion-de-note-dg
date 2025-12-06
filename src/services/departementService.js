@@ -1,14 +1,14 @@
-import prisma from '../lib/prisma.js'
+import { supabaseAdmin } from '../lib/supabase.js'
 
 // Obtenir tous les départements
 export const getAllDepartements = async () => {
   try {
-    const departements = await prisma.departement.findMany({
-      orderBy: {
-        nom: 'asc'
-      }
-      // Note: Les filières seront ajoutées plus tard quand la relation sera créée dans le schéma
-    })
+    const { data: departements, error } = await supabaseAdmin
+      .from('departements')
+      .select('*')
+      .order('nom', { ascending: true })
+
+    if (error) throw error
 
     return {
       success: true,
@@ -36,9 +36,11 @@ export const createDepartement = async (data) => {
     }
 
     // Vérifier si le code existe déjà
-    const codeExists = await prisma.departement.findUnique({
-      where: { code: code.trim().toUpperCase() }
-    })
+    const { data: codeExists } = await supabaseAdmin
+      .from('departements')
+      .select('id')
+      .eq('code', code.trim().toUpperCase())
+      .single()
 
     if (codeExists) {
       return {
@@ -48,9 +50,11 @@ export const createDepartement = async (data) => {
     }
 
     // Vérifier si le nom existe déjà
-    const nomExists = await prisma.departement.findUnique({
-      where: { nom: nom.trim() }
-    })
+    const { data: nomExists } = await supabaseAdmin
+      .from('departements')
+      .select('id')
+      .eq('nom', nom.trim())
+      .single()
 
     if (nomExists) {
       return {
@@ -59,14 +63,18 @@ export const createDepartement = async (data) => {
       }
     }
 
-    const departement = await prisma.departement.create({
-      data: {
+    const { data: departement, error } = await supabaseAdmin
+      .from('departements')
+      .insert({
         nom: nom.trim(),
         code: code.trim().toUpperCase(),
         description: description?.trim() || null,
         actif: actif !== undefined ? actif : true
-      }
-    })
+      })
+      .select()
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
@@ -87,11 +95,13 @@ export const updateDepartement = async (id, data) => {
     const { nom, code, description, actif } = data
 
     // Vérifier que le département existe
-    const existingDepartement = await prisma.departement.findUnique({
-      where: { id }
-    })
+    const { data: existingDepartement, error: fetchError } = await supabaseAdmin
+      .from('departements')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existingDepartement) {
+    if (fetchError || !existingDepartement) {
       return {
         success: false,
         error: 'Département non trouvé'
@@ -100,9 +110,12 @@ export const updateDepartement = async (id, data) => {
 
     // Vérifier si le code existe déjà (pour un autre département)
     if (code && code.trim().toUpperCase() !== existingDepartement.code) {
-      const codeExists = await prisma.departement.findUnique({
-        where: { code: code.trim().toUpperCase() }
-      })
+      const { data: codeExists } = await supabaseAdmin
+        .from('departements')
+        .select('id')
+        .eq('code', code.trim().toUpperCase())
+        .neq('id', id)
+        .single()
 
       if (codeExists) {
         return {
@@ -114,9 +127,12 @@ export const updateDepartement = async (id, data) => {
 
     // Vérifier si le nom existe déjà (pour un autre département)
     if (nom && nom.trim() !== existingDepartement.nom) {
-      const nomExists = await prisma.departement.findUnique({
-        where: { nom: nom.trim() }
-      })
+      const { data: nomExists } = await supabaseAdmin
+        .from('departements')
+        .select('id')
+        .eq('nom', nom.trim())
+        .neq('id', id)
+        .single()
 
       if (nomExists) {
         return {
@@ -126,16 +142,21 @@ export const updateDepartement = async (id, data) => {
       }
     }
 
-    const departement = await prisma.departement.update({
-      where: { id },
-      data: {
-        nom: nom ? nom.trim() : undefined,
-        code: code ? code.trim().toUpperCase() : undefined,
-        description: description !== undefined ? (description?.trim() || null) : undefined,
-        actif: actif !== undefined ? actif : undefined
-      },
-      // Note: Les filières seront ajoutées plus tard quand la relation sera créée dans le schéma
-    })
+    // Préparer les données de mise à jour
+    const updateData = {}
+    if (nom) updateData.nom = nom.trim()
+    if (code) updateData.code = code.trim().toUpperCase()
+    if (description !== undefined) updateData.description = description?.trim() || null
+    if (actif !== undefined) updateData.actif = actif
+
+    const { data: departement, error } = await supabaseAdmin
+      .from('departements')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
@@ -154,18 +175,13 @@ export const updateDepartement = async (id, data) => {
 export const deleteDepartement = async (id) => {
   try {
     // Vérifier que le département existe
-    const existingDepartement = await prisma.departement.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            chefs: true
-          }
-        }
-      }
-    })
+    const { data: existingDepartement, error: fetchError } = await supabaseAdmin
+      .from('departements')
+      .select('id')
+      .eq('id', id)
+      .single()
 
-    if (!existingDepartement) {
+    if (fetchError || !existingDepartement) {
       return {
         success: false,
         error: 'Département non trouvé'
@@ -173,16 +189,24 @@ export const deleteDepartement = async (id) => {
     }
 
     // Vérifier s'il y a des chefs de département associés
-    if (existingDepartement._count.chefs > 0) {
+    const { count: chefsCount } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*', { count: 'exact', head: true })
+      .eq('departement_id', id)
+
+    if (chefsCount && chefsCount > 0) {
       return {
         success: false,
         error: 'Impossible de supprimer ce département car il contient des chefs de département'
       }
     }
 
-    await prisma.departement.delete({
-      where: { id }
-    })
+    const { error } = await supabaseAdmin
+      .from('departements')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
 
     return {
       success: true,
@@ -196,4 +220,3 @@ export const deleteDepartement = async (id) => {
     }
   }
 }
-

@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt'
-import prisma from '../lib/prisma.js'
+import { supabaseAdmin } from '../lib/supabase.js'
 
 // Créer un nouveau chef de département
 export const createChefDepartement = async (data, createdBy) => {
@@ -15,36 +15,46 @@ export const createChefDepartement = async (data, createdBy) => {
     }
 
     // Vérifier que le département existe
-    const departement = await prisma.departement.findUnique({
-      where: { id: departementId }
-    })
+    const { data: departement, error: deptError } = await supabaseAdmin
+      .from('departements')
+      .select('*')
+      .eq('id', departementId)
+      .single()
 
-    if (!departement) {
+    if (deptError || !departement) {
       return {
         success: false,
         error: 'Département introuvable'
       }
     }
 
+    // Récupérer le rôle CHEF_DEPARTEMENT
+    const { data: roleChef, error: roleError } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('code', 'CHEF_DEPARTEMENT')
+      .single()
+
+    if (roleError || !roleChef) {
+      return {
+        success: false,
+        error: 'Rôle CHEF_DEPARTEMENT introuvable'
+      }
+    }
+
     // Vérifier si le département est déjà assigné à un autre chef de département
-    const roleChef = await prisma.role.findUnique({
-      where: { code: 'CHEF_DEPARTEMENT' }
-    })
+    const { data: existingChef } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('id, nom, prenom')
+      .eq('departement_id', departementId)
+      .eq('role_id', roleChef.id)
+      .eq('actif', true)
+      .single()
 
-    if (roleChef) {
-      const existingChef = await prisma.utilisateur.findFirst({
-        where: {
-          departementId: departementId,
-          roleId: roleChef.id,
-          actif: true
-        }
-      })
-
-      if (existingChef) {
-        return {
-          success: false,
-          error: `Ce département est déjà assigné à ${existingChef.prenom} ${existingChef.nom}. Un département ne peut être assigné qu'à un seul chef.`
-        }
+    if (existingChef) {
+      return {
+        success: false,
+        error: `Ce département est déjà assigné à ${existingChef.prenom} ${existingChef.nom}. Un département ne peut être assigné qu'à un seul chef.`
       }
     }
 
@@ -52,9 +62,11 @@ export const createChefDepartement = async (data, createdBy) => {
     const normalizedEmail = email.trim().toLowerCase()
 
     // Vérifier si l'email existe déjà
-    const emailExists = await prisma.utilisateur.findUnique({
-      where: { email: normalizedEmail }
-    })
+    const { data: emailExists } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .single()
 
     if (emailExists) {
       return {
@@ -66,73 +78,53 @@ export const createChefDepartement = async (data, createdBy) => {
     // Générer un username à partir de l'email
     let username = normalizedEmail.split('@')[0]
 
-    // Vérifier si le username existe déjà et générer un nouveau si nécessaire
-    let usernameExists = await prisma.utilisateur.findUnique({
-      where: { username }
-    })
+    // Vérifier si le username existe déjà
+    const { data: usernameExists } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('id')
+      .eq('username', username)
+      .single()
 
     if (usernameExists) {
-      // Ajouter un suffixe si le username existe
       username = `${username}_${Date.now().toString().slice(-4)}`
-      
-      // Vérifier à nouveau (peu probable mais on vérifie quand même)
-      usernameExists = await prisma.utilisateur.findUnique({
-        where: { username }
-      })
-      
-      if (usernameExists) {
-        return {
-          success: false,
-          error: 'Impossible de générer un nom d\'utilisateur unique'
-        }
-      }
     }
 
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(motDePasse, 10)
 
-    // Récupérer le rôle CHEF_DEPARTEMENT
-    const roleChefDepartement = await prisma.role.findUnique({
-      where: { code: 'CHEF_DEPARTEMENT' }
-    })
-
-    if (!roleChefDepartement) {
-      return {
-        success: false,
-        error: 'Rôle CHEF_DEPARTEMENT introuvable'
-      }
-    }
-
     // Créer l'utilisateur avec le rôle CHEF_DEPARTEMENT
-    const utilisateur = await prisma.utilisateur.create({
-      data: {
+    const { data: utilisateur, error: createError } = await supabaseAdmin
+      .from('utilisateurs')
+      .insert({
         nom: nom.trim(),
         prenom: prenom.trim(),
         email: normalizedEmail,
         username: username,
         password: hashedPassword,
         telephone: telephone?.trim() || null,
-        roleId: roleChefDepartement.id,
+        role_id: roleChef.id,
         actif: actif !== undefined ? actif : true,
-        departementId: departementId
-      },
-      include: {
-        departement: true,
-        role: true
-      }
-    })
+        departement_id: departementId
+      })
+      .select('*, departements (*), roles (*)')
+      .single()
+
+    if (createError) {
+      console.error('Erreur lors de la création:', createError)
+      throw createError
+    }
 
     // Enregistrer dans l'audit
     if (createdBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: createdBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: createdBy,
           action: 'Création de chef de département',
           details: `Chef de département créé : ${prenom} ${nom} (${departement.nom})`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     // Retourner les données sans le mot de passe
@@ -146,14 +138,14 @@ export const createChefDepartement = async (data, createdBy) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         telephone: userWithoutPassword.telephone,
-        departementId: userWithoutPassword.departementId,
-        departement: userWithoutPassword.departement ? {
-          id: userWithoutPassword.departement.id,
-          nom: userWithoutPassword.departement.nom,
-          code: userWithoutPassword.departement.code
+        departementId: userWithoutPassword.departement_id,
+        departement: userWithoutPassword.departements ? {
+          id: userWithoutPassword.departements.id,
+          nom: userWithoutPassword.departements.nom,
+          code: userWithoutPassword.departements.code
         } : null,
         actif: userWithoutPassword.actif,
-        dateCreation: userWithoutPassword.dateCreation
+        dateCreation: userWithoutPassword.date_creation
       }
     }
   } catch (error) {
@@ -169,31 +161,28 @@ export const createChefDepartement = async (data, createdBy) => {
 export const getAllChefsDepartement = async () => {
   try {
     // Récupérer le rôle CHEF_DEPARTEMENT
-    const roleChef = await prisma.role.findUnique({
-      where: { code: 'CHEF_DEPARTEMENT' }
-    })
+    const { data: roleChef, error: roleError } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('code', 'CHEF_DEPARTEMENT')
+      .single()
 
-    if (!roleChef) {
+    if (roleError || !roleChef) {
       return {
         success: false,
         error: 'Rôle CHEF_DEPARTEMENT introuvable'
       }
     }
 
-    const utilisateurs = await prisma.utilisateur.findMany({
-      where: {
-        roleId: roleChef.id
-      },
-      include: {
-        departement: true,
-        role: true
-      },
-      orderBy: {
-        dateCreation: 'desc'
-      }
-    })
+    const { data: utilisateurs, error } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, departements (*), roles (*)')
+      .eq('role_id', roleChef.id)
+      .order('date_creation', { ascending: false })
 
-    const chefs = utilisateurs.map(u => {
+    if (error) throw error
+
+    const chefs = (utilisateurs || []).map(u => {
       const { password: _, ...userWithoutPassword } = u
       return {
         id: userWithoutPassword.id,
@@ -201,15 +190,15 @@ export const getAllChefsDepartement = async () => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         telephone: userWithoutPassword.telephone || '',
-        departementId: userWithoutPassword.departementId,
-        departement: userWithoutPassword.departement ? {
-          id: userWithoutPassword.departement.id,
-          nom: userWithoutPassword.departement.nom,
-          code: userWithoutPassword.departement.code
+        departementId: userWithoutPassword.departement_id,
+        departement: userWithoutPassword.departements ? {
+          id: userWithoutPassword.departements.id,
+          nom: userWithoutPassword.departements.nom,
+          code: userWithoutPassword.departements.code
         } : null,
         actif: userWithoutPassword.actif,
-        dateCreation: userWithoutPassword.dateCreation,
-        derniereConnexion: userWithoutPassword.derniereConnexion
+        dateCreation: userWithoutPassword.date_creation,
+        derniereConnexion: userWithoutPassword.derniere_connexion
       }
     })
 
@@ -232,12 +221,13 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
     const { nom, prenom, email, telephone, departementId, motDePasse, actif } = data
 
     // Vérifier si le chef existe
-    const existingChef = await prisma.utilisateur.findUnique({
-      where: { id },
-      include: { role: true }
-    })
+    const { data: existingChef, error: fetchError } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, roles (*)')
+      .eq('id', id)
+      .single()
 
-    if (!existingChef) {
+    if (fetchError || !existingChef) {
       return {
         success: false,
         error: 'Chef de département introuvable'
@@ -245,7 +235,7 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
     }
 
     // Vérifier que c'est bien un chef de département
-    if (!existingChef.role || existingChef.role.code !== 'CHEF_DEPARTEMENT') {
+    if (!existingChef.roles || existingChef.roles.code !== 'CHEF_DEPARTEMENT') {
       return {
         success: false,
         error: 'Cet utilisateur n\'est pas un chef de département'
@@ -257,9 +247,12 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
 
     // Vérifier si l'email est déjà utilisé par un autre compte
     if (normalizedEmail && normalizedEmail !== existingChef.email) {
-      const emailExists = await prisma.utilisateur.findUnique({
-        where: { email: normalizedEmail }
-      })
+      const { data: emailExists } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .neq('id', id)
+        .single()
 
       if (emailExists) {
         return {
@@ -271,33 +264,36 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
 
     // Vérifier que le département existe si fourni
     if (departementId) {
-      const departement = await prisma.departement.findUnique({
-        where: { id: departementId }
-      })
+      const { data: departement, error: deptError } = await supabaseAdmin
+        .from('departements')
+        .select('id')
+        .eq('id', departementId)
+        .single()
 
-      if (!departement) {
+      if (deptError || !departement) {
         return {
           success: false,
           error: 'Département introuvable'
         }
       }
 
-      // Vérifier si le département est déjà assigné à un autre chef de département
-      // (différent de celui qu'on modifie)
-      if (departementId !== existingChef.departementId) {
-        const roleChef = await prisma.role.findUnique({
-          where: { code: 'CHEF_DEPARTEMENT' }
-        })
+      // Vérifier si le département est déjà assigné à un autre chef
+      if (departementId !== existingChef.departement_id) {
+        const { data: roleChef } = await supabaseAdmin
+          .from('roles')
+          .select('id')
+          .eq('code', 'CHEF_DEPARTEMENT')
+          .single()
 
         if (roleChef) {
-          const existingChefWithDept = await prisma.utilisateur.findFirst({
-            where: {
-              departementId: departementId,
-              roleId: roleChef.id,
-              id: { not: id }, // Exclure le chef qu'on modifie
-              actif: true
-            }
-          })
+          const { data: existingChefWithDept } = await supabaseAdmin
+            .from('utilisateurs')
+            .select('id, nom, prenom')
+            .eq('departement_id', departementId)
+            .eq('role_id', roleChef.id)
+            .neq('id', id)
+            .eq('actif', true)
+            .single()
 
           if (existingChefWithDept) {
             return {
@@ -316,7 +312,7 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
     if (prenom) updateData.prenom = prenom.trim()
     if (normalizedEmail) updateData.email = normalizedEmail
     if (telephone !== undefined) updateData.telephone = telephone?.trim() || null
-    if (departementId) updateData.departementId = departementId
+    if (departementId) updateData.departement_id = departementId
     if (actif !== undefined) updateData.actif = actif
 
     // Hasher le nouveau mot de passe si fourni
@@ -325,25 +321,26 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
     }
 
     // Mettre à jour le chef
-    const utilisateur = await prisma.utilisateur.update({
-      where: { id },
-      data: updateData,
-      include: {
-        departement: true
-      }
-    })
+    const { data: utilisateur, error: updateError } = await supabaseAdmin
+      .from('utilisateurs')
+      .update(updateData)
+      .eq('id', id)
+      .select('*, departements (*)')
+      .single()
+
+    if (updateError) throw updateError
 
     // Enregistrer dans l'audit
     if (updatedBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: updatedBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: updatedBy,
           action: 'Modification de chef de département',
           details: `Chef de département modifié : ${utilisateur.prenom} ${utilisateur.nom}`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     // Retourner les données sans le mot de passe
@@ -357,15 +354,15 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
         prenom: userWithoutPassword.prenom,
         email: userWithoutPassword.email,
         telephone: userWithoutPassword.telephone,
-        departementId: userWithoutPassword.departementId,
-        departement: userWithoutPassword.departement ? {
-          id: userWithoutPassword.departement.id,
-          nom: userWithoutPassword.departement.nom,
-          code: userWithoutPassword.departement.code
+        departementId: userWithoutPassword.departement_id,
+        departement: userWithoutPassword.departements ? {
+          id: userWithoutPassword.departements.id,
+          nom: userWithoutPassword.departements.nom,
+          code: userWithoutPassword.departements.code
         } : null,
         actif: userWithoutPassword.actif,
-        dateCreation: userWithoutPassword.dateCreation,
-        derniereConnexion: userWithoutPassword.derniereConnexion
+        dateCreation: userWithoutPassword.date_creation,
+        derniereConnexion: userWithoutPassword.derniere_connexion
       }
     }
   } catch (error) {
@@ -381,12 +378,13 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
 export const deleteChefDepartement = async (id, deletedBy) => {
   try {
     // Vérifier si le chef existe
-    const existingChef = await prisma.utilisateur.findUnique({
-      where: { id },
-      include: { role: true }
-    })
+    const { data: existingChef, error: fetchError } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('*, roles (*)')
+      .eq('id', id)
+      .single()
 
-    if (!existingChef) {
+    if (fetchError || !existingChef) {
       return {
         success: false,
         error: 'Chef de département introuvable'
@@ -394,7 +392,7 @@ export const deleteChefDepartement = async (id, deletedBy) => {
     }
 
     // Vérifier que c'est bien un chef de département
-    if (!existingChef.role || existingChef.role.code !== 'CHEF_DEPARTEMENT') {
+    if (!existingChef.roles || existingChef.roles.code !== 'CHEF_DEPARTEMENT') {
       return {
         success: false,
         error: 'Cet utilisateur n\'est pas un chef de département'
@@ -402,21 +400,24 @@ export const deleteChefDepartement = async (id, deletedBy) => {
     }
 
     // Supprimer le chef
-    await prisma.utilisateur.delete({
-      where: { id }
-    })
+    const { error: deleteError } = await supabaseAdmin
+      .from('utilisateurs')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
 
     // Enregistrer dans l'audit
     if (deletedBy) {
-      await prisma.actionAudit.create({
-        data: {
-          utilisateurId: deletedBy,
+      await supabaseAdmin
+        .from('actions_audit')
+        .insert({
+          utilisateur_id: deletedBy,
           action: 'Suppression de chef de département',
           details: `Chef de département supprimé : ${existingChef.prenom} ${existingChef.nom}`,
-          typeAction: 'CONNEXION',
-          dateAction: new Date()
-        }
-      })
+          type_action: 'CONNEXION',
+          date_action: new Date().toISOString()
+        })
     }
 
     return {
@@ -431,4 +432,3 @@ export const deleteChefDepartement = async (id, deletedBy) => {
     }
   }
 }
-

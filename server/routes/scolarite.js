@@ -1,6 +1,6 @@
 import express from 'express'
 import multer from 'multer'
-import prisma from '../../src/lib/prisma.js'
+import { supabaseAdmin } from '../../src/lib/supabase.js'
 import {
   getFormations,
   getFilieres,
@@ -196,9 +196,12 @@ router.get('/niveaux', async (req, res) => {
       res.json(niveaux)
     } else {
       // Sinon, retourner tous les niveaux
-      const niveaux = await prisma.niveau.findMany({
-        orderBy: { code: 'asc' }
-      })
+      const { data: niveaux, error } = await supabaseAdmin
+        .from('niveaux')
+        .select('*')
+        .order('code', { ascending: true })
+      
+      if (error) throw error
       res.json(niveaux)
     }
   } catch (error) {
@@ -506,12 +509,13 @@ router.post('/inscriptions/:id/documents/:type', authenticate, uploadDocuments.s
     }
     
     // Vérifier que l'inscription existe
-    const inscription = await prisma.inscription.findUnique({
-      where: { id },
-      include: { etudiant: true }
-    })
+    const { data: inscription, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*, etudiants (*)')
+      .eq('id', id)
+      .single()
     
-    if (!inscription) {
+    if (inscError || !inscription) {
       return res.status(404).json({
         success: false,
         error: 'Inscription introuvable'
@@ -519,7 +523,7 @@ router.post('/inscriptions/:id/documents/:type', authenticate, uploadDocuments.s
     }
     
     // Sauvegarder le document
-    const documentUrl = await saveDocument(req.file, inscription.etudiantId, type)
+    const documentUrl = await saveDocument(req.file, inscription.etudiant_id, type)
     
     // Mettre à jour l'inscription
     await updateInscriptionDocument(id, type, documentUrl)
@@ -544,11 +548,13 @@ router.delete('/inscriptions/:id/documents/:type', authenticate, async (req, res
     const { id, type } = req.params
     
     // Vérifier que l'inscription existe
-    const inscription = await prisma.inscription.findUnique({
-      where: { id }
-    })
+    const { data: inscription, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('id')
+      .eq('id', id)
+      .single()
     
-    if (!inscription) {
+    if (inscError || !inscription) {
       return res.status(404).json({
         success: false,
         error: 'Inscription introuvable'
@@ -616,17 +622,20 @@ router.post('/etudiants/:id/photo', authenticate, uploadDocuments.single('photo'
     // Mettre à jour la photo de profil de l'étudiant
     await updateEtudiantInfo(id, { photo: photoUrl })
     
-    // Synchroniser avec la photo d'identité dans l'inscription (si une inscription existe)
-    const inscription = await prisma.inscription.findFirst({
-      where: { etudiantId: id },
-      orderBy: { dateInscription: 'desc' } // Prendre la plus récente
-    })
+    // Synchroniser avec la photo d'identité dans l'inscription
+    const { data: inscription } = await supabaseAdmin
+      .from('inscriptions')
+      .select('id')
+      .eq('etudiant_id', id)
+      .order('date_inscription', { ascending: false })
+      .limit(1)
+      .single()
     
     if (inscription) {
-      await prisma.inscription.update({
-        where: { id: inscription.id },
-        data: { photoIdentite: photoUrl }
-      })
+      await supabaseAdmin
+        .from('inscriptions')
+        .update({ photo_identite: photoUrl })
+        .eq('id', inscription.id)
     }
     
     res.json({
@@ -732,4 +741,3 @@ router.get('/etudiant/mon-profil', authenticate, async (req, res) => {
 })
 
 export default router
-

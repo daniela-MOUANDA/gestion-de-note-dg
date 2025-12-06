@@ -1,4 +1,4 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -45,19 +45,19 @@ export const deleteDocument = async (documentUrl) => {
     }
   } catch (error) {
     console.error('Erreur lors de la suppression du document:', error)
-    // Ne pas throw, juste logger l'erreur
   }
 }
 
 // Supprimer un document d'inscription
 export const deleteInscriptionDocument = async (inscriptionId, documentType) => {
   try {
-    // Récupérer l'inscription pour obtenir l'URL du document
-    const inscription = await prisma.inscription.findUnique({
-      where: { id: inscriptionId }
-    })
+    const { data: inscription, error } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*')
+      .eq('id', inscriptionId)
+      .single()
     
-    if (!inscription) {
+    if (error || !inscription) {
       throw new Error('Inscription introuvable')
     }
     
@@ -65,44 +65,41 @@ export const deleteInscriptionDocument = async (inscriptionId, documentType) => 
     let fieldName = null
     switch (documentType) {
       case 'acteNaissance':
-        fieldName = 'copieActeNaissance'
+        fieldName = 'copie_acte_naissance'
         break
       case 'photo':
-        fieldName = 'photoIdentite'
+        fieldName = 'photo_identite'
         break
       case 'quittance':
         fieldName = 'quittance'
         break
       case 'pieceIdentite':
-        fieldName = 'pieceIdentite'
+        fieldName = 'piece_identite'
         break
       case 'releveBac':
-        fieldName = 'copieReleve'
+        fieldName = 'copie_releve'
         break
       case 'attestationReussiteBac':
-        fieldName = 'copieDiplome'
+        fieldName = 'copie_diplome'
         break
       default:
         throw new Error(`Type de document inconnu: ${documentType}`)
     }
     
-    // Récupérer l'URL du document à supprimer
     const documentUrl = inscription[fieldName]
     
     if (!documentUrl) {
-      // Le document n'existe pas déjà, rien à supprimer
       return { success: true, message: 'Document déjà absent' }
     }
     
-    // Supprimer le fichier physique
     await deleteDocument(documentUrl)
     
-    // Mettre à jour l'inscription pour supprimer la référence au document
-    const updateData = { [fieldName]: null }
-    await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: updateData
-    })
+    const { error: updateError } = await supabaseAdmin
+      .from('inscriptions')
+      .update({ [fieldName]: null })
+      .eq('id', inscriptionId)
+    
+    if (updateError) throw updateError
     
     return { success: true, message: 'Document supprimé avec succès' }
   } catch (error) {
@@ -118,39 +115,37 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
     
     switch (documentType) {
       case 'acteNaissance':
-        updateData.copieActeNaissance = documentUrl
+        updateData.copie_acte_naissance = documentUrl
         break
       case 'photo':
-        updateData.photoIdentite = documentUrl
+        updateData.photo_identite = documentUrl
         break
       case 'quittance':
         updateData.quittance = documentUrl
         break
       case 'pieceIdentite':
-        // Pièce d'identité - utilise le champ dédié pieceIdentite
-        updateData.pieceIdentite = documentUrl
+        updateData.piece_identite = documentUrl
         break
       case 'releveBac':
-        // Copie légalisée du relevé de notes du bac - utilise copieReleve
-        updateData.copieReleve = documentUrl
+        updateData.copie_releve = documentUrl
         break
       case 'attestationReussiteBac':
-        // Copie légalisée de l'attestation de réussite au bac - on utilise copieDiplome
-        updateData.copieDiplome = documentUrl
+        updateData.copie_diplome = documentUrl
         break
       case 'diplome':
-        updateData.copieDiplome = documentUrl
+        updateData.copie_diplome = documentUrl
         break
       default:
         throw new Error(`Type de document inconnu: ${documentType}`)
     }
     
-    // Récupérer l'inscription pour supprimer l'ancien document
-    const inscription = await prisma.inscription.findUnique({
-      where: { id: inscriptionId }
-    })
+    const { data: inscription, error: fetchError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*')
+      .eq('id', inscriptionId)
+      .single()
     
-    if (!inscription) {
+    if (fetchError || !inscription) {
       throw new Error('Inscription introuvable')
     }
     
@@ -163,17 +158,20 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
     
     // Si on upload la photo d'identité, synchroniser avec la photo de profil de l'étudiant
     if (documentType === 'photo' && documentUrl) {
-      await prisma.etudiant.update({
-        where: { id: inscription.etudiantId },
-        data: { photo: documentUrl }
-      })
+      await supabaseAdmin
+        .from('etudiants')
+        .update({ photo: documentUrl })
+        .eq('id', inscription.etudiant_id)
     }
     
-    // Mettre à jour l'inscription
-    const updated = await prisma.inscription.update({
-      where: { id: inscriptionId },
-      data: updateData
-    })
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('inscriptions')
+      .update(updateData)
+      .eq('id', inscriptionId)
+      .select()
+      .single()
+    
+    if (updateError) throw updateError
     
     return updated
   } catch (error) {
@@ -194,10 +192,11 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
     
     // Mettre à jour la photo de profil si fournie
     if (data.photo !== undefined) {
-      // Supprimer l'ancienne photo si elle existe
-      const etudiant = await prisma.etudiant.findUnique({
-        where: { id: etudiantId }
-      })
+      const { data: etudiant } = await supabaseAdmin
+        .from('etudiants')
+        .select('photo')
+        .eq('id', etudiantId)
+        .single()
       
       if (etudiant && etudiant.photo) {
         await deleteDocument(etudiant.photo)
@@ -206,10 +205,14 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
       updateData.photo = data.photo
     }
     
-    const updated = await prisma.etudiant.update({
-      where: { id: etudiantId },
-      data: updateData
-    })
+    const { data: updated, error } = await supabaseAdmin
+      .from('etudiants')
+      .update(updateData)
+      .eq('id', etudiantId)
+      .select()
+      .single()
+    
+    if (error) throw error
     
     return updated
   } catch (error) {
@@ -221,32 +224,35 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
 // Récupérer ou créer un parent
 export const upsertParent = async (etudiantId, parentData) => {
   try {
-    // Vérifier si un parent de ce type existe déjà
-    const existing = await prisma.parent.findFirst({
-      where: {
-        etudiantId,
-        type: parentData.type
-      }
-    })
+    const { data: existing } = await supabaseAdmin
+      .from('parents')
+      .select('*')
+      .eq('etudiant_id', etudiantId)
+      .eq('type', parentData.type)
+      .single()
     
     if (existing) {
-      // Mettre à jour
-      return await prisma.parent.update({
-        where: { id: existing.id },
-        data: {
+      const { data: updated, error } = await supabaseAdmin
+        .from('parents')
+        .update({
           nom: parentData.nom,
           prenom: parentData.prenom,
           telephone: parentData.telephone || null,
           email: parentData.email || null,
           profession: parentData.profession || null,
           adresse: parentData.adresse || null
-        }
-      })
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return updated
     } else {
-      // Créer
-      return await prisma.parent.create({
-        data: {
-          etudiantId,
+      const { data: created, error } = await supabaseAdmin
+        .from('parents')
+        .insert({
+          etudiant_id: etudiantId,
           type: parentData.type,
           nom: parentData.nom,
           prenom: parentData.prenom,
@@ -254,8 +260,12 @@ export const upsertParent = async (etudiantId, parentData) => {
           email: parentData.email || null,
           profession: parentData.profession || null,
           adresse: parentData.adresse || null
-        }
-      })
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      return created
     }
   } catch (error) {
     console.error('Erreur lors de la création/mise à jour du parent:', error)
@@ -266,10 +276,14 @@ export const upsertParent = async (etudiantId, parentData) => {
 // Récupérer les parents d'un étudiant
 export const getParents = async (etudiantId) => {
   try {
-    return await prisma.parent.findMany({
-      where: { etudiantId },
-      orderBy: { type: 'asc' }
-    })
+    const { data: parents, error } = await supabaseAdmin
+      .from('parents')
+      .select('*')
+      .eq('etudiant_id', etudiantId)
+      .order('type', { ascending: true })
+    
+    if (error) throw error
+    return parents || []
   } catch (error) {
     console.error('Erreur lors de la récupération des parents:', error)
     throw error
@@ -279,49 +293,46 @@ export const getParents = async (etudiantId) => {
 // Récupérer le dossier complet d'un étudiant
 export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
   try {
-    const etudiant = await prisma.etudiant.findUnique({
-      where: { id: etudiantId },
-      include: {
-        parents: true,
-        inscriptions: {
-          where: { id: inscriptionId },
-          include: {
-            promotion: true,
-            formation: true,
-            filiere: true,
-            niveau: true,
-            classe: true
-          }
-        }
-      }
-    })
+    const { data: etudiant, error: etudError } = await supabaseAdmin
+      .from('etudiants')
+      .select(`
+        *,
+        parents (*),
+        inscriptions (
+          *,
+          promotions (*),
+          formations (*),
+          filieres (*),
+          niveaux (*),
+          classes (*)
+        )
+      `)
+      .eq('id', etudiantId)
+      .single()
     
-    if (!etudiant) {
+    if (etudError || !etudiant) {
       throw new Error('Étudiant introuvable')
     }
     
-    const inscription = etudiant.inscriptions[0]
+    const inscription = (etudiant.inscriptions || []).find(i => i.id === inscriptionId)
     
     if (!inscription) {
       throw new Error(`Aucune inscription trouvée pour l'étudiant ${etudiantId} avec l'ID d'inscription ${inscriptionId}`)
     }
     
-    // Synchroniser la photo : si la photo d'identité existe mais pas la photo de profil, utiliser la photo d'identité
+    // Synchroniser la photo
     let photoProfil = etudiant.photo
-    if (!photoProfil && inscription.photoIdentite) {
-      photoProfil = inscription.photoIdentite
-      // Mettre à jour la photo de profil de l'étudiant
-      await prisma.etudiant.update({
-        where: { id: etudiantId },
-        data: { photo: inscription.photoIdentite }
-      })
-    }
-    // Si la photo de profil existe mais pas la photo d'identité, synchroniser dans l'autre sens
-    else if (photoProfil && !inscription.photoIdentite) {
-      await prisma.inscription.update({
-        where: { id: inscriptionId },
-        data: { photoIdentite: photoProfil }
-      })
+    if (!photoProfil && inscription.photo_identite) {
+      photoProfil = inscription.photo_identite
+      await supabaseAdmin
+        .from('etudiants')
+        .update({ photo: inscription.photo_identite })
+        .eq('id', etudiantId)
+    } else if (photoProfil && !inscription.photo_identite) {
+      await supabaseAdmin
+        .from('inscriptions')
+        .update({ photo_identite: photoProfil })
+        .eq('id', inscriptionId)
     }
     
     return {
@@ -330,8 +341,8 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
         matricule: etudiant.matricule,
         nom: etudiant.nom,
         prenom: etudiant.prenom,
-        dateNaissance: etudiant.dateNaissance,
-        lieuNaissance: etudiant.lieuNaissance,
+        dateNaissance: etudiant.date_naissance,
+        lieuNaissance: etudiant.lieu_naissance,
         nationalite: etudiant.nationalite,
         email: etudiant.email,
         telephone: etudiant.telephone,
@@ -341,23 +352,23 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
       inscription: {
         id: inscription.id,
         statut: inscription.statut,
-        typeInscription: inscription.typeInscription,
-        dateInscription: inscription.dateInscription,
-        dateValidation: inscription.dateValidation,
+        typeInscription: inscription.type_inscription,
+        dateInscription: inscription.date_inscription,
+        dateValidation: inscription.date_validation,
         documents: {
-          acteNaissance: inscription.copieActeNaissance,
-          photo: inscription.photoIdentite || photoProfil,
+          acteNaissance: inscription.copie_acte_naissance,
+          photo: inscription.photo_identite || photoProfil,
           quittance: inscription.quittance,
-          pieceIdentite: inscription.pieceIdentite,
-          releveBac: inscription.copieReleve,
-          attestationReussiteBac: inscription.copieDiplome,
-          diplome: inscription.copieDiplome
+          pieceIdentite: inscription.piece_identite,
+          releveBac: inscription.copie_releve,
+          attestationReussiteBac: inscription.copie_diplome,
+          diplome: inscription.copie_diplome
         },
-        promotion: inscription.promotion,
-        formation: inscription.formation,
-        filiere: inscription.filiere,
-        niveau: inscription.niveau,
-        classe: inscription.classe
+        promotion: inscription.promotions,
+        formation: inscription.formations,
+        filiere: inscription.filieres,
+        niveau: inscription.niveaux,
+        classe: inscription.classes
       },
       parents: etudiant.parents || []
     }
@@ -366,4 +377,3 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
     throw error
   }
 }
-

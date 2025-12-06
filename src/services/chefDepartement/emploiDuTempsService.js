@@ -1,59 +1,49 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Obtenir l'emploi du temps d'une classe
 export const getEmploiDuTempsByClasse = async (classeId, semestre, departementId) => {
   try {
-    const classe = await prisma.classe.findUnique({
-      where: { id: classeId },
-      include: {
-        filiere: {
-          include: {
-            departement: true
-          }
-        }
-      }
-    })
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    const emploisTemps = await prisma.emploiDuTemps.findMany({
-      where: {
-        classeId,
-        semestre
-      },
-      include: {
-        module: true,
-        enseignant: true
-      },
-      orderBy: [
-        { jour: 'asc' },
-        { heureDebut: 'asc' }
-      ]
-    })
+    const { data: emploisTemps, error } = await supabaseAdmin
+      .from('emplois_du_temps')
+      .select('*, modules (*), enseignants (*)')
+      .eq('classe_id', classeId)
+      .eq('semestre', semestre)
+      .order('jour', { ascending: true })
+      .order('heure_debut', { ascending: true })
+
+    if (error) throw error
 
     return {
       success: true,
-      emploisTemps: emploisTemps.map(edt => ({
+      emploisTemps: (emploisTemps || []).map(edt => ({
         id: edt.id,
         jour: edt.jour,
-        heureDebut: edt.heureDebut,
-        heureFin: edt.heureFin,
+        heureDebut: edt.heure_debut,
+        heureFin: edt.heure_fin,
         salle: edt.salle,
-        module: {
-          id: edt.module.id,
-          code: edt.module.code,
-          nom: edt.module.nom
-        },
-        enseignant: {
-          id: edt.enseignant.id,
-          nom: edt.enseignant.nom,
-          prenom: edt.enseignant.prenom
-        }
+        module: edt.modules ? {
+          id: edt.modules.id,
+          code: edt.modules.code,
+          nom: edt.modules.nom
+        } : null,
+        enseignant: edt.enseignants ? {
+          id: edt.enseignants.id,
+          nom: edt.enseignants.nom,
+          prenom: edt.enseignants.prenom
+        } : null
       }))
     }
   } catch (error) {
@@ -77,41 +67,42 @@ export const createEmploiDuTemps = async (data, departementId) => {
       }
     }
 
-    // Vérifier que la classe, le module et l'enseignant appartiennent au département
-    const [classe, module, enseignant] = await Promise.all([
-      prisma.classe.findUnique({
-        where: { id: classeId },
-        include: {
-          filiere: {
-            include: {
-              departement: true
-            }
-          }
-        }
-      }),
-      prisma.module.findUnique({
-        where: { id: moduleId }
-      }),
-      prisma.enseignant.findUnique({
-        where: { id: enseignantId }
-      })
-    ])
+    // Vérifier que la classe appartient au département
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (!module || module.departementId !== departementId) {
+    // Vérifier le module
+    const { data: module } = await supabaseAdmin
+      .from('modules')
+      .select('*')
+      .eq('id', moduleId)
+      .single()
+
+    if (!module || module.departement_id !== departementId) {
       return {
         success: false,
         error: 'Module introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (!enseignant || enseignant.departementId !== departementId) {
+    // Vérifier l'enseignant
+    const { data: enseignant } = await supabaseAdmin
+      .from('enseignants')
+      .select('*')
+      .eq('id', enseignantId)
+      .single()
+
+    if (!enseignant || enseignant.departement_id !== departementId) {
       return {
         success: false,
         error: 'Enseignant introuvable ou n\'appartient pas à votre département'
@@ -119,71 +110,57 @@ export const createEmploiDuTemps = async (data, departementId) => {
     }
 
     // Vérifier les conflits d'horaires
-    const conflit = await prisma.emploiDuTemps.findFirst({
-      where: {
-        classeId,
-        jour,
-        OR: [
-          {
-            AND: [
-              { heureDebut: { lte: heureDebut } },
-              { heureFin: { gt: heureDebut } }
-            ]
-          },
-          {
-            AND: [
-              { heureDebut: { lt: heureFin } },
-              { heureFin: { gte: heureFin } }
-            ]
-          }
-        ],
-        semestre
-      }
-    })
+    const { data: conflits } = await supabaseAdmin
+      .from('emplois_du_temps')
+      .select('id')
+      .eq('classe_id', classeId)
+      .eq('jour', jour)
+      .eq('semestre', semestre)
+      .or(`and(heure_debut.lte.${heureDebut},heure_fin.gt.${heureDebut}),and(heure_debut.lt.${heureFin},heure_fin.gte.${heureFin})`)
 
-    if (conflit) {
+    if (conflits && conflits.length > 0) {
       return {
         success: false,
         error: 'Conflit d\'horaire détecté pour cette classe'
       }
     }
 
-    const emploiDuTemps = await prisma.emploiDuTemps.create({
-      data: {
-        classeId,
-        moduleId,
-        enseignantId,
+    const { data: emploiDuTemps, error } = await supabaseAdmin
+      .from('emplois_du_temps')
+      .insert({
+        classe_id: classeId,
+        module_id: moduleId,
+        enseignant_id: enseignantId,
         jour,
-        heureDebut,
-        heureFin,
+        heure_debut: heureDebut,
+        heure_fin: heureFin,
         salle,
         semestre,
-        anneeAcademique
-      },
-      include: {
-        module: true,
-        enseignant: true
-      }
-    })
+        annee_academique: anneeAcademique
+      })
+      .select('*, modules (*), enseignants (*)')
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
       emploiDuTemps: {
         id: emploiDuTemps.id,
         jour: emploiDuTemps.jour,
-        heureDebut: emploiDuTemps.heureDebut,
-        heureFin: emploiDuTemps.heureFin,
+        heureDebut: emploiDuTemps.heure_debut,
+        heureFin: emploiDuTemps.heure_fin,
         salle: emploiDuTemps.salle,
-        module: {
-          id: emploiDuTemps.module.id,
-          code: emploiDuTemps.module.code,
-          nom: emploiDuTemps.module.nom
-        },
-        enseignant: {
-          id: emploiDuTemps.enseignant.id,
-          nom: emploiDuTemps.enseignant.nom,
-          prenom: emploiDuTemps.enseignant.prenom
-        }
+        module: emploiDuTemps.modules ? {
+          id: emploiDuTemps.modules.id,
+          code: emploiDuTemps.modules.code,
+          nom: emploiDuTemps.modules.nom
+        } : null,
+        enseignant: emploiDuTemps.enseignants ? {
+          id: emploiDuTemps.enseignants.id,
+          nom: emploiDuTemps.enseignants.nom,
+          prenom: emploiDuTemps.enseignants.prenom
+        } : null
       }
     }
   } catch (error) {
@@ -198,31 +175,25 @@ export const createEmploiDuTemps = async (data, departementId) => {
 // Supprimer un emploi du temps
 export const deleteEmploiDuTemps = async (id, departementId) => {
   try {
-    const existing = await prisma.emploiDuTemps.findUnique({
-      where: { id },
-      include: {
-        classe: {
-          include: {
-            filiere: {
-              include: {
-                departement: true
-              }
-            }
-          }
-        }
-      }
-    })
+    const { data: existing } = await supabaseAdmin
+      .from('emplois_du_temps')
+      .select('*, classes (*, filieres (*, departements (*)))')
+      .eq('id', id)
+      .single()
 
-    if (!existing || existing.classe.filiere.departement?.id !== departementId) {
+    if (!existing || existing.classes?.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Emploi du temps introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    await prisma.emploiDuTemps.delete({
-      where: { id }
-    })
+    const { error } = await supabaseAdmin
+      .from('emplois_du_temps')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
 
     return {
       success: true,
@@ -236,4 +207,3 @@ export const deleteEmploiDuTemps = async (id, departementId) => {
     }
   }
 }
-

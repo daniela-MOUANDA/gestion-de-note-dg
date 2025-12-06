@@ -1,49 +1,45 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Récupérer les bulletins d'une classe et d'un semestre
 export const getBulletinsParClasse = async (promotionId, classeId, semestre) => {
   try {
-    const inscriptions = await prisma.inscription.findMany({
-      where: {
-        promotionId,
-        classeId,
-        statut: 'INSCRIT'
-      },
-      include: {
-        etudiant: true
-      }
-    })
+    const { data: inscriptions, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('*, etudiants (*)')
+      .eq('promotion_id', promotionId)
+      .eq('classe_id', classeId)
+      .eq('statut', 'INSCRIT')
     
-    const bulletins = await prisma.bulletin.findMany({
-      where: {
-        promotionId,
-        classeId,
-        semestre
-      },
-      include: {
-        etudiant: true
-      }
-    })
+    if (inscError) throw inscError
+    
+    const { data: bulletins, error: bulError } = await supabaseAdmin
+      .from('bulletins')
+      .select('*, etudiants (*)')
+      .eq('promotion_id', promotionId)
+      .eq('classe_id', classeId)
+      .eq('semestre', semestre)
+    
+    if (bulError) throw bulError
     
     // Créer les bulletins manquants pour les étudiants inscrits
-    const bulletinsManquants = inscriptions
-      .filter(inscription => !bulletins.find(b => b.etudiantId === inscription.etudiantId))
+    const bulletinsManquants = (inscriptions || [])
+      .filter(inscription => !(bulletins || []).find(b => b.etudiant_id === inscription.etudiant_id))
       .map(inscription => ({
         id: null,
-        etudiantId: inscription.etudiantId,
-        etudiant: `${inscription.etudiant.nom} ${inscription.etudiant.prenom}`,
-        matricule: inscription.etudiant.matricule,
+        etudiantId: inscription.etudiant_id,
+        etudiant: `${inscription.etudiants.nom} ${inscription.etudiants.prenom}`,
+        matricule: inscription.etudiants.matricule,
         statut: 'NON_RECUPERE',
         dateRecuperation: null
       }))
     
-    const bulletinsExistants = bulletins.map(bulletin => ({
+    const bulletinsExistants = (bulletins || []).map(bulletin => ({
       id: bulletin.id,
-      etudiantId: bulletin.etudiantId,
-      etudiant: `${bulletin.etudiant.nom} ${bulletin.etudiant.prenom}`,
-      matricule: bulletin.etudiant.matricule,
+      etudiantId: bulletin.etudiant_id,
+      etudiant: `${bulletin.etudiants.nom} ${bulletin.etudiants.prenom}`,
+      matricule: bulletin.etudiants.matricule,
       statut: bulletin.statut,
-      dateRecuperation: bulletin.dateRecuperation
+      dateRecuperation: bulletin.date_recuperation
     }))
     
     return [...bulletinsExistants, ...bulletinsManquants].sort((a, b) => 
@@ -58,41 +54,49 @@ export const getBulletinsParClasse = async (promotionId, classeId, semestre) => 
 // Marquer un bulletin comme récupéré
 export const marquerBulletinRecupere = async (bulletinId, etudiantId, promotionId, classeId, semestre, agentId) => {
   try {
-    // Vérifier si le bulletin existe
-    let bulletin = await prisma.bulletin.findUnique({
-      where: { id: bulletinId }
-    })
-    
-    if (!bulletin) {
-      // Créer le bulletin s'il n'existe pas
-      bulletin = await prisma.bulletin.create({
-        data: {
-          etudiantId,
-          promotionId,
-          classeId,
-          semestre,
-          anneeAcademique: (await prisma.promotion.findUnique({ where: { id: promotionId } }))?.annee || '',
-          statut: 'RECUPERE',
-          dateRecuperation: new Date(),
-          agentRecuperation: agentId
-        }
-      })
-    } else {
+    if (bulletinId) {
       // Mettre à jour le bulletin existant
-      bulletin = await prisma.bulletin.update({
-        where: { id: bulletinId },
-        data: {
+      const { data: bulletin, error } = await supabaseAdmin
+        .from('bulletins')
+        .update({
           statut: 'RECUPERE',
-          dateRecuperation: new Date(),
-          agentRecuperation: agentId
-        }
-      })
+          date_recuperation: new Date().toISOString(),
+          agent_recuperation: agentId
+        })
+        .eq('id', bulletinId)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return bulletin
+    } else {
+      // Créer le bulletin s'il n'existe pas
+      const { data: promotion } = await supabaseAdmin
+        .from('promotions')
+        .select('annee')
+        .eq('id', promotionId)
+        .single()
+      
+      const { data: bulletin, error } = await supabaseAdmin
+        .from('bulletins')
+        .insert({
+          etudiant_id: etudiantId,
+          promotion_id: promotionId,
+          classe_id: classeId,
+          semestre,
+          annee_academique: promotion?.annee || '',
+          statut: 'RECUPERE',
+          date_recuperation: new Date().toISOString(),
+          agent_recuperation: agentId
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      return bulletin
     }
-    
-    return bulletin
   } catch (error) {
     console.error('Erreur lors de la mise à jour du bulletin:', error)
     throw error
   }
 }
-

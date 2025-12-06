@@ -1,19 +1,20 @@
+import dotenv from 'dotenv'
+import { fileURLToPath } from 'url'
+import path from 'path'
+
+// Charger les variables d'environnement AVANT tous les autres imports
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+dotenv.config({ path: path.join(__dirname, '..', '.env') })
+
 import express from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import authRoutes from './routes/auth.js'
 import scolariteRoutes from './routes/scolarite.js'
 import comptesRoutes from './routes/comptes.js'
 import chefsDepartementRoutes from './routes/chefsDepartement.js'
 import chefDepartementRoutes from './routes/chefDepartement.js'
 import departementsRoutes from './routes/departements.js'
-
-dotenv.config()
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -56,4 +57,3 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Serveur API démarré sur http://localhost:${PORT}`)
 })
-

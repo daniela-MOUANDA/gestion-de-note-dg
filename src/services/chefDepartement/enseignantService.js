@@ -1,49 +1,38 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Obtenir tous les enseignants d'un département
 export const getEnseignantsByDepartement = async (departementId) => {
   try {
-    const enseignants = await prisma.enseignant.findMany({
-      where: {
-        departementId,
-        actif: true
-      },
-      include: {
-        affectations: {
-          include: {
-            module: {
-              include: {
-                classe: true
-              }
-            }
-          }
-        },
-        _count: {
-          select: {
-            affectations: true
-          }
-        }
-      },
-      orderBy: {
-        nom: 'asc'
-      }
-    })
+    const { data: enseignants, error } = await supabaseAdmin
+      .from('enseignants')
+      .select(`
+        *,
+        affectations_module_enseignant (
+          *,
+          modules (*, classes (*))
+        )
+      `)
+      .eq('departement_id', departementId)
+      .eq('actif', true)
+      .order('nom', { ascending: true })
+
+    if (error) throw error
 
     return {
       success: true,
-      enseignants: enseignants.map(ens => ({
+      enseignants: (enseignants || []).map(ens => ({
         id: ens.id,
         nom: ens.nom,
         prenom: ens.prenom,
         email: ens.email,
         telephone: ens.telephone,
-        modules: ens.affectations.map(aff => ({
-          id: aff.module.id,
-          code: aff.module.code,
-          nom: aff.module.nom,
-          classe: aff.module.classe.code
+        modules: (ens.affectations_module_enseignant || []).map(aff => ({
+          id: aff.modules?.id,
+          code: aff.modules?.code,
+          nom: aff.modules?.nom,
+          classe: aff.modules?.classes?.code
         })),
-        nombreModules: ens._count.affectations,
+        nombreModules: (ens.affectations_module_enseignant || []).length,
         actif: ens.actif
       }))
     }
@@ -69,9 +58,11 @@ export const createEnseignant = async (data, departementId) => {
     }
 
     // Vérifier si l'email existe déjà
-    const existing = await prisma.enseignant.findUnique({
-      where: { email }
-    })
+    const { data: existing } = await supabaseAdmin
+      .from('enseignants')
+      .select('id')
+      .eq('email', email)
+      .single()
 
     if (existing) {
       return {
@@ -80,16 +71,20 @@ export const createEnseignant = async (data, departementId) => {
       }
     }
 
-    const enseignant = await prisma.enseignant.create({
-      data: {
+    const { data: enseignant, error } = await supabaseAdmin
+      .from('enseignants')
+      .insert({
         nom,
         prenom,
         email,
         telephone,
-        departementId,
+        departement_id: departementId,
         actif: true
-      }
-    })
+      })
+      .select()
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
@@ -116,38 +111,39 @@ export const createEnseignant = async (data, departementId) => {
 // Mettre à jour un enseignant
 export const updateEnseignant = async (id, data, departementId) => {
   try {
-    const existing = await prisma.enseignant.findUnique({
-      where: { id }
-    })
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('enseignants')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existing || existing.departementId !== departementId) {
+    if (fetchError || !existing || existing.departement_id !== departementId) {
       return {
         success: false,
         error: 'Enseignant introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    const enseignant = await prisma.enseignant.update({
-      where: { id },
-      data: {
+    const { data: enseignant, error } = await supabaseAdmin
+      .from('enseignants')
+      .update({
         nom: data.nom,
         prenom: data.prenom,
         email: data.email,
         telephone: data.telephone,
         actif: data.actif !== undefined ? data.actif : existing.actif
-      },
-      include: {
-        affectations: {
-          include: {
-            module: {
-              include: {
-                classe: true
-              }
-            }
-          }
-        }
-      }
-    })
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        affectations_module_enseignant (
+          *,
+          modules (*, classes (*))
+        )
+      `)
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
@@ -157,13 +153,13 @@ export const updateEnseignant = async (id, data, departementId) => {
         prenom: enseignant.prenom,
         email: enseignant.email,
         telephone: enseignant.telephone,
-        modules: enseignant.affectations.map(aff => ({
-          id: aff.module.id,
-          code: aff.module.code,
-          nom: aff.module.nom,
-          classe: aff.module.classe.code
+        modules: (enseignant.affectations_module_enseignant || []).map(aff => ({
+          id: aff.modules?.id,
+          code: aff.modules?.code,
+          nom: aff.modules?.nom,
+          classe: aff.modules?.classes?.code
         })),
-        nombreModules: enseignant.affectations.length,
+        nombreModules: (enseignant.affectations_module_enseignant || []).length,
         actif: enseignant.actif
       }
     }
@@ -179,35 +175,44 @@ export const updateEnseignant = async (id, data, departementId) => {
 // Supprimer un enseignant
 export const deleteEnseignant = async (id, departementId) => {
   try {
-    const existing = await prisma.enseignant.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            affectations: true,
-            notes: true
-          }
-        }
-      }
-    })
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('enseignants')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existing || existing.departementId !== departementId) {
+    if (fetchError || !existing || existing.departement_id !== departementId) {
       return {
         success: false,
         error: 'Enseignant introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (existing._count.affectations > 0 || existing._count.notes > 0) {
+    // Vérifier les affectations
+    const { count: affectationsCount } = await supabaseAdmin
+      .from('affectations_module_enseignant')
+      .select('*', { count: 'exact', head: true })
+      .eq('enseignant_id', id)
+
+    // Vérifier les notes
+    const { count: notesCount } = await supabaseAdmin
+      .from('notes')
+      .select('*', { count: 'exact', head: true })
+      .eq('enseignant_id', id)
+
+    if ((affectationsCount || 0) > 0 || (notesCount || 0) > 0) {
       return {
         success: false,
         error: 'Impossible de supprimer un enseignant qui a des affectations ou des notes'
       }
     }
 
-    await prisma.enseignant.delete({
-      where: { id }
-    })
+    const { error } = await supabaseAdmin
+      .from('enseignants')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
 
     return {
       success: true,
@@ -225,12 +230,13 @@ export const deleteEnseignant = async (id, departementId) => {
 // Affecter un enseignant à un ou plusieurs modules
 export const affecterModules = async (enseignantId, moduleIds, departementId) => {
   try {
-    // Vérifier que l'enseignant appartient au département
-    const enseignant = await prisma.enseignant.findUnique({
-      where: { id: enseignantId }
-    })
+    const { data: enseignant, error: ensError } = await supabaseAdmin
+      .from('enseignants')
+      .select('*')
+      .eq('id', enseignantId)
+      .single()
 
-    if (!enseignant || enseignant.departementId !== departementId) {
+    if (ensError || !enseignant || enseignant.departement_id !== departementId) {
       return {
         success: false,
         error: 'Enseignant introuvable ou n\'appartient pas à votre département'
@@ -238,14 +244,15 @@ export const affecterModules = async (enseignantId, moduleIds, departementId) =>
     }
 
     // Vérifier que tous les modules appartiennent au département
-    const modules = await prisma.module.findMany({
-      where: {
-        id: { in: moduleIds },
-        departementId
-      }
-    })
+    const { data: modules, error: modError } = await supabaseAdmin
+      .from('modules')
+      .select('id')
+      .in('id', moduleIds)
+      .eq('departement_id', departementId)
 
-    if (modules.length !== moduleIds.length) {
+    if (modError) throw modError
+
+    if ((modules || []).length !== moduleIds.length) {
       return {
         success: false,
         error: 'Certains modules n\'existent pas ou n\'appartiennent pas à votre département'
@@ -253,36 +260,38 @@ export const affecterModules = async (enseignantId, moduleIds, departementId) =>
     }
 
     // Supprimer les anciennes affectations
-    await prisma.affectationModuleEnseignant.deleteMany({
-      where: { enseignantId }
-    })
+    await supabaseAdmin
+      .from('affectations_module_enseignant')
+      .delete()
+      .eq('enseignant_id', enseignantId)
 
     // Créer les nouvelles affectations
-    const affectations = await Promise.all(
-      moduleIds.map(moduleId =>
-        prisma.affectationModuleEnseignant.create({
-          data: {
-            moduleId,
-            enseignantId
-          },
-          include: {
-            module: {
-              include: {
-                classe: true
-              }
-            }
-          }
-        })
-      )
-    )
+    const affectationsToInsert = moduleIds.map(moduleId => ({
+      module_id: moduleId,
+      enseignant_id: enseignantId
+    }))
+
+    const { error: insertError } = await supabaseAdmin
+      .from('affectations_module_enseignant')
+      .insert(affectationsToInsert)
+
+    if (insertError) throw insertError
+
+    // Récupérer les affectations avec les détails
+    const { data: affectations, error: fetchError } = await supabaseAdmin
+      .from('affectations_module_enseignant')
+      .select('*, modules (*, classes (*))')
+      .eq('enseignant_id', enseignantId)
+
+    if (fetchError) throw fetchError
 
     return {
       success: true,
-      affectations: affectations.map(aff => ({
-        id: aff.module.id,
-        code: aff.module.code,
-        nom: aff.module.nom,
-        classe: aff.module.classe.code
+      affectations: (affectations || []).map(aff => ({
+        id: aff.modules?.id,
+        code: aff.modules?.code,
+        nom: aff.modules?.nom,
+        classe: aff.modules?.classes?.code
       }))
     }
   } catch (error) {
@@ -293,4 +302,3 @@ export const affecterModules = async (enseignantId, moduleIds, departementId) =>
     }
   }
 }
-

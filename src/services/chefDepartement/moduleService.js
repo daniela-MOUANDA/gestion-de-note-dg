@@ -1,48 +1,40 @@
-import prisma from '../../lib/prisma.js'
+import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Obtenir tous les modules d'un département
 export const getModulesByDepartement = async (departementId, classeId = null) => {
   try {
-    const where = { departementId }
+    let query = supabaseAdmin
+      .from('modules')
+      .select(`
+        *,
+        classes (*, filieres (*), niveaux (*)),
+        affectations_module_enseignant (*, enseignants (*))
+      `)
+      .eq('departement_id', departementId)
+      .order('code', { ascending: true })
+
     if (classeId) {
-      where.classeId = classeId
+      query = query.eq('classe_id', classeId)
     }
 
-    const modules = await prisma.module.findMany({
-      where,
-      include: {
-        classe: {
-          include: {
-            filiere: true,
-            niveau: true
-          }
-        },
-        affectations: {
-          include: {
-            enseignant: true
-          }
-        }
-      },
-      orderBy: [
-        { classe: { code: 'asc' } },
-        { code: 'asc' }
-      ]
-    })
+    const { data: modules, error } = await query
+
+    if (error) throw error
 
     return {
       success: true,
-      modules: modules.map(mod => ({
+      modules: (modules || []).map(mod => ({
         id: mod.id,
         code: mod.code,
         nom: mod.nom,
         credit: mod.credit,
         semestre: mod.semestre,
-        classe: mod.classe.code,
-        classeId: mod.classeId,
-        enseignants: mod.affectations.map(aff => ({
-          id: aff.enseignant.id,
-          nom: aff.enseignant.nom,
-          prenom: aff.enseignant.prenom
+        classe: mod.classes?.code,
+        classeId: mod.classe_id,
+        enseignants: (mod.affectations_module_enseignant || []).map(aff => ({
+          id: aff.enseignants?.id,
+          nom: aff.enseignants?.nom,
+          prenom: aff.enseignants?.prenom
         })),
         actif: mod.actif
       }))
@@ -69,18 +61,13 @@ export const createModule = async (data, departementId) => {
     }
 
     // Vérifier que la classe appartient au département
-    const classe = await prisma.classe.findUnique({
-      where: { id: classeId },
-      include: {
-        filiere: {
-          include: {
-            departement: true
-          }
-        }
-      }
-    })
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (*, departements (*))')
+      .eq('id', classeId)
+      .single()
 
-    if (!classe || classe.filiere.departement?.id !== departementId) {
+    if (!classe || classe.filieres?.departement_id !== departementId) {
       return {
         success: false,
         error: 'Classe introuvable ou n\'appartient pas à votre département'
@@ -88,12 +75,12 @@ export const createModule = async (data, departementId) => {
     }
 
     // Vérifier l'unicité
-    const existing = await prisma.module.findFirst({
-      where: {
-        code,
-        classeId
-      }
-    })
+    const { data: existing } = await supabaseAdmin
+      .from('modules')
+      .select('id')
+      .eq('code', code)
+      .eq('classe_id', classeId)
+      .single()
 
     if (existing) {
       return {
@@ -102,20 +89,21 @@ export const createModule = async (data, departementId) => {
       }
     }
 
-    const module = await prisma.module.create({
-      data: {
+    const { data: module, error } = await supabaseAdmin
+      .from('modules')
+      .insert({
         code,
         nom,
         credit: parseInt(credit),
         semestre,
-        classeId,
-        departementId,
+        classe_id: classeId,
+        departement_id: departementId,
         actif: true
-      },
-      include: {
-        classe: true
-      }
-    })
+      })
+      .select('*, classes (*)')
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
@@ -125,8 +113,8 @@ export const createModule = async (data, departementId) => {
         nom: module.nom,
         credit: module.credit,
         semestre: module.semestre,
-        classe: module.classe.code,
-        classeId: module.classeId,
+        classe: module.classes?.code,
+        classeId: module.classe_id,
         actif: module.actif
       }
     }
@@ -142,18 +130,19 @@ export const createModule = async (data, departementId) => {
 // Mettre à jour un module
 export const updateModule = async (id, data, departementId) => {
   try {
-    const existing = await prisma.module.findUnique({
-      where: { id }
-    })
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('modules')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existing || existing.departementId !== departementId) {
+    if (fetchError || !existing || existing.departement_id !== departementId) {
       return {
         success: false,
         error: 'Module introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    // Vérifier si la classe change
     let updateData = {
       code: data.code,
       nom: data.nom,
@@ -163,19 +152,14 @@ export const updateModule = async (id, data, departementId) => {
     }
 
     // Si classeId est fourni et différent, vérifier qu'elle appartient au département
-    if (data.classeId && data.classeId !== existing.classeId) {
-      const classe = await prisma.classe.findUnique({
-        where: { id: data.classeId },
-        include: {
-          filiere: {
-            include: {
-              departement: true
-            }
-          }
-        }
-      })
+    if (data.classeId && data.classeId !== existing.classe_id) {
+      const { data: classe } = await supabaseAdmin
+        .from('classes')
+        .select('*, filieres (*, departements (*))')
+        .eq('id', data.classeId)
+        .single()
 
-      if (!classe || classe.filiere.departement?.id !== departementId) {
+      if (!classe || classe.filieres?.departement_id !== departementId) {
         return {
           success: false,
           error: 'Classe introuvable ou n\'appartient pas à votre département'
@@ -183,13 +167,13 @@ export const updateModule = async (id, data, departementId) => {
       }
 
       // Vérifier l'unicité du code dans la nouvelle classe
-      const existingCode = await prisma.module.findFirst({
-        where: {
-          code: data.code,
-          classeId: data.classeId,
-          id: { not: id }
-        }
-      })
+      const { data: existingCode } = await supabaseAdmin
+        .from('modules')
+        .select('id')
+        .eq('code', data.code)
+        .eq('classe_id', data.classeId)
+        .neq('id', id)
+        .single()
 
       if (existingCode) {
         return {
@@ -198,16 +182,17 @@ export const updateModule = async (id, data, departementId) => {
         }
       }
 
-      updateData.classeId = data.classeId
+      updateData.classe_id = data.classeId
     }
 
-    const module = await prisma.module.update({
-      where: { id },
-      data: updateData,
-      include: {
-        classe: true
-      }
-    })
+    const { data: module, error } = await supabaseAdmin
+      .from('modules')
+      .update(updateData)
+      .eq('id', id)
+      .select('*, classes (*)')
+      .single()
+
+    if (error) throw error
 
     return {
       success: true,
@@ -217,8 +202,8 @@ export const updateModule = async (id, data, departementId) => {
         nom: module.nom,
         credit: module.credit,
         semestre: module.semestre,
-        classe: module.classe.code,
-        classeId: module.classeId,
+        classe: module.classes?.code,
+        classeId: module.classe_id,
         actif: module.actif
       }
     }
@@ -234,35 +219,38 @@ export const updateModule = async (id, data, departementId) => {
 // Supprimer un module
 export const deleteModule = async (id, departementId) => {
   try {
-    const existing = await prisma.module.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            affectations: true,
-            notes: true
-          }
-        }
-      }
-    })
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('modules')
+      .select('*')
+      .eq('id', id)
+      .single()
 
-    if (!existing || existing.departementId !== departementId) {
+    if (fetchError || !existing || existing.departement_id !== departementId) {
       return {
         success: false,
         error: 'Module introuvable ou n\'appartient pas à votre département'
       }
     }
 
-    if (existing._count.notes > 0) {
+    // Vérifier les notes
+    const { count: notesCount } = await supabaseAdmin
+      .from('notes')
+      .select('*', { count: 'exact', head: true })
+      .eq('module_id', id)
+
+    if ((notesCount || 0) > 0) {
       return {
         success: false,
         error: 'Impossible de supprimer un module qui contient des notes'
       }
     }
 
-    await prisma.module.delete({
-      where: { id }
-    })
+    const { error } = await supabaseAdmin
+      .from('modules')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
 
     return {
       success: true,
@@ -276,4 +264,3 @@ export const deleteModule = async (id, departementId) => {
     }
   }
 }
-

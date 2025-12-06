@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faFileAlt, faArrowLeft, faSearch, faDownload, faPrint, faPlus, faCheck
 } from '@fortawesome/free-solid-svg-icons'
 import SidebarSP from '../../components/common/SidebarSP'
@@ -22,7 +22,7 @@ const AttestationsView = () => {
   const [numeroAttestation, setNumeroAttestation] = useState(460) // Commence à 460
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
-  
+
   // États pour les données de la base
   const [promotions, setPromotions] = useState([])
   const [formations, setFormations] = useState([])
@@ -36,13 +36,13 @@ const AttestationsView = () => {
       prev.map(item =>
         item.id === etudiantId
           ? {
-              ...item,
-              attestationExiste: true,
-              attestationId: attestationInfo?.id || item.attestationId || null,
-              attestationNumero: attestationInfo?.numero || item.attestationNumero || null,
-              attestationArchivee: attestationInfo?.archivee ?? true,
-              attestationDate: attestationInfo?.dateGeneration || item.attestationDate || null
-            }
+            ...item,
+            attestationExiste: true,
+            attestationId: attestationInfo?.id || item.attestationId || null,
+            attestationNumero: attestationInfo?.numero || item.attestationNumero || null,
+            attestationArchivee: attestationInfo?.archivee ?? true,
+            attestationDate: attestationInfo?.dateGeneration || item.attestationDate || null
+          }
           : item
       )
     )
@@ -130,10 +130,10 @@ const AttestationsView = () => {
       const promotion = promotions.find(p => p.id === selectedPromotion)
       const niveau = niveaux.find(n => n.id === selectedNiveau)
       const filiere = filieres.find(f => f.id === selectedFiliere)
-      
+
       // Créer l'attestation dans la base de données
       const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2024-2025')
-      
+
       const attestation = {
         numero: attestationData.numero,
         etudiant: `${etudiant.nom} ${etudiant.prenom}`,
@@ -144,15 +144,21 @@ const AttestationsView = () => {
         niveauFull: niveau?.nom || etudiant.niveau || '1ère année',
         formation: etudiant.formation,
         anneeAcademique: promotion?.annee || '2024-2025',
-        dateGeneration: new Date(attestationData.dateGeneration).toISOString().split('T')[0],
+        dateGeneration: attestationData.dateGeneration
+          ? (typeof attestationData.dateGeneration === 'string'
+            ? attestationData.dateGeneration.split('T')[0]
+            : new Date(attestationData.dateGeneration).toISOString().split('T')[0])
+          : new Date().toISOString().split('T')[0],
         lieu: 'Libreville',
-        dateTexte: new Date(attestationData.dateGeneration).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+        dateTexte: attestationData.dateGeneration
+          ? new Date(attestationData.dateGeneration).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+          : new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
       }
-      
+
       setAttestationGenerated(attestation)
       markAttestationAsGenerated(etudiant.id, attestationData)
       success('Attestation générée avec succès')
-      
+
       // Déclencher un événement pour rafraîchir le dashboard
       window.dispatchEvent(new CustomEvent('attestationGenerated'))
     } catch (error) {
@@ -169,9 +175,9 @@ const AttestationsView = () => {
       margin: [0, 0, 0, 0],
       filename: `Attestation_${attestationGenerated.etudiant.replace(/\s+/g, '_')}_${attestationGenerated.numero.replace(/\//g, '-')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
         letterRendering: true,
         windowWidth: 794,
         windowHeight: 1123,
@@ -179,9 +185,9 @@ const AttestationsView = () => {
         logging: false,
         allowTaint: false
       },
-      jsPDF: { 
-        unit: 'mm', 
-        format: 'a4', 
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
         orientation: 'portrait',
         compress: true,
         precision: 16,
@@ -189,7 +195,7 @@ const AttestationsView = () => {
       },
       pagebreak: { mode: 'avoid-all' }
     }
-    
+
     html2pdf().set(opt).from(element).save()
   }
 
@@ -199,7 +205,7 @@ const AttestationsView = () => {
 
   const handleGenerateAllAttestations = async () => {
     const etudiantsDisponibles = etudiants.filter(e => !e.attestationExiste)
-    
+
     if (etudiantsDisponibles.length === 0) {
       alertError('Toutes les attestations ont déjà été générées.')
       return
@@ -208,7 +214,7 @@ const AttestationsView = () => {
     const confirmation = window.confirm(
       `Voulez-vous générer ${etudiantsInscrits.length} attestations pour tous les étudiants inscrits ?\n\nCela peut prendre quelques minutes...`
     )
-    
+
     if (!confirmation) return
 
     try {
@@ -223,7 +229,7 @@ const AttestationsView = () => {
       }
 
       success(`${etudiantsDisponibles.length} attestation(s) générée(s) et envoyée(s) dans les archives !`)
-      
+
       // Déclencher un événement pour rafraîchir le dashboard
       window.dispatchEvent(new CustomEvent('attestationGenerated'))
     } catch (error) {
@@ -238,10 +244,10 @@ const AttestationsView = () => {
     const promotion = promotions.find(p => p.id === selectedPromotion)
     const niveauInfo = niveaux.find(n => n.id === selectedNiveau)
     const filiereInfo = filieres.find(f => f.id === selectedFiliere)
-    
+
     // Créer l'attestation dans la base de données
     const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2024-2025')
-    
+
     const attestation = {
       etudiant: `${etudiant.nom} ${etudiant.prenom}`,
       matricule: etudiant.matricule,
@@ -265,7 +271,7 @@ const AttestationsView = () => {
     element.style.backgroundColor = '#ffffff'
     element.style.boxSizing = 'border-box'
     element.style.pageBreakInside = 'avoid'
-    
+
     element.innerHTML = `
       <div style="padding: 2cm; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; position: relative; background-color: #ffffff; page-break-inside: avoid;">
         <div style="z-index: 2; position: relative; page-break-inside: avoid;">
@@ -337,20 +343,20 @@ const AttestationsView = () => {
         </div>
       </div>
     `
-    
+
     document.body.appendChild(element)
-    
+
     // Attendre que les images soient chargées
     await new Promise((resolve) => {
       const images = element.getElementsByTagName('img')
       let loadedCount = 0
       const totalImages = images.length
-      
+
       if (totalImages === 0) {
         resolve()
         return
       }
-      
+
       const checkAllLoaded = () => {
         loadedCount++
         if (loadedCount === totalImages) {
@@ -358,7 +364,7 @@ const AttestationsView = () => {
           setTimeout(resolve, 500)
         }
       }
-      
+
       for (let img of images) {
         if (img.complete) {
           checkAllLoaded()
@@ -368,14 +374,14 @@ const AttestationsView = () => {
         }
       }
     })
-    
+
     const opt = {
       margin: [0, 0, 0, 0],
       filename: `Attestation_${attestation.matricule}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
         letterRendering: true,
         windowWidth: 794,
         windowHeight: 1123,
@@ -383,9 +389,9 @@ const AttestationsView = () => {
         backgroundColor: '#ffffff',
         allowTaint: false
       },
-      jsPDF: { 
-        unit: 'mm', 
-        format: 'a4', 
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
         orientation: 'portrait',
         compress: true,
         precision: 16,
@@ -393,7 +399,7 @@ const AttestationsView = () => {
       },
       pagebreak: { mode: 'avoid-all' }
     }
-    
+
     await html2pdf().set(opt).from(element).save()
     document.body.removeChild(element)
     markAttestationAsGenerated(etudiant.id, attestationData)
@@ -471,22 +477,22 @@ const AttestationsView = () => {
                 </div>
 
                 {/* Titre centré avec cadre bleu ciel */}
-                <div style={{ 
-                  backgroundColor: '#A8C9E4', 
-                  border: '3px solid #2C3E50', 
-                  padding: '15px 0', 
+                <div style={{
+                  backgroundColor: '#A8C9E4',
+                  border: '3px solid #2C3E50',
+                  padding: '15px 0',
                   marginBottom: '3rem',
                   width: '100%',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center'
                 }}>
-                  <h1 style={{ 
-                    fontFamily: 'Arial, sans-serif', 
-                    fontSize: '18pt', 
-                    letterSpacing: '4px', 
-                    color: '#000', 
-                    fontWeight: 'bold', 
+                  <h1 style={{
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '18pt',
+                    letterSpacing: '4px',
+                    color: '#000',
+                    fontWeight: 'bold',
                     margin: 0,
                     textAlign: 'center'
                   }}>
@@ -497,9 +503,9 @@ const AttestationsView = () => {
                 {/* Corps du texte - Alignement justifié */}
                 <div className="flex-1" style={{ fontFamily: 'Arial, sans-serif', fontSize: '12pt', lineHeight: '1.3' }}>
                   <p className="mb-4 text-justify" style={{ textIndent: '2cm' }}>
-                    Je soussigné, Soilihi ALI ISSILAM, Directeur de la Scolarité et des Examens de 
-                    l'Institut National de la Poste, des Technologies de l'Information et de la 
-                    Communication (INPTIC), atteste que l'étudiant(e) <strong>{attestationGenerated.etudiant}</strong> suit 
+                    Je soussigné, Soilihi ALI ISSILAM, Directeur de la Scolarité et des Examens de
+                    l'Institut National de la Poste, des Technologies de l'Information et de la
+                    Communication (INPTIC), atteste que l'étudiant(e) <strong>{attestationGenerated.etudiant}</strong> suit
                     la formation ci-dessous dans notre établissement.
                   </p>
 
@@ -523,7 +529,7 @@ const AttestationsView = () => {
                   </div>
 
                   <p className="text-justify" style={{ textIndent: '2cm' }}>
-                    En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que 
+                    En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que
                     de droit.
                   </p>
                 </div>
@@ -536,21 +542,21 @@ const AttestationsView = () => {
                   <div className="flex justify-end">
                     <div className="relative" style={{ width: '300px' }}>
                       <p className="text-right mb-16" style={{ fontSize: '12pt', whiteSpace: 'nowrap' }}>Fait à {attestationGenerated.lieu}, le {attestationGenerated.dateTexte}</p>
-                      
+
                       <p className="font-bold mb-2 text-right" style={{ fontSize: '12pt', whiteSpace: 'nowrap' }}>Directeur de la Scolarité et des Examens</p>
-                      
+
                       <div className="relative" style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <img 
-                          src="/images/cachet.png" 
-                          alt="Cachet INPTIC" 
-                          style={{ 
-                            width: '150px', 
+                        <img
+                          src="/images/cachet.png"
+                          alt="Cachet INPTIC"
+                          style={{
+                            width: '150px',
                             height: '150px',
                             opacity: 0.95
-                          }} 
+                          }}
                         />
                       </div>
-                      
+
                       <p className="font-bold mt-2 text-center" style={{ fontSize: '12pt' }}>Soilihi ALI ISSILAM</p>
                     </div>
                   </div>
@@ -600,25 +606,21 @@ const AttestationsView = () => {
                 <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez l'année académique</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                   {promotions.map((promotion) => (
-                    <button 
+                    <button
                       key={promotion.id}
                       onClick={() => setSelectedPromotion(promotion.id)}
-                      className={`p-6 border-2 rounded-xl transition-all duration-200 group ${
-                        promotion.statut === 'EN_COURS'
+                      className={`p-6 border-2 rounded-xl transition-all duration-200 group ${promotion.statut === 'EN_COURS'
                           ? 'border-green-300 bg-green-50 hover:border-green-500 hover:shadow-lg'
                           : 'border-slate-200 hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg'
-                      }`}>
+                        }`}>
                       <div className="text-center">
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                          promotion.statut === 'EN_COURS' ? 'bg-green-100 group-hover:bg-green-200' : 'bg-blue-100 group-hover:bg-blue-200'
-                        }`}>
-                          <FontAwesomeIcon icon={faFileAlt} className={`text-3xl ${
-                            promotion.statut === 'EN_COURS' ? 'text-green-600' : 'text-blue-600'
-                          }`} />
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${promotion.statut === 'EN_COURS' ? 'bg-green-100 group-hover:bg-green-200' : 'bg-blue-100 group-hover:bg-blue-200'
+                          }`}>
+                          <FontAwesomeIcon icon={faFileAlt} className={`text-3xl ${promotion.statut === 'EN_COURS' ? 'text-green-600' : 'text-blue-600'
+                            }`} />
                         </div>
-                        <div className={`text-2xl font-bold mb-2 ${
-                          promotion.statut === 'EN_COURS' ? 'text-green-800 group-hover:text-green-600' : 'text-slate-800 group-hover:text-blue-600'
-                        }`}>
+                        <div className={`text-2xl font-bold mb-2 ${promotion.statut === 'EN_COURS' ? 'text-green-800 group-hover:text-green-600' : 'text-slate-800 group-hover:text-blue-600'
+                          }`}>
                           {promotion.annee}
                         </div>
                         {promotion.statut === 'EN_COURS' && (
@@ -662,7 +664,7 @@ const AttestationsView = () => {
               <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez le type de formation</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
                 {formations.map((formation) => (
-                  <button 
+                  <button
                     key={formation.id}
                     onClick={() => setSelectedFormation(formation.id)}
                     className="p-8 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
@@ -706,7 +708,7 @@ const AttestationsView = () => {
               <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez la filière</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
                 {filieres.map((filiere) => (
-                  <button 
+                  <button
                     key={filiere.id}
                     onClick={() => setSelectedFiliere(filiere.id)}
                     className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
@@ -761,7 +763,7 @@ const AttestationsView = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
                     {niveaux.map((niveau) => (
-                      <button 
+                      <button
                         key={niveau.id}
                         onClick={() => setSelectedNiveau(niveau.id)}
                         className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
@@ -787,9 +789,9 @@ const AttestationsView = () => {
     (e.prenom || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (e.matricule || '').toLowerCase().includes(searchQuery.toLowerCase())
   )
-  
+
   const etudiantsDisponibles = etudiants.filter(e => !e.attestationExiste)
-  
+
   const promotion = promotions.find(p => p.id === selectedPromotion)
   const filiere = filieres.find(f => f.id === selectedFiliere)
   const niveau = niveaux.find(n => n.id === selectedNiveau)
@@ -841,11 +843,10 @@ const AttestationsView = () => {
                       <button
                         onClick={handleGenerateAllAttestations}
                         disabled={loading || etudiantsDisponibles.length === 0}
-                        className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors ${
-                          etudiantsDisponibles.length === 0 || loading
+                        className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors ${etudiantsDisponibles.length === 0 || loading
                             ? 'bg-emerald-200 text-emerald-700 cursor-not-allowed'
                             : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                        }`}
+                          }`}
                       >
                         <FontAwesomeIcon icon={faPlus} />
                         {etudiantsDisponibles.length === 0 ? 'Toutes générées' : 'Générer toutes les attestations'}
@@ -872,34 +873,34 @@ const AttestationsView = () => {
                         {filteredEtudiants.map((etudiant) => {
                           const dejaGeneree = !!etudiant.attestationExiste
                           return (
-                          <tr key={etudiant.id} className="hover:bg-blue-50 transition-colors">
-                            <td className="px-6 py-4 text-sm text-slate-800 font-mono">{etudiant.matricule || 'N/A'}</td>
-                            <td className="px-6 py-4 text-sm text-slate-800 font-medium">
-                              {etudiant.prenom || ''} {etudiant.nom || ''}
-                              {dejaGeneree && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-                                  Déjà générée
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-600">{etudiant.formation || 'N/A'}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center justify-center">
-                                <button
-                                  onClick={() => handleGenerateAttestation(etudiant)}
-                                  disabled={loading || dejaGeneree}
-                                  className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
-                                    loading || dejaGeneree
-                                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                      : 'bg-blue-600 text-white hover:bg-blue-700 transition-colors'
-                                  }`}>
-                                  <FontAwesomeIcon icon={faFileAlt} />
-                                  {dejaGeneree ? 'Déjà générée' : 'Générer attestation'}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )})}
+                            <tr key={etudiant.id} className="hover:bg-blue-50 transition-colors">
+                              <td className="px-6 py-4 text-sm text-slate-800 font-mono">{etudiant.matricule || 'N/A'}</td>
+                              <td className="px-6 py-4 text-sm text-slate-800 font-medium">
+                                {etudiant.prenom || ''} {etudiant.nom || ''}
+                                {dejaGeneree && (
+                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                                    Déjà générée
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-slate-600">{etudiant.formation || 'N/A'}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center justify-center">
+                                  <button
+                                    onClick={() => handleGenerateAttestation(etudiant)}
+                                    disabled={loading || dejaGeneree}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${loading || dejaGeneree
+                                        ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700 transition-colors'
+                                      }`}>
+                                    <FontAwesomeIcon icon={faFileAlt} />
+                                    {dejaGeneree ? 'Déjà générée' : 'Générer attestation'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

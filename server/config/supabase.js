@@ -5,33 +5,35 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmenhxaWplenJ1c3dibG9rcmRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAxNTk5MiwiZXhwIjoyMDgwNTkxOTkyfQ.1Jc53E7p_4U5u-hqNpFjEJVxqgclJvlpYABh-ImEI08'
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('⚠️ Variables d\'environnement Supabase manquantes!')
-  console.error('Assurez-vous de définir SUPABASE_URL et SUPABASE_ANON_KEY dans votre fichier .env')
+    console.error('⚠️ Variables d\'environnement Supabase manquantes!')
+    console.error('Assurez-vous de définir SUPABASE_URL et SUPABASE_ANON_KEY dans votre fichier .env')
 }
 
 // Client Supabase pour le frontend (avec clé anonyme)
-// Utilise des valeurs par défaut temporaires si les variables ne sont pas encore chargées
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseKey || 'placeholder-key',
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseKey || 'placeholder-key',
+    {
+        auth: {
+            autoRefreshToken: true,
+            persistSession: true
+        }
     }
-  }
 )
 
 // Client Supabase pour le backend avec privilèges élevés (service role)
 // À utiliser uniquement côté serveur pour les opérations administratives
 export const supabaseAdmin = supabaseServiceKey
-  ? createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  })
-  : supabase
+    ? createClient(
+        supabaseUrl || 'https://placeholder.supabase.co',
+        supabaseServiceKey,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    )
+    : supabase
 
 export default supabase
-

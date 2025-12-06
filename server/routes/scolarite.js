@@ -1,6 +1,6 @@
 import express from 'express'
 import multer from 'multer'
-import { supabaseAdmin } from '../../src/lib/supabase.js'
+import { supabaseAdmin } from '../config/supabase.js'
 import {
   getFormations,
   getFilieres,
@@ -30,11 +30,11 @@ import {
   marquerDiplomeRecupere
 } from '../../src/services/scolarite/diplomeService.js'
 import { parseExcelFile, importEtudiants } from '../../src/services/scolarite/importService.js'
-import { 
-  saveDocument, 
-  updateInscriptionDocument, 
-  updateEtudiantInfo, 
-  upsertParent, 
+import {
+  saveDocument,
+  updateInscriptionDocument,
+  updateEtudiantInfo,
+  upsertParent,
   getParents,
   getDossierEtudiant,
   deleteInscriptionDocument
@@ -51,10 +51,10 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedTypes = /xlsx|xls/
     const extname = allowedTypes.test(file.originalname.toLowerCase().split('.').pop())
-    const mimetype = allowedTypes.test(file.mimetype) || 
-                    file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                    file.mimetype === 'application/vnd.ms-excel'
-    
+    const mimetype = allowedTypes.test(file.mimetype) ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.mimetype === 'application/vnd.ms-excel'
+
     if (mimetype && extname) {
       return cb(null, true)
     } else {
@@ -200,7 +200,7 @@ router.get('/niveaux', async (req, res) => {
         .from('niveaux')
         .select('*')
         .order('code', { ascending: true })
-      
+
       if (error) throw error
       res.json(niveaux)
     }
@@ -237,19 +237,19 @@ router.get('/promotions', async (req, res) => {
 router.get('/etudiants', async (req, res) => {
   try {
     const { classeId, filiereId, niveauId, promotionId, formationId, typeInscription } = req.query
-    
+
     // Si filiereId et niveauId sont fournis, utiliser la nouvelle méthode
     if (filiereId && niveauId && promotionId && formationId && typeInscription) {
       const etudiants = await getEtudiantsParFiliereNiveau(filiereId, niveauId, promotionId, formationId, typeInscription)
       return res.json(etudiants)
     }
-    
+
     // Sinon, utiliser l'ancienne méthode avec classeId (pour compatibilité)
     if (classeId && promotionId && typeInscription) {
       const etudiants = await getEtudiantsParClasse(classeId, promotionId, typeInscription)
       return res.json(etudiants)
     }
-    
+
     return res.status(400).json({ error: 'Paramètres requis manquants' })
   } catch (error) {
     console.error('Erreur:', error)
@@ -337,36 +337,36 @@ router.post('/attestations/:id/archiver', async (req, res) => {
 router.get('/attestations/archives', authenticate, async (req, res) => {
   try {
     const { promotionId, filiereId, niveauId, formationId } = req.query
-    
+
     if (!promotionId || !filiereId || !niveauId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Les paramètres promotionId, filiereId et niveauId sont requis',
         required: ['promotionId', 'filiereId', 'niveauId']
       })
     }
-    
+
     console.log('Requête pour les attestations archivées avec les paramètres:', {
       promotionId,
       filiereId,
       niveauId,
       formationId: formationId || 'toutes les formations'
     });
-    
+
     const attestations = await getAttestationsArchiveesParFiliereNiveau(
-      promotionId, 
-      filiereId, 
-      niveauId, 
+      promotionId,
+      filiereId,
+      niveauId,
       formationId || null // formationId est optionnel
     )
-    
+
     console.log(`Nombre d'attestations trouvées: ${attestations.length}`);
-    
+
     res.json(attestations)
   } catch (error) {
     console.error('Erreur lors de la récupération des attestations archivées:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Erreur lors de la récupération des attestations archivées',
-      details: error.message 
+      details: error.message
     })
   }
 })
@@ -433,7 +433,7 @@ const uploadDocuments = multer({
     const allowedTypes = /pdf|jpeg|jpg|png|gif|webp/
     const extname = allowedTypes.test(file.originalname.toLowerCase().split('.').pop())
     const mimetype = allowedTypes.test(file.mimetype)
-    
+
     if (mimetype && extname) {
       return cb(null, true)
     } else {
@@ -471,7 +471,7 @@ router.post('/import-etudiants', authenticate, upload.single('file'), async (req
 
     // Parser le fichier Excel
     const dataBySheet = await parseExcelFile(req.file.buffer)
-    
+
     if (Object.keys(dataBySheet).length === 0) {
       return res.status(400).json({
         success: false,
@@ -500,34 +500,34 @@ router.post('/import-etudiants', authenticate, upload.single('file'), async (req
 router.post('/inscriptions/:id/documents/:type', authenticate, uploadDocuments.single('document'), async (req, res) => {
   try {
     const { id, type } = req.params
-    
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
         error: 'Aucun fichier fourni'
       })
     }
-    
+
     // Vérifier que l'inscription existe
     const { data: inscription, error: inscError } = await supabaseAdmin
       .from('inscriptions')
       .select('*, etudiants (*)')
       .eq('id', id)
       .single()
-    
+
     if (inscError || !inscription) {
       return res.status(404).json({
         success: false,
         error: 'Inscription introuvable'
       })
     }
-    
+
     // Sauvegarder le document
     const documentUrl = await saveDocument(req.file, inscription.etudiant_id, type)
-    
+
     // Mettre à jour l'inscription
     await updateInscriptionDocument(id, type, documentUrl)
-    
+
     res.json({
       success: true,
       message: 'Document uploadé avec succès',
@@ -546,24 +546,24 @@ router.post('/inscriptions/:id/documents/:type', authenticate, uploadDocuments.s
 router.delete('/inscriptions/:id/documents/:type', authenticate, async (req, res) => {
   try {
     const { id, type } = req.params
-    
+
     // Vérifier que l'inscription existe
     const { data: inscription, error: inscError } = await supabaseAdmin
       .from('inscriptions')
       .select('id')
       .eq('id', id)
       .single()
-    
+
     if (inscError || !inscription) {
       return res.status(404).json({
         success: false,
         error: 'Inscription introuvable'
       })
     }
-    
+
     // Supprimer le document
     const result = await deleteInscriptionDocument(id, type)
-    
+
     res.json({
       success: true,
       message: result.message || 'Document supprimé avec succès'
@@ -582,14 +582,14 @@ router.put('/etudiants/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params
     const { email, telephone, adresse, nationalite } = req.body
-    
+
     const updated = await updateEtudiantInfo(id, {
       email,
       telephone,
       adresse,
       nationalite
     })
-    
+
     res.json({
       success: true,
       message: 'Informations mises à jour avec succès',
@@ -608,20 +608,20 @@ router.put('/etudiants/:id', authenticate, async (req, res) => {
 router.post('/etudiants/:id/photo', authenticate, uploadDocuments.single('photo'), async (req, res) => {
   try {
     const { id } = req.params
-    
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
         error: 'Aucun fichier fourni'
       })
     }
-    
+
     // Sauvegarder la photo
     const photoUrl = await saveDocument(req.file, id, 'photo')
-    
+
     // Mettre à jour la photo de profil de l'étudiant
     await updateEtudiantInfo(id, { photo: photoUrl })
-    
+
     // Synchroniser avec la photo d'identité dans l'inscription
     const { data: inscription } = await supabaseAdmin
       .from('inscriptions')
@@ -630,14 +630,14 @@ router.post('/etudiants/:id/photo', authenticate, uploadDocuments.single('photo'
       .order('date_inscription', { ascending: false })
       .limit(1)
       .single()
-    
+
     if (inscription) {
       await supabaseAdmin
         .from('inscriptions')
         .update({ photo_identite: photoUrl })
         .eq('id', inscription.id)
     }
-    
+
     res.json({
       success: true,
       message: 'Photo uploadée avec succès',
@@ -657,9 +657,9 @@ router.post('/etudiants/:id/parents', authenticate, async (req, res) => {
   try {
     const { id } = req.params
     const parentData = req.body
-    
+
     const parent = await upsertParent(id, parentData)
-    
+
     res.json({
       success: true,
       message: 'Parent enregistré avec succès',
@@ -679,7 +679,7 @@ router.get('/etudiants/:id/parents', authenticate, async (req, res) => {
   try {
     const { id } = req.params
     const parents = await getParents(id)
-    
+
     res.json({
       success: true,
       parents
@@ -698,7 +698,7 @@ router.get('/dossiers/:etudiantId/:inscriptionId', authenticate, async (req, res
   try {
     const { etudiantId, inscriptionId } = req.params
     const dossier = await getDossierEtudiant(etudiantId, inscriptionId)
-    
+
     res.json({
       success: true,
       dossier
@@ -716,7 +716,7 @@ router.get('/dossiers/:etudiantId/:inscriptionId', authenticate, async (req, res
 router.get('/etudiant/mon-profil', authenticate, async (req, res) => {
   try {
     const { getEtudiantByUserId } = await import('../../src/services/scolarite/etudiantService.js')
-    
+
     // Vérifier que l'utilisateur est bien un étudiant
     if (req.user.role !== 'ETUDIANT') {
       return res.status(403).json({
@@ -726,7 +726,7 @@ router.get('/etudiant/mon-profil', authenticate, async (req, res) => {
     }
 
     const etudiant = await getEtudiantByUserId(req.user.id)
-    
+
     res.json({
       success: true,
       etudiant

@@ -1,5 +1,5 @@
 // Client API pour l'authentification
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/auth'
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/auth'
 
 // Connexion
 export const login = async (email, password, matricule = null) => {
@@ -8,7 +8,7 @@ export const login = async (email, password, matricule = null) => {
     if (matricule) {
       body.matricule = matricule
     }
-    
+
     const response = await fetch(`${API_URL}/login`, {
       method: 'POST',
       headers: {
@@ -18,7 +18,7 @@ export const login = async (email, password, matricule = null) => {
     })
 
     const data = await response.json()
-    
+
     if (!response.ok) {
       throw new Error(data.error || 'Erreur lors de la connexion')
     }
@@ -27,7 +27,7 @@ export const login = async (email, password, matricule = null) => {
     if (data.token) {
       localStorage.setItem('token', data.token)
       console.log('✅ Token stocké dans localStorage après connexion:', data.token.substring(0, 20) + '...')
-      
+
       // Vérifier que le token est bien stocké
       const storedToken = localStorage.getItem('token')
       if (!storedToken) {
@@ -50,7 +50,7 @@ export const login = async (email, password, matricule = null) => {
 export const verifyToken = async (shouldRefresh = false) => {
   try {
     const token = localStorage.getItem('token')
-    
+
     if (!token) {
       return { valid: false, error: 'Token manquant' }
     }
@@ -65,7 +65,7 @@ export const verifyToken = async (shouldRefresh = false) => {
           const currentTime = Math.floor(Date.now() / 1000)
           const timeUntilExpiry = payload.exp - currentTime
           const oneHour = 3600 // 1 heure en secondes
-          
+
           // Si le token expire dans moins d'1 heure, demander un renouvellement
           if (timeUntilExpiry < oneHour && timeUntilExpiry > 0) {
             shouldRefresh = true
@@ -88,7 +88,7 @@ export const verifyToken = async (shouldRefresh = false) => {
     // Vérifier si la réponse est valide avant de parser
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Erreur serveur' }))
-      
+
       // Ne supprimer le localStorage que si c'est vraiment une erreur d'authentification (401)
       if (response.status === 401) {
         // Vérifier si c'est une expiration ou une erreur de token
@@ -100,13 +100,13 @@ export const verifyToken = async (shouldRefresh = false) => {
         // Pour les autres erreurs 401, ne pas supprimer immédiatement
         return { valid: false, error: errorData.error || 'Token invalide' }
       }
-      
+
       // Pour les autres erreurs (500, timeout, etc.), ne pas supprimer le localStorage
       return { valid: false, error: errorData.error || 'Erreur serveur' }
     }
 
     const data = await response.json()
-    
+
     if (!data.valid) {
       // Token invalide mais ne pas supprimer si c'est une erreur réseau
       // Ne supprimer que si c'est vraiment une expiration ou une erreur d'authentification
@@ -135,9 +135,9 @@ export const verifyToken = async (shouldRefresh = false) => {
     console.error('Erreur réseau lors de la vérification du token:', error)
     // En cas d'erreur réseau, ne pas supprimer le localStorage et ne pas déconnecter
     // Retourner une erreur qui indique que c'est temporaire
-    return { 
-      valid: false, 
-      error: 'Erreur réseau temporaire. Veuillez réessayer.' 
+    return {
+      valid: false,
+      error: 'Erreur réseau temporaire. Veuillez réessayer.'
     }
     // L'utilisateur pourra continuer à utiliser l'application
     return { valid: false, error: 'Erreur réseau. Vérification impossible.' }
@@ -148,7 +148,7 @@ export const verifyToken = async (shouldRefresh = false) => {
 export const logout = async () => {
   try {
     const token = localStorage.getItem('token')
-    
+
     if (token) {
       await fetch(`${API_URL}/logout`, {
         method: 'POST',
@@ -161,7 +161,7 @@ export const logout = async () => {
     // Supprimer le token et les données utilisateur
     localStorage.removeItem('token')
     localStorage.removeItem('user') // Supprimer si présent
-    
+
     return { success: true }
   } catch (error) {
     console.error('Erreur lors de la déconnexion:', error)
@@ -176,7 +176,7 @@ export const logout = async () => {
 export const getCurrentUser = async () => {
   try {
     const token = localStorage.getItem('token')
-    
+
     if (!token) {
       return null
     }
@@ -225,7 +225,7 @@ export const uploadProfilePhoto = async (file) => {
   try {
     // Récupérer le token depuis localStorage
     let token = localStorage.getItem('token')
-    
+
     // Si le token n'est pas dans localStorage, essayer de le récupérer depuis le contexte
     if (!token) {
       // Vérifier si l'utilisateur existe dans localStorage
@@ -233,7 +233,7 @@ export const uploadProfilePhoto = async (file) => {
       if (!storedUser) {
         throw new Error('Vous devez être connecté pour uploader une photo. Veuillez vous reconnecter.')
       }
-      
+
       // Si l'utilisateur existe mais pas le token, c'est un problème de session
       // Essayer de vérifier le token via l'API pour voir si on peut le récupérer
       console.warn('Token manquant dans localStorage, mais utilisateur présent. Tentative de récupération...')
@@ -259,7 +259,7 @@ export const uploadProfilePhoto = async (file) => {
     }
 
     const data = await response.json()
-    
+
     if (!response.ok) {
       // Si le token est expiré ou invalide
       if (response.status === 401) {
@@ -293,7 +293,7 @@ export const uploadProfilePhoto = async (file) => {
 export const changePassword = async (currentPassword, newPassword) => {
   try {
     const token = localStorage.getItem('token')
-    
+
     if (!token) {
       throw new Error('Vous devez être connecté pour changer votre mot de passe')
     }
@@ -308,7 +308,7 @@ export const changePassword = async (currentPassword, newPassword) => {
     })
 
     const data = await response.json()
-    
+
     if (!response.ok) {
       throw new Error(data.error || 'Erreur lors du changement de mot de passe')
     }

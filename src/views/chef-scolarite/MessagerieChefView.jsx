@@ -3,8 +3,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faEnvelope, faPaperPlane, faUsers, faCheckCircle
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 
 const MessagerieChefView = () => {
   const [destinataire, setDestinataire] = useState('')
@@ -34,10 +34,10 @@ const MessagerieChefView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarChef />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
               <FontAwesomeIcon icon={faEnvelope} className="text-blue-600" />

@@ -17,8 +17,8 @@ import {
   faReply,
   faArchive
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 
 const MessagerieChefView = () => {
   const [activeTab, setActiveTab] = useState('recus') // recus, envoyes, archives
@@ -188,11 +188,11 @@ const MessagerieChefView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarChef />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef chefName="Dr. Jean KAMDEM" />
+        <AdminHeader />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* En-tête */}
           <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>

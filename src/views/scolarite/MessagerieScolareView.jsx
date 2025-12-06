@@ -4,8 +4,8 @@ import {
   faEnvelope, faArrowLeft, faUsers, faUserCircle, faGlobe,
   faPaperPlane, faCheck, faGraduationCap
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarScolarite from '../../components/common/SidebarScolarite'
-import HeaderScolarite from '../../components/common/HeaderScolarite'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 
 const MessagerieScolareView = () => {
   const [typeMessage, setTypeMessage] = useState('') // 'individuel', 'groupe', 'collectif'
@@ -113,10 +113,10 @@ const MessagerieScolareView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="max-w-2xl mx-auto">
               <div className="bg-white rounded-xl shadow-lg p-8 border-2 border-green-500">
                 <div className="text-center">
@@ -145,10 +145,10 @@ const MessagerieScolareView = () => {
   if (!typeMessage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
                 <FontAwesomeIcon icon={faEnvelope} className="text-blue-600" />
@@ -206,10 +206,10 @@ const MessagerieScolareView = () => {
   if (typeMessage === 'individuel' && !selectedFormation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -250,10 +250,10 @@ const MessagerieScolareView = () => {
   if ((typeMessage === 'individuel' || typeMessage === 'groupe') && !selectedFiliere) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -298,10 +298,10 @@ const MessagerieScolareView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -347,10 +347,10 @@ const MessagerieScolareView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -420,10 +420,10 @@ const MessagerieScolareView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarScolarite />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderScolarite scolariteName="Service Scolarité" />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour

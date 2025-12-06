@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faArchive, faArrowLeft, faDownload, faFileAlt, faCalendarAlt, faGraduationCap, faSchool, faUsers, faSearch, faChevronLeft, faChevronRight
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarSP from '../../components/common/SidebarSP'
-import HeaderSP from '../../components/common/HeaderSP'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import html2pdf from 'html2pdf.js'
 import { getPromotions, getFilieres, getNiveauxDisponibles, getFormations } from '../../api/scolarite'
 import { getAttestationsArchiveesParFiliereNiveau } from '../../api/scolarite'
@@ -81,7 +81,7 @@ const ArchivesAttestationsView = () => {
             niveau: selectedNiveau,
             formation: selectedFormation || null
           })
-          
+
           setLoading(true)
           // Passer null pour formationId si non sélectionné (pour récupérer toutes les formations)
           const attestations = await getAttestationsArchiveesParFiliereNiveau(
@@ -90,15 +90,15 @@ const ArchivesAttestationsView = () => {
             selectedNiveau,
             selectedFormation || null
           )
-          
+
           console.log('Réponse de l\'API (attestations):', attestations)
-          
+
           if (!attestations || !Array.isArray(attestations)) {
             console.error('Format de données invalide reçu:', attestations)
             setAttestationsArchivees([])
             return
           }
-          
+
           setAttestationsArchivees(attestations)
         } catch (error) {
           console.error('Erreur lors du chargement des attestations:', error)
@@ -117,15 +117,15 @@ const ArchivesAttestationsView = () => {
   const handleDownloadAttestation = async (attestation) => {
     try {
       // Gérer les deux formats possibles pour l'étudiant
-      const nomComplet = typeof attestation.etudiant === 'string' 
-        ? attestation.etudiant 
+      const nomComplet = typeof attestation.etudiant === 'string'
+        ? attestation.etudiant
         : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
       const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
       const formation = attestation.formation || 'N/A'
       const filiere = attestation.filiere || 'N/A'
       const niveau = attestation.niveau || attestation.niveauFull || 'N/A'
       const anneeAcademique = attestation.anneeAcademique || 'N/A'
-      const dateGeneration = attestation.dateGenerationISO 
+      const dateGeneration = attestation.dateGenerationISO
         ? new Date(attestation.dateGenerationISO).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
         : attestation.dateGeneration || new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -224,28 +224,28 @@ const ArchivesAttestationsView = () => {
           </div>
         </div>
       `
-      
+
       document.body.appendChild(element)
-      
+
       // Attendre que le DOM soit complètement rendu
       await new Promise(resolve => setTimeout(resolve, 300))
-      
+
       // Attendre que les images soient chargées
       await new Promise((resolve) => {
         const images = element.getElementsByTagName('img')
         let loadedCount = 0
         const totalImages = images.length
-        
+
         if (totalImages === 0) {
           setTimeout(resolve, 1000)
           return
         }
-        
+
         let timeoutId = setTimeout(() => {
           console.warn('Timeout lors du chargement des images, génération du PDF quand même')
           resolve()
         }, 10000)
-        
+
         const checkAllLoaded = () => {
           loadedCount++
           if (loadedCount === totalImages) {
@@ -254,7 +254,7 @@ const ArchivesAttestationsView = () => {
             setTimeout(resolve, 1000)
           }
         }
-        
+
         for (let img of images) {
           // Forcer le rechargement si nécessaire
           if (img.complete && img.naturalHeight !== 0) {
@@ -274,17 +274,17 @@ const ArchivesAttestationsView = () => {
           }
         }
       })
-      
+
       // Attendre encore un peu pour le rendu final
       await new Promise(resolve => setTimeout(resolve, 1000))
-      
+
       const opt = {
         margin: [0, 0, 0, 0],
         filename: `Attestation_Duplicata_${matricule.replace(/\s+/g, '_')}_${attestation.numero.replace(/\//g, '-')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true, 
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
           letterRendering: true,
           windowWidth: 794,
           windowHeight: 1123,
@@ -292,9 +292,9 @@ const ArchivesAttestationsView = () => {
           backgroundColor: '#ffffff',
           allowTaint: false
         },
-        jsPDF: { 
-          unit: 'mm', 
-          format: 'a4', 
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
           orientation: 'portrait',
           compress: true,
           precision: 16,
@@ -302,7 +302,7 @@ const ArchivesAttestationsView = () => {
         },
         pagebreak: { mode: 'avoid-all' }
       }
-      
+
       try {
         console.log('Début de la génération du PDF pour:', nomComplet)
         console.log('Dimensions de l\'élément:', element.offsetWidth, element.offsetHeight)
@@ -347,16 +347,16 @@ const ArchivesAttestationsView = () => {
     // Filtrage par recherche
     const filteredAttestations = attestationsArchivees.filter(attestation => {
       // Gérer les deux formats possibles : objet avec etudiant ou string
-      const nomComplet = typeof attestation.etudiant === 'string' 
-        ? attestation.etudiant 
+      const nomComplet = typeof attestation.etudiant === 'string'
+        ? attestation.etudiant
         : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
       const matricule = attestation.matricule || attestation.etudiant?.matricule || ''
       const numero = attestation.numero || ''
       const query = (searchQuery || '').toLowerCase()
-      
+
       return nomComplet.toLowerCase().includes(query) ||
-             matricule.toLowerCase().includes(query) ||
-             numero.toLowerCase().includes(query)
+        matricule.toLowerCase().includes(query) ||
+        numero.toLowerCase().includes(query)
     })
 
     // Pagination
@@ -372,10 +372,10 @@ const ArchivesAttestationsView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -394,161 +394,158 @@ const ArchivesAttestationsView = () => {
                 <LoadingSpinner size="lg" text="Chargement des attestations archivées..." />
               </div>
             ) : (
-            <div className="bg-white shadow overflow-hidden">
-              <div className="p-6 border-b border-slate-200">
-                <h2 className="text-xl font-bold text-slate-800">Attestations archivées</h2>
-                <p className="text-sm text-slate-600 mt-1">{filteredAttestations.length} attestation(s) trouvée(s)</p>
-              </div>
-
-              {/* Barre de recherche */}
-              <div className="p-6 border-b border-slate-200">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FontAwesomeIcon icon={faSearch} className="text-slate-400" />
-                  </div>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value)
-                      setCurrentPage(1) // Réinitialiser à la page 1 lors d'une recherche
-                    }}
-                    className="w-full pl-10 pr-4 py-3 border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Rechercher par nom, matricule ou numéro d'attestation..."
-                  />
+              <div className="bg-white shadow overflow-hidden">
+                <div className="p-6 border-b border-slate-200">
+                  <h2 className="text-xl font-bold text-slate-800">Attestations archivées</h2>
+                  <p className="text-sm text-slate-600 mt-1">{filteredAttestations.length} attestation(s) trouvée(s)</p>
                 </div>
-              </div>
 
-              {/* Tableau */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b-2 border-slate-300">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Étudiant
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Matricule
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Formation
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Date génération
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        N° Attestation
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-200">
-                    {paginatedAttestations.length === 0 ? (
+                {/* Barre de recherche */}
+                <div className="p-6 border-b border-slate-200">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FontAwesomeIcon icon={faSearch} className="text-slate-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value)
+                        setCurrentPage(1) // Réinitialiser à la page 1 lors d'une recherche
+                      }}
+                      className="w-full pl-10 pr-4 py-3 border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Rechercher par nom, matricule ou numéro d'attestation..."
+                    />
+                  </div>
+                </div>
+
+                {/* Tableau */}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b-2 border-slate-300">
                       <tr>
-                        <td colSpan="6" className="px-6 py-12 text-center">
-                          <p className="text-slate-500 text-lg">Aucune attestation archivée trouvée</p>
-                        </td>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Étudiant
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Matricule
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Formation
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Date génération
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          N° Attestation
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Action
+                        </th>
                       </tr>
-                    ) : (
-                      paginatedAttestations.map((attestation) => {
-                        // Gérer les deux formats possibles
-                        const nomComplet = typeof attestation.etudiant === 'string' 
-                          ? attestation.etudiant 
-                          : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
-                        const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
-                        return (
-                        <tr key={attestation.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-semibold text-slate-800">{nomComplet || 'N/A'}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-slate-600">{matricule}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-slate-600">{attestation.formation || 'N/A'}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-slate-600">{attestation.dateGeneration || 'N/A'}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-mono text-slate-600">{attestation.numero || 'N/A'}</div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => handleDownloadAttestation(attestation)}
-                              className="inline-flex items-center px-3 py-2 bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors text-sm gap-2">
-                              <FontAwesomeIcon icon={faDownload} />
-                              Télécharger
-                            </button>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-200">
+                      {paginatedAttestations.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="px-6 py-12 text-center">
+                            <p className="text-slate-500 text-lg">Aucune attestation archivée trouvée</p>
                           </td>
                         </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        paginatedAttestations.map((attestation) => {
+                          // Gérer les deux formats possibles
+                          const nomComplet = typeof attestation.etudiant === 'string'
+                            ? attestation.etudiant
+                            : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
+                          const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
+                          return (
+                            <tr key={attestation.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-semibold text-slate-800">{nomComplet || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-slate-600">{matricule}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-slate-600">{attestation.formation || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-slate-600">{attestation.dateGeneration || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-mono text-slate-600">{attestation.numero || 'N/A'}</div>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <button
+                                  onClick={() => handleDownloadAttestation(attestation)}
+                                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors text-sm gap-2">
+                                  <FontAwesomeIcon icon={faDownload} />
+                                  Télécharger
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-                  <div className="text-sm text-slate-600">
-                    Affichage de {startIndex + 1} à {Math.min(endIndex, filteredAttestations.length)} sur {filteredAttestations.length} résultats
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className={`px-3 py-2 font-semibold transition-colors ${
-                        currentPage === 1
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+                    <div className="text-sm text-slate-600">
+                      Affichage de {startIndex + 1} à {Math.min(endIndex, filteredAttestations.length)} sur {filteredAttestations.length} résultats
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-2 font-semibold transition-colors ${currentPage === 1
                           ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                           : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
-                      }`}>
-                      <FontAwesomeIcon icon={faChevronLeft} />
-                    </button>
-                    
-                    {[...Array(totalPages)].map((_, index) => {
-                      const pageNum = index + 1
-                      // Afficher seulement quelques pages autour de la page actuelle
-                      if (
-                        pageNum === 1 ||
-                        pageNum === totalPages ||
-                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-                      ) {
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => handlePageChange(pageNum)}
-                            className={`px-4 py-2 font-semibold transition-colors ${
-                              currentPage === pageNum
+                          }`}>
+                        <FontAwesomeIcon icon={faChevronLeft} />
+                      </button>
+
+                      {[...Array(totalPages)].map((_, index) => {
+                        const pageNum = index + 1
+                        // Afficher seulement quelques pages autour de la page actuelle
+                        if (
+                          pageNum === 1 ||
+                          pageNum === totalPages ||
+                          (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => handlePageChange(pageNum)}
+                              className={`px-4 py-2 font-semibold transition-colors ${currentPage === pageNum
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
-                            }`}>
-                            {pageNum}
-                          </button>
-                        )
-                      } else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
-                        return <span key={pageNum} className="px-2 text-slate-400">...</span>
-                      }
-                      return null
-                    })}
-                    
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className={`px-3 py-2 font-semibold transition-colors ${
-                        currentPage === totalPages
+                                }`}>
+                              {pageNum}
+                            </button>
+                          )
+                        } else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                          return <span key={pageNum} className="px-2 text-slate-400">...</span>
+                        }
+                        return null
+                      })}
+
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-2 font-semibold transition-colors ${currentPage === totalPages
                           ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                           : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
-                      }`}>
-                      <FontAwesomeIcon icon={faChevronRight} />
-                    </button>
+                          }`}>
+                        <FontAwesomeIcon icon={faChevronRight} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
             )}
           </main>
         </div>
@@ -562,10 +559,10 @@ const ArchivesAttestationsView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -618,7 +615,7 @@ const ArchivesAttestationsView = () => {
     const promotion = promotions.find(p => p.id === selectedPromotion)
     const filiere = filieres.find(f => f.id === selectedFiliere)
     const niveau = niveaux.find(n => n.id === selectedNiveau)
-    
+
     // Fonction pour formater le nom de l'étudiant en toute sécurité
     const getEtudiantName = (attestation) => {
       if (!attestation) return 'Inconnu';
@@ -630,21 +627,21 @@ const ArchivesAttestationsView = () => {
       }
       return 'Étudiant inconnu';
     };
-    
+
     // Fonction pour formater la date de génération
     const formatDateGeneration = (dateString) => {
       if (!dateString) return 'Date inconnue';
       try {
         const date = new Date(dateString);
-        return isNaN(date.getTime()) 
-          ? 'Date invalide' 
+        return isNaN(date.getTime())
+          ? 'Date invalide'
           : date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
       } catch (e) {
         console.error('Erreur de format de date:', e);
         return 'Date invalide';
       }
     };
-    
+
     console.log('Rendu des attestations avec les données:', {
       promotion,
       filiere,
@@ -656,16 +653,16 @@ const ArchivesAttestationsView = () => {
     // Filtrage par recherche
     const filteredAttestations = attestationsArchivees.filter(attestation => {
       // Gérer les deux formats possibles : objet avec etudiant ou string
-      const nomComplet = typeof attestation.etudiant === 'string' 
-        ? attestation.etudiant 
+      const nomComplet = typeof attestation.etudiant === 'string'
+        ? attestation.etudiant
         : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
       const matricule = attestation.matricule || attestation.etudiant?.matricule || ''
       const numero = attestation.numero || ''
       const query = (searchQuery || '').toLowerCase()
-      
+
       return nomComplet.toLowerCase().includes(query) ||
-             matricule.toLowerCase().includes(query) ||
-             numero.toLowerCase().includes(query)
+        matricule.toLowerCase().includes(query) ||
+        numero.toLowerCase().includes(query)
     })
 
     // Pagination
@@ -681,13 +678,13 @@ const ArchivesAttestationsView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
-              <button 
-                onClick={handleBack} 
+              <button
+                onClick={handleBack}
                 className="flex items-center text-slate-600 hover:text-slate-800 mb-4"
               >
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" /> Retour
@@ -763,14 +760,14 @@ const ArchivesAttestationsView = () => {
                       <tbody className="bg-white divide-y divide-slate-200">
                         {paginatedAttestations.map((attestation) => {
                           // Gérer les deux formats possibles
-                          const etudiantName = typeof attestation.etudiant === 'string' 
-                            ? attestation.etudiant 
+                          const etudiantName = typeof attestation.etudiant === 'string'
+                            ? attestation.etudiant
                             : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim() || 'N/A'
                           const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
-                          const dateGeneration = attestation.dateGenerationISO 
+                          const dateGeneration = attestation.dateGenerationISO
                             ? new Date(attestation.dateGenerationISO).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
                             : attestation.dateGeneration || 'N/A'
-                          
+
                           return (
                             <tr key={attestation.id} className="hover:bg-slate-50">
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -817,15 +814,14 @@ const ArchivesAttestationsView = () => {
                           <button
                             onClick={() => handlePageChange(currentPage - 1)}
                             disabled={currentPage === 1}
-                            className={`px-3 py-1 rounded-md ${
-                              currentPage === 1
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
-                            }`}
+                            className={`px-3 py-1 rounded-md ${currentPage === 1
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                              }`}
                           >
                             <FontAwesomeIcon icon={faChevronLeft} />
                           </button>
-                          
+
                           {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                             let pageNum
                             if (totalPages <= 5) {
@@ -837,30 +833,28 @@ const ArchivesAttestationsView = () => {
                             } else {
                               pageNum = currentPage - 2 + i
                             }
-                            
+
                             return (
                               <button
                                 key={pageNum}
                                 onClick={() => handlePageChange(pageNum)}
-                                className={`px-3 py-1 rounded-md ${
-                                  currentPage === pageNum
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
-                                }`}
+                                className={`px-3 py-1 rounded-md ${currentPage === pageNum
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                                  }`}
                               >
                                 {pageNum}
                               </button>
                             )
                           })}
-                          
+
                           <button
                             onClick={() => handlePageChange(currentPage + 1)}
                             disabled={currentPage === totalPages}
-                            className={`px-3 py-1 rounded-md ${
-                              currentPage === totalPages
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
-                            }`}
+                            className={`px-3 py-1 rounded-md ${currentPage === totalPages
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300'
+                              }`}
                           >
                             <FontAwesomeIcon icon={faChevronRight} />
                           </button>
@@ -881,10 +875,10 @@ const ArchivesAttestationsView = () => {
   if (!selectedPromotion) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
                 <FontAwesomeIcon icon={faCalendarAlt} className="text-blue-600" />
@@ -911,11 +905,10 @@ const ArchivesAttestationsView = () => {
                         <FontAwesomeIcon icon={faCalendarAlt} className="text-white text-2xl" />
                       </div>
                       <h3 className="text-xl font-bold text-slate-800 mb-2">{promotion.annee}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        promotion.statut === 'EN_COURS'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${promotion.statut === 'EN_COURS'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-slate-100 text-slate-600'
+                        }`}>
                         {promotion.statut === 'EN_COURS' ? 'En cours' : 'Archivé'}
                       </span>
                     </div>
@@ -935,10 +928,10 @@ const ArchivesAttestationsView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -980,10 +973,10 @@ const ArchivesAttestationsView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -1024,10 +1017,10 @@ const ArchivesAttestationsView = () => {
   // On affiche donc la vue d'accueil par défaut
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarSP />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
               <FontAwesomeIcon icon={faArchive} className="text-blue-600" />
@@ -1055,9 +1048,8 @@ const ArchivesAttestationsView = () => {
                       <FontAwesomeIcon icon={faCalendarAlt} className="text-white text-2xl" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 mb-2">{promotion.annee}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      promotion.statut === 'EN_COURS' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                    }`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${promotion.statut === 'EN_COURS' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
                       {promotion.statut === 'EN_COURS' ? 'En cours' : 'Archivé'}
                     </span>
                   </div>
@@ -1087,7 +1079,7 @@ const ArchivesAttestationsView = () => {
                 }}>
                   DUPLICATA
                 </div>
-                
+
                 <div style={{ padding: '2cm', position: 'relative', zIndex: 2 }} className="h-full flex flex-col">
                   {/* En-tête */}
                   <div className="mb-12">
@@ -1102,22 +1094,22 @@ const ArchivesAttestationsView = () => {
                   </div>
 
                   {/* Titre */}
-                  <div style={{ 
-                    backgroundColor: '#A8C9E4', 
-                    border: '3px solid #2C3E50', 
-                    padding: '15px 0', 
+                  <div style={{
+                    backgroundColor: '#A8C9E4',
+                    border: '3px solid #2C3E50',
+                    padding: '15px 0',
                     marginBottom: '3rem',
                     width: '100%',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center'
                   }}>
-                    <h1 style={{ 
-                      fontFamily: 'Arial, sans-serif', 
-                      fontSize: '18pt', 
-                      letterSpacing: '4px', 
-                      color: '#000', 
-                      fontWeight: 'bold', 
+                    <h1 style={{
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '18pt',
+                      letterSpacing: '4px',
+                      color: '#000',
+                      fontWeight: 'bold',
                       margin: 0,
                       textAlign: 'center'
                     }}>
@@ -1128,9 +1120,9 @@ const ArchivesAttestationsView = () => {
                   {/* Corps */}
                   <div className="flex-1" style={{ fontFamily: 'Arial, sans-serif', fontSize: '12pt', lineHeight: '1.3' }}>
                     <p className="mb-4 text-justify" style={{ textIndent: '2cm' }}>
-                      Je soussigné, Soilihi ALI ISSILAM, Directeur de la Scolarité et des Examens de 
-                      l'Institut National de la Poste, des Technologies de l'Information et de la 
-                      Communication (INPTIC), atteste que l'étudiant(e) <strong>{attestationToView.etudiant}</strong> suit 
+                      Je soussigné, Soilihi ALI ISSILAM, Directeur de la Scolarité et des Examens de
+                      l'Institut National de la Poste, des Technologies de l'Information et de la
+                      Communication (INPTIC), atteste que l'étudiant(e) <strong>{attestationToView.etudiant}</strong> suit
                       la formation ci-dessous dans notre établissement.
                     </p>
 
@@ -1154,7 +1146,7 @@ const ArchivesAttestationsView = () => {
                     </div>
 
                     <p className="text-justify" style={{ textIndent: '2cm' }}>
-                      En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que 
+                      En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que
                       de droit.
                     </p>
                   </div>
@@ -1169,21 +1161,21 @@ const ArchivesAttestationsView = () => {
                         <p className="text-right mb-16" style={{ fontSize: '12pt', whiteSpace: 'nowrap' }}>
                           Fait à Libreville, le {attestationToView.dateGeneration || (attestationToView.dateGenerationISO ? new Date(attestationToView.dateGenerationISO).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '')}
                         </p>
-                        
+
                         <p className="font-bold mb-2 text-right" style={{ fontSize: '12pt', whiteSpace: 'nowrap' }}>Directeur de la Scolarité et des Examens</p>
-                        
+
                         <div className="relative" style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <img 
-                            src="/images/cachet.png" 
-                            alt="Cachet INPTIC" 
-                            style={{ 
-                              width: '150px', 
+                          <img
+                            src="/images/cachet.png"
+                            alt="Cachet INPTIC"
+                            style={{
+                              width: '150px',
                               height: '150px',
                               opacity: 0.95
-                            }} 
+                            }}
                           />
                         </div>
-                        
+
                         <p className="font-bold mt-2 text-center" style={{ fontSize: '12pt' }}>Soilihi ALI ISSILAM</p>
                       </div>
                     </div>

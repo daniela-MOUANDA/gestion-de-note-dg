@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faStamp, faCheckCircle, faClock, faFileAlt, faSearch, faFilter, faDownload, faEye } from '@fortawesome/free-solid-svg-icons'
-import SidebarDEP from '../../components/common/SidebarDEP'
-import HeaderDEP from '../../components/common/HeaderDEP'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 
 const VisasView = () => {
@@ -63,10 +63,10 @@ const VisasView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarDEP />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderDEP />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Visas & Documents</h1>
             <p className="text-sm text-slate-600">Imposez des visas sur les documents (bulletins, notes de service, PV, etc.)</p>

@@ -1,12 +1,12 @@
-import SidebarChef from '../common/SidebarChef'
-import HeaderChef from '../common/HeaderChef'
+import AdminSidebar from '../common/AdminSidebar'
+import AdminHeader from '../common/AdminHeader'
 
 const ChefScolariteLayout = ({ children }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarChef />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChef />
+        <AdminHeader />
         {children}
       </div>
     </div>
@@ -14,4 +14,5 @@ const ChefScolariteLayout = ({ children }) => {
 }
 
 export default ChefScolariteLayout
+
 

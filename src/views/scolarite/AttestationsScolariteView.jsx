@@ -1,20 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faFileAlt, faArrowLeft, faCheckCircle, faSearch, faCalendarAlt, faGraduationCap, faSchool, faUsers, faDownload
 } from '@fortawesome/free-solid-svg-icons'
 import html2pdf from 'html2pdf.js'
-import SidebarScolarite from '../../components/common/SidebarScolarite'
-import HeaderScolarite from '../../components/common/HeaderScolarite'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 
 const AttestationsScolariteView = () => {
   const location = useLocation()
-  const isChefView = location.pathname.startsWith('/chef-scolarite')
-  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
-  const Header = isChefView ? HeaderChef : HeaderScolarite
   const [selectedPromotion, setSelectedPromotion] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
@@ -62,7 +57,7 @@ const AttestationsScolariteView = () => {
   const getAttestations = (promotion, filiere, niveau, classe) => {
     const filiereCode = classe.split('-')[0]
     const niveauNum = classe.split('-')[1].charAt(0)
-    
+
     // Attestations générées par la SP
     const attestations = [
       { id: 1, etudiant: 'ANDEME MBO Lidvige Johane', matricule: `${filiereCode}2024-L${niveauNum}-125`, formation: 'Formation Initiale 1', dateGeneration: '11 novembre 2024', numero: 'N°0460/INPTIC/DG/DSE/2024' },
@@ -71,7 +66,7 @@ const AttestationsScolariteView = () => {
       { id: 4, etudiant: 'ONDO Marie', matricule: `${filiereCode}2024-L${niveauNum}-067`, formation: 'Formation Initiale 1', dateGeneration: '14 novembre 2024', numero: 'N°0463/INPTIC/DG/DSE/2024' },
       { id: 5, etudiant: 'EKOMY Pierre', matricule: `${filiereCode}2024-L${niveauNum}-034`, formation: 'Formation Initiale 2', dateGeneration: '15 novembre 2024', numero: 'N°0464/INPTIC/DG/DSE/2024' }
     ]
-    
+
     return attestations
   }
 
@@ -195,20 +190,20 @@ const AttestationsScolariteView = () => {
         </div>
       </div>
     `
-    
+
     document.body.appendChild(element)
-    
+
     // Attendre que les images soient chargées
     await new Promise((resolve) => {
       const images = element.getElementsByTagName('img')
       let loadedCount = 0
       const totalImages = images.length
-      
+
       if (totalImages === 0) {
         resolve()
         return
       }
-      
+
       const checkAllLoaded = () => {
         loadedCount++
         if (loadedCount === totalImages) {
@@ -216,7 +211,7 @@ const AttestationsScolariteView = () => {
           setTimeout(resolve, 500)
         }
       }
-      
+
       for (let img of images) {
         if (img.complete) {
           checkAllLoaded()
@@ -226,27 +221,27 @@ const AttestationsScolariteView = () => {
         }
       }
     })
-    
+
     const opt = {
       margin: 0,
       filename: `Attestation_${attestation.matricule}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
         letterRendering: true,
         logging: false
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     }
-    
+
     await html2pdf().set(opt).from(element).save()
     document.body.removeChild(element)
   }
 
   const handleDownloadAll = async () => {
     const attestations = getAttestations(selectedPromotion, selectedFiliere, selectedNiveau, selectedClasse)
-    
+
     if (attestations.length === 0) {
       alert('Aucune attestation disponible dans cette classe.')
       return
@@ -255,7 +250,7 @@ const AttestationsScolariteView = () => {
     const confirmation = window.confirm(
       `Voulez-vous télécharger ${attestations.length} attestations pour la classe ${selectedClasse} ?\n\nCela peut prendre quelques minutes...`
     )
-    
+
     if (!confirmation) return
 
     for (let i = 0; i < attestations.length; i++) {
@@ -276,7 +271,7 @@ const AttestationsScolariteView = () => {
     const filiere = filieres.find(f => f.id === selectedFiliere)
     const niveau = niveaux.find(n => n.id === selectedNiveau)
 
-    const filteredAttestations = attestations.filter(att => 
+    const filteredAttestations = attestations.filter(att =>
       att.etudiant.toLowerCase().includes(searchQuery.toLowerCase()) ||
       att.matricule.toLowerCase().includes(searchQuery.toLowerCase())
     )
@@ -286,7 +281,7 @@ const AttestationsScolariteView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -312,11 +307,11 @@ const AttestationsScolariteView = () => {
                     Télécharger toutes les attestations
                   </button>
                 </div>
-                
+
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm text-slate-600">{filteredAttestations.length} attestation(s)</span>
                 </div>
-                
+
                 {/* Barre de recherche */}
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -336,22 +331,20 @@ const AttestationsScolariteView = () => {
                 <div className="space-y-3">
                   {filteredAttestations.map((attestation) => {
                     const estRecupere = isRecupere(attestation.id)
-                    
+
                     return (
                       <div
                         key={attestation.id}
-                        className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
-                          estRecupere
-                            ? 'bg-slate-100 border-slate-300 opacity-60'
-                            : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
+                        className={`flex items-center justify-between p-4 rounded-lg border transition-all ${estRecupere
+                          ? 'bg-slate-100 border-slate-300 opacity-60'
+                          : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-md'
+                          }`}
                       >
                         <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                            estRecupere ? 'bg-slate-200' : 'bg-blue-100'
-                          }`}>
-                            <FontAwesomeIcon 
-                              icon={estRecupere ? faCheckCircle : faFileAlt} 
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${estRecupere ? 'bg-slate-200' : 'bg-blue-100'
+                            }`}>
+                            <FontAwesomeIcon
+                              icon={estRecupere ? faCheckCircle : faFileAlt}
                               className={estRecupere ? 'text-slate-500 text-xl' : 'text-blue-600 text-xl'}
                             />
                           </div>
@@ -371,7 +364,7 @@ const AttestationsScolariteView = () => {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => generateAttestationPDF(attestation, false)}
@@ -443,10 +436,10 @@ const AttestationsScolariteView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -489,10 +482,10 @@ const AttestationsScolariteView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -535,10 +528,10 @@ const AttestationsScolariteView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -578,10 +571,10 @@ const AttestationsScolariteView = () => {
   // Vue: Sélection de la promotion
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <Sidebar />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
               <FontAwesomeIcon icon={faFileAlt} className="text-blue-600" />
@@ -604,11 +597,10 @@ const AttestationsScolariteView = () => {
                     <FontAwesomeIcon icon={faCalendarAlt} className="text-white text-2xl" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">{promotion.nom}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    promotion.statut === 'en_cours'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${promotion.statut === 'en_cours'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-slate-100 text-slate-600'
+                    }`}>
                     {promotion.statut === 'en_cours' ? 'En cours' : 'Archivé'}
                   </span>
                 </div>

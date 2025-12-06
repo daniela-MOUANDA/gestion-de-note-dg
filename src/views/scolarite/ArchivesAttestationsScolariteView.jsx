@@ -1,23 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faArchive, faArrowLeft, faDownload, faSearch, faCalendarAlt, faGraduationCap, faSchool, faUsers
 } from '@fortawesome/free-solid-svg-icons'
 import html2pdf from 'html2pdf.js'
-import SidebarScolarite from '../../components/common/SidebarScolarite'
-import HeaderScolarite from '../../components/common/HeaderScolarite'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import { getPromotions, getFilieres, getNiveauxDisponibles, getFormations, getAttestationsArchiveesParFiliereNiveau } from '../../api/scolarite'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { useAlert } from '../../contexts/AlertContext'
 
 const ArchivesAttestationsScolariteView = () => {
   const location = useLocation()
-  const isChefView = location.pathname.startsWith('/chef-scolarite')
-  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
-  const Header = isChefView ? HeaderChef : HeaderScolarite
+
   const { error: alertError } = useAlert()
   const [selectedPromotion, setSelectedPromotion] = useState('')
   const [selectedFormation, setSelectedFormation] = useState('')
@@ -91,12 +87,12 @@ const ArchivesAttestationsScolariteView = () => {
             selectedNiveau,
             null // Pas de filtre par formation
           )
-          
+
           if (!attestations || !Array.isArray(attestations)) {
             setAttestationsArchivees([])
             return
           }
-          
+
           setAttestationsArchivees(attestations)
         } catch (error) {
           console.error('Erreur lors du chargement des attestations:', error)
@@ -197,20 +193,20 @@ const ArchivesAttestationsScolariteView = () => {
         </div>
       </div>
     `
-    
+
     document.body.appendChild(element)
-    
+
     // Attendre que les images soient chargées
     await new Promise((resolve) => {
       const images = element.getElementsByTagName('img')
       let loadedCount = 0
       const totalImages = images.length
-      
+
       if (totalImages === 0) {
         resolve()
         return
       }
-      
+
       const checkAllLoaded = () => {
         loadedCount++
         if (loadedCount === totalImages) {
@@ -218,7 +214,7 @@ const ArchivesAttestationsScolariteView = () => {
           setTimeout(resolve, 500)
         }
       }
-      
+
       for (let img of images) {
         if (img.complete) {
           checkAllLoaded()
@@ -228,20 +224,20 @@ const ArchivesAttestationsScolariteView = () => {
         }
       }
     })
-    
+
     const opt = {
       margin: 0,
       filename: `Attestation_Duplicata_${attestation.matricule}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
         letterRendering: true,
         logging: false
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     }
-    
+
     await html2pdf().set(opt).from(element).save()
     document.body.removeChild(element)
   }
@@ -280,10 +276,10 @@ const ArchivesAttestationsScolariteView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -303,7 +299,7 @@ const ArchivesAttestationsScolariteView = () => {
                   <h2 className="text-lg font-bold text-slate-800">Attestations archivées</h2>
                   <span className="text-sm text-slate-600">{filteredAttestations.length} attestation(s)</span>
                 </div>
-                
+
                 {/* Barre de recherche */}
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -350,18 +346,18 @@ const ArchivesAttestationsScolariteView = () => {
                     ) : (
                       paginatedAttestations.map((attestation) => {
                         // Gérer les deux formats possibles
-                        const nomComplet = typeof attestation.etudiant === 'string' 
-                          ? attestation.etudiant 
+                        const nomComplet = typeof attestation.etudiant === 'string'
+                          ? attestation.etudiant
                           : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
                         const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
-                        const dateGen = attestation.dateGeneration 
-                          ? (typeof attestation.dateGeneration === 'string' 
-                              ? attestation.dateGeneration 
-                              : new Date(attestation.dateGeneration).toLocaleDateString('fr-FR', { 
-                                  day: 'numeric', 
-                                  month: 'long', 
-                                  year: 'numeric' 
-                                }))
+                        const dateGen = attestation.dateGeneration
+                          ? (typeof attestation.dateGeneration === 'string'
+                            ? attestation.dateGeneration
+                            : new Date(attestation.dateGeneration).toLocaleDateString('fr-FR', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric'
+                            }))
                           : 'N/A'
                         const formationNom = attestation.formation || 'N/A'
                         return (
@@ -407,11 +403,10 @@ const ArchivesAttestationsScolariteView = () => {
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                       disabled={currentPage === 1}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                        currentPage === 1
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                      }`}
+                      className={`px-4 py-2 rounded-lg font-semibold transition-colors ${currentPage === 1
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                        }`}
                     >
                       Précédent
                     </button>
@@ -421,11 +416,10 @@ const ArchivesAttestationsScolariteView = () => {
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                       disabled={currentPage === totalPages}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                        currentPage === totalPages
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                      }`}
+                      className={`px-4 py-2 rounded-lg font-semibold transition-colors ${currentPage === totalPages
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                        }`}
                     >
                       Suivant
                     </button>
@@ -441,15 +435,15 @@ const ArchivesAttestationsScolariteView = () => {
 
 
   // Vue: Sélection du niveau
-  if (selectedFiliere && selectedFormation && !selectedNiveau) {
+  if (selectedFiliere && !selectedNiveau) {
     const filiere = filieres.find(f => f.id === selectedFiliere)
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -498,10 +492,10 @@ const ArchivesAttestationsScolariteView = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -526,8 +520,8 @@ const ArchivesAttestationsScolariteView = () => {
                     <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mb-4">
                       <FontAwesomeIcon icon={faArchive} className="text-white text-2xl" />
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">{filiere.id}</h3>
-                    <p className="text-sm text-slate-600 text-center">{filiere.nom}</p>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2 text-center">{filiere.nom}</h3>
+                    <p className="text-sm text-slate-600 text-center uppercase tracking-wider">{filiere.code || filiere.id}</p>
                   </div>
                 </button>
               ))}
@@ -541,10 +535,10 @@ const ArchivesAttestationsScolariteView = () => {
   // Vue: Sélection de la promotion
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <Sidebar />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
               <FontAwesomeIcon icon={faArchive} className="text-blue-600" />
@@ -572,11 +566,10 @@ const ArchivesAttestationsScolariteView = () => {
                       <FontAwesomeIcon icon={faCalendarAlt} className="text-white text-2xl" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 mb-2">{promotion.nom || promotion.anneeAcademique}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      promotion.statut === 'EN_COURS'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${promotion.statut === 'EN_COURS'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-slate-100 text-slate-600'
+                      }`}>
                       {promotion.statut === 'EN_COURS' ? 'En cours' : 'Archivé'}
                     </span>
                   </div>

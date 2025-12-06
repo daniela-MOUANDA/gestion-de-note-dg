@@ -1,19 +1,17 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
-  faFileExcel, 
-  faUpload, 
-  faDownload, 
-  faCheckCircle, 
-  faInfoCircle, 
+import {
+  faFileExcel,
+  faUpload,
+  faDownload,
+  faCheckCircle,
+  faInfoCircle,
   faExclamationTriangle,
   faSpinner
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarScolarite from '../../components/common/SidebarScolarite'
-import HeaderScolarite from '../../components/common/HeaderScolarite'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import { useAlert } from '../../contexts/AlertContext'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -22,12 +20,12 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 const ImporterCandidatsView = () => {
   const location = useLocation()
-  const isChefView = location.pathname.startsWith('/chef-scolarite')
+
   const { success, error: alertError } = useAlert()
   const { isAuthenticated, user } = useAuth()
-  
-  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
-  const Header = isChefView ? HeaderChef : HeaderScolarite
+
+
+
   const [selectedFile, setSelectedFile] = useState(null)
   const [anneeAcademique, setAnneeAcademique] = useState('2025')
   const [isUploading, setIsUploading] = useState(false)
@@ -36,10 +34,10 @@ const ImporterCandidatsView = () => {
   const handleFileSelect = (e) => {
     const file = e.target.files[0]
     if (file) {
-      if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-          file.type === 'application/vnd.ms-excel' ||
-          file.name.endsWith('.xlsx') || 
-          file.name.endsWith('.xls')) {
+      if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        file.type === 'application/vnd.ms-excel' ||
+        file.name.endsWith('.xlsx') ||
+        file.name.endsWith('.xls')) {
         setSelectedFile(file)
         setUploadResult(null)
       } else {
@@ -61,7 +59,7 @@ const ImporterCandidatsView = () => {
 
     setIsUploading(true)
     setUploadResult(null)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', selectedFile)
@@ -70,7 +68,7 @@ const ImporterCandidatsView = () => {
       // Récupérer le token depuis localStorage
       const token = localStorage.getItem('token')
       console.log('Token récupéré:', token ? 'Présent' : 'Manquant', token ? `(${token.length} caractères)` : '')
-      
+
       if (!token) {
         console.error('Token manquant dans localStorage')
         alertError('Votre session a expiré. Veuillez vous reconnecter.')
@@ -86,7 +84,7 @@ const ImporterCandidatsView = () => {
         },
         body: formData
       })
-      
+
       console.log('Réponse reçue:', response.status, response.statusText)
 
       const data = await response.json()
@@ -98,7 +96,7 @@ const ImporterCandidatsView = () => {
       setUploadResult(data)
       success(data.message || 'Import réussi !')
       setSelectedFile(null)
-      
+
       // Réinitialiser le champ fichier
       const fileInput = document.getElementById('file-upload')
       if (fileInput) {
@@ -123,11 +121,11 @@ const ImporterCandidatsView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <Sidebar />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
               Importer candidats admis
@@ -205,15 +203,14 @@ const ImporterCandidatsView = () => {
 
             {/* Résultat de l'upload */}
             {uploadResult && (
-              <div className={`mt-4 p-4 rounded-lg ${
-                uploadResult.success 
-                  ? 'bg-green-50 text-green-800 border border-green-200' 
+              <div className={`mt-4 p-4 rounded-lg ${uploadResult.success
+                  ? 'bg-green-50 text-green-800 border border-green-200'
                   : 'bg-red-50 text-red-800 border border-red-200'
-              }`}>
+                }`}>
                 <div className="flex items-start">
-                  <FontAwesomeIcon 
-                    icon={uploadResult.success ? faCheckCircle : faExclamationTriangle} 
-                    className="mr-3 mt-0.5" 
+                  <FontAwesomeIcon
+                    icon={uploadResult.success ? faCheckCircle : faExclamationTriangle}
+                    className="mr-3 mt-0.5"
                   />
                   <div className="flex-1">
                     <p className="font-medium mb-2">{uploadResult.message}</p>

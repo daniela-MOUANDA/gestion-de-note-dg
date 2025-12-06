@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faUsers,
   faUserCheck,
   faFileExcel,
@@ -16,8 +16,8 @@ import {
   faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
-import SidebarScolarite from '../../components/common/SidebarScolarite'
-import HeaderScolarite from '../../components/common/HeaderScolarite'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAgentDashboardStats } from '../../api/scolarite'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -33,7 +33,7 @@ const DashboardScolariteView = () => {
       navigate('/login')
       return
     }
-    
+
     // Si l'utilisateur n'est pas AGENT_SCOLARITE, rediriger vers le bon dashboard
     if (user.role !== 'AGENT_SCOLARITE') {
       console.warn('Utilisateur avec rôle incorrect sur le dashboard Agent:', user.role)
@@ -102,10 +102,10 @@ const DashboardScolariteView = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarScolarite />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderScolarite scolariteName="Service Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 flex items-center justify-center">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
             <LoadingSpinner size="lg" text="Chargement des statistiques..." />
           </main>
         </div>
@@ -115,11 +115,11 @@ const DashboardScolariteView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarScolarite />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderScolarite scolariteName="Service Scolarité" />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
@@ -205,8 +205,8 @@ const DashboardScolariteView = () => {
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend 
-                        verticalAlign="bottom" 
+                      <Legend
+                        verticalAlign="bottom"
                         height={36}
                         formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
                       />
@@ -253,8 +253,8 @@ const DashboardScolariteView = () => {
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend 
-                        verticalAlign="bottom" 
+                      <Legend
+                        verticalAlign="bottom"
                         height={36}
                         formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
                       />
@@ -295,12 +295,12 @@ const DashboardScolariteView = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="semaine" stroke="#64748b" />
                   <YAxis stroke="#64748b" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#fff', 
-                      border: '1px solid #e2e8f0', 
-                      borderRadius: '8px' 
-                    }} 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px'
+                    }}
                   />
                   <Legend />
                   <Bar dataKey="inscrits" fill="#3B82F6" radius={[8, 8, 0, 0]} />

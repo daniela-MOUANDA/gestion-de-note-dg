@@ -130,7 +130,7 @@ const NotesView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Titre et boutons d'action */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>

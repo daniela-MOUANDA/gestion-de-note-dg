@@ -5,16 +5,12 @@ import {
   faFileAlt, faCalendar, faArrowLeft, faGraduationCap, faBook,
   faDownload, faEye, faCheckCircle, faHourglassHalf, faAward, faArchive
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarScolarite from '../../components/common/SidebarScolarite'
-import HeaderScolarite from '../../components/common/HeaderScolarite'
-import SidebarChef from '../../components/common/SidebarChef'
-import HeaderChef from '../../components/common/HeaderChef'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 
 const ProcesVerbauxView = () => {
   const location = useLocation()
-  const isChefView = location.pathname.startsWith('/chef-scolarite')
-  const Sidebar = isChefView ? SidebarChef : SidebarScolarite
-  const Header = isChefView ? HeaderChef : HeaderScolarite
+  
   const [selectedPromotion, setSelectedPromotion] = useState('') // '2024-2025', '2023-2024', etc.
   const [selectedFiliere, setSelectedFiliere] = useState('') // 'RT', 'GI', 'MTIC', 'AV'
   const [selectedNiveau, setSelectedNiveau] = useState('') // 'L1', 'L2', 'L3'
@@ -542,10 +538,10 @@ const ProcesVerbauxView = () => {
   if (!selectedPromotion) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             {/* Notification des nouveaux PV */}
             {nouveauxPV > 0 && (
               <div className="mb-6 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl p-4 shadow-md animate-pulse">
@@ -633,10 +629,10 @@ const ProcesVerbauxView = () => {
     const promo = promotions.find(p => p.id === selectedPromotion)
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -676,10 +672,10 @@ const ProcesVerbauxView = () => {
   if (!selectedNiveau) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -720,10 +716,10 @@ const ProcesVerbauxView = () => {
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -768,10 +764,10 @@ const ProcesVerbauxView = () => {
   if (!selectedTypeRattrapage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -821,10 +817,10 @@ const ProcesVerbauxView = () => {
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-        <Sidebar />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <Header />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -900,10 +896,10 @@ const ProcesVerbauxView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-50">
-      <Sidebar />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour

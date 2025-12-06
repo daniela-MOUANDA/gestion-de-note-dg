@@ -15,8 +15,8 @@ import {
   faEnvelope
 } from '@fortawesome/free-solid-svg-icons'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
-import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
 
 const DashboardChefView = () => {
@@ -111,9 +111,9 @@ const DashboardChefView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarChefDepartement />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChefDepartement chefName={nomComplet} />
+        <AdminHeader />
         
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}

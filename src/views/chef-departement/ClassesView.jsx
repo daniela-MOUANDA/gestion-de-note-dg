@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus, faEdit, faTrash, faGraduationCap, faSearch, faUsers, faBook, faSpinner } from '@fortawesome/free-solid-svg-icons'
-import SidebarChefDepartement from '../../components/common/SidebarChefDepartement'
-import HeaderChefDepartement from '../../components/common/HeaderChefDepartement'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
@@ -179,9 +179,9 @@ const ClassesView = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarChefDepartement />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+          <AdminHeader />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
             <div className="text-center">
               <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin mb-4" />
@@ -195,9 +195,9 @@ const ClassesView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarChefDepartement />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderChefDepartement chefName={user ? `${user.prenom} ${user.nom}` : 'Chef de Département'} />
+        <AdminHeader />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>

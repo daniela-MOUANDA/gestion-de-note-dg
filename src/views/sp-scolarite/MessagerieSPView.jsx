@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faEnvelope, faArrowLeft, faPaperPlane, faUser, faUsers, faCheckCircle
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarSP from '../../components/common/SidebarSP'
-import HeaderSP from '../../components/common/HeaderSP'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 
 const MessagerieSPView = () => {
   const [destinataire, setDestinataire] = useState('')
@@ -33,10 +33,10 @@ const MessagerieSPView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarSP />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <Link to="/sp-scolarite/dashboard" className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour au tableau de bord
@@ -64,15 +64,14 @@ const MessagerieSPView = () => {
                         key={dest.id}
                         type="button"
                         onClick={() => setDestinataire(dest.id)}
-                        className={`p-4 border-2 rounded-lg text-left transition-all ${
-                          destinataire === dest.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
-                        }`}
+                        className={`p-4 border-2 rounded-lg text-left transition-all ${destinataire === dest.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
                       >
                         <div className="flex items-center gap-3">
-                          <FontAwesomeIcon 
-                            icon={dest.role === 'Groupe' ? faUsers : faUser} 
+                          <FontAwesomeIcon
+                            icon={dest.role === 'Groupe' ? faUsers : faUser}
                             className={destinataire === dest.id ? 'text-blue-600' : 'text-slate-400'}
                           />
                           <div>
@@ -131,11 +130,10 @@ const MessagerieSPView = () => {
                   <button
                     type="submit"
                     disabled={!destinataire || !sujet || !message}
-                    className={`px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2 ${
-                      !destinataire || !sujet || !message
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
+                    className={`px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2 ${!destinataire || !sujet || !message
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
                   >
                     <FontAwesomeIcon icon={faPaperPlane} />
                     Envoyer le message

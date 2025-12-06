@@ -3,8 +3,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faFileAlt, faArrowLeft, faSearch, faDownload, faPrint, faPlus, faCheck
 } from '@fortawesome/free-solid-svg-icons'
-import SidebarSP from '../../components/common/SidebarSP'
-import HeaderSP from '../../components/common/HeaderSP'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import html2pdf from 'html2pdf.js'
 import { getPromotions, getFilieres, getNiveauxDisponibles, getFormations } from '../../api/scolarite'
 import { getEtudiantsInscritsParFiliereNiveau, creerAttestation } from '../../api/scolarite'
@@ -424,10 +424,10 @@ const AttestationsView = () => {
   if (attestationGenerated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-28 lg:pt-28">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6 print:hidden">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -583,10 +583,10 @@ const AttestationsView = () => {
   if (!selectedPromotion) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center gap-3">
                 <FontAwesomeIcon icon={faFileAlt} className="text-blue-600" />
@@ -610,8 +610,8 @@ const AttestationsView = () => {
                       key={promotion.id}
                       onClick={() => setSelectedPromotion(promotion.id)}
                       className={`p-6 border-2 rounded-xl transition-all duration-200 group ${promotion.statut === 'EN_COURS'
-                          ? 'border-green-300 bg-green-50 hover:border-green-500 hover:shadow-lg'
-                          : 'border-slate-200 hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg'
+                        ? 'border-green-300 bg-green-50 hover:border-green-500 hover:shadow-lg'
+                        : 'border-slate-200 hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg'
                         }`}>
                       <div className="text-center">
                         <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${promotion.statut === 'EN_COURS' ? 'bg-green-100 group-hover:bg-green-200' : 'bg-blue-100 group-hover:bg-blue-200'
@@ -644,10 +644,10 @@ const AttestationsView = () => {
   if (!selectedFormation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -688,10 +688,10 @@ const AttestationsView = () => {
   if (!selectedFiliere) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -733,10 +733,10 @@ const AttestationsView = () => {
   if (!selectedNiveau) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarSP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="mb-6">
               <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -798,10 +798,10 @@ const AttestationsView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarSP />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderSP spName="Secrétaire Particulière - Direction de la Scolarité" />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="mb-6">
             <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
@@ -844,8 +844,8 @@ const AttestationsView = () => {
                         onClick={handleGenerateAllAttestations}
                         disabled={loading || etudiantsDisponibles.length === 0}
                         className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors ${etudiantsDisponibles.length === 0 || loading
-                            ? 'bg-emerald-200 text-emerald-700 cursor-not-allowed'
-                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          ? 'bg-emerald-200 text-emerald-700 cursor-not-allowed'
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
                           }`}
                       >
                         <FontAwesomeIcon icon={faPlus} />
@@ -890,8 +890,8 @@ const AttestationsView = () => {
                                     onClick={() => handleGenerateAttestation(etudiant)}
                                     disabled={loading || dejaGeneree}
                                     className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${loading || dejaGeneree
-                                        ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                        : 'bg-blue-600 text-white hover:bg-blue-700 transition-colors'
+                                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                      : 'bg-blue-600 text-white hover:bg-blue-700 transition-colors'
                                       }`}>
                                     <FontAwesomeIcon icon={faFileAlt} />
                                     {dejaGeneree ? 'Déjà générée' : 'Générer attestation'}

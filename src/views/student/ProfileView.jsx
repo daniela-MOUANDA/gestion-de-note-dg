@@ -66,7 +66,7 @@ const ProfileView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header studentName="Chargement..." />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 flex items-center justify-center">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
             <LoadingSpinner size="lg" text="Chargement de votre profil..." />
           </main>
         </div>
@@ -80,7 +80,7 @@ const ProfileView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header studentName="Erreur" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
               <strong className="font-bold">Erreur!</strong>
               <span className="block sm:inline"> Impossible de charger votre profil.</span>
@@ -97,7 +97,7 @@ const ProfileView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
         
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Titre */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">

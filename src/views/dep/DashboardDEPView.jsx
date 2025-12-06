@@ -6,8 +6,8 @@ import {
   faFileAlt, faClipboardList, faEnvelope, faTrophy, faCheckCircle
 } from '@fortawesome/free-solid-svg-icons'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
-import SidebarDEP from '../../components/common/SidebarDEP'
-import HeaderDEP from '../../components/common/HeaderDEP'
+import AdminSidebar from '../../components/common/AdminSidebar'
+import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
@@ -92,10 +92,10 @@ const DashboardDEPView = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-        <SidebarDEP />
+        <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
-          <HeaderDEP />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 flex items-center justify-center">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
             <LoadingSpinner size="lg" text="Chargement du tableau de bord..." />
           </main>
         </div>
@@ -105,10 +105,10 @@ const DashboardDEPView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
-      <SidebarDEP />
+      <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <HeaderDEP />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24">
+        <AdminHeader />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">

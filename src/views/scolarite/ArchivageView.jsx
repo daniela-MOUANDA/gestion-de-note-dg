@@ -23,7 +23,7 @@ const ArchivageView = () => {
   const [emptyAlertMessage, setEmptyAlertMessage] = useState('')
 
   const promotions = [
-    { id: '2024-2025', nom: '2024-2025', nbDiplomes: 145, nbAbandons: 23 },
+    { id: '2025-2026', nom: '2025-2026', nbDiplomes: 145, nbAbandons: 23 },
     { id: '2023-2024', nom: '2023-2024', nbDiplomes: 138, nbAbandons: 19 },
     { id: '2022-2023', nom: '2022-2023', nbDiplomes: 142, nbAbandons: 21 },
     { id: '2021-2022', nom: '2021-2022', nbDiplomes: 135, nbAbandons: 18 }
@@ -38,7 +38,7 @@ const ArchivageView = () => {
 
   // Données d'exemple pour les diplômés
   const diplomesData = {
-    '2024-2025': {
+    '2025-2026': {
       'DTS': {
         'RT': [
           { id: 1, nom: 'MBADINGA', prenom: 'Paul', matricule: 'RT2023-DTS-001', mention: 'Bien', moyenne: 14.5 },
@@ -70,7 +70,7 @@ const ArchivageView = () => {
 
   // Données d'exemple pour les abandons
   const abandonsData = {
-    '2024-2025': {
+    '2025-2026': {
       'L1': {
         'RT': [
           { id: 1, nom: 'MINTSA', prenom: 'Alain', matricule: 'RT2024-L1-045', dateAbandon: '2025-01-15', motif: 'Raisons personnelles' }

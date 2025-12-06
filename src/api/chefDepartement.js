@@ -25,6 +25,36 @@ const request = async (endpoint, options = {}) => {
     }
   }
 }
+// ============================================
+// DASHBOARD & STATS
+// ============================================
+
+export const getFilieres = async () => {
+  return request('/filieres')
+}
+
+export const getDashboardStats = async () => {
+  return request('/stats')
+}
+
+export const getNiveaux = async () => {
+  return request('/niveaux')
+}
+
+// ============================================
+// RÉPARTITION CLASSES
+// ============================================
+
+export const getRepartitionCount = async (filiereId, niveauId) => {
+  return request(`/repartition/count?filiereId=${filiereId}&niveauId=${niveauId}`)
+}
+
+export const createClassesRepartition = async (data) => {
+  return request('/repartition/create', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
 
 // ============================================
 // CLASSES

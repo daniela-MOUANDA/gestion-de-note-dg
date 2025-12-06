@@ -334,7 +334,7 @@ const GererClassesView = () => {
         
         doc.setFontSize(10)
         doc.setFont('helvetica', 'normal')
-        doc.text(`Année académique 2024-2025`, pageWidth / 2, 58, { align: 'center' })
+        doc.text(`Année académique 2025-2026`, pageWidth / 2, 58, { align: 'center' })
       }
 
       // Préparer les données du tableau

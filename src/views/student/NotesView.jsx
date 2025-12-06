@@ -138,7 +138,7 @@ const NotesView = () => {
                 Notes
               </h1>
               <p className="text-sm sm:text-base text-slate-600">
-                {student.semestre} - Année académique 2024-2025
+                {student.semestre} - Année académique 2025-2026
               </p>
             </div>
             <div className="flex gap-3">

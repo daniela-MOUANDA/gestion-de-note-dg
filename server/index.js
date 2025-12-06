@@ -178,7 +178,7 @@ app.get('/api/audit/agents', (req, res, next) => {
 // Routes protégées
 app.use('/api/scolarite', scolariteRoutes)
 app.use('/api/comptes', comptesRoutes)
-app.use('/api/chefs-departement', chefsDepartementRoutes)
+app.use('/api/chef-departement', chefsDepartementRoutes)
 app.use('/api/departements', departementsRoutes)
 
 // Health check

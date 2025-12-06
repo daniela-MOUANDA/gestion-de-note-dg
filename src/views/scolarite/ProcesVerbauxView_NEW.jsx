@@ -8,7 +8,7 @@ import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 
 const ProcesVerbauxView = () => {
-  const [selectedPromotion, setSelectedPromotion] = useState('') // '2024-2025', '2023-2024', etc.
+  const [selectedPromotion, setSelectedPromotion] = useState('') // '2025-2026', '2023-2024', etc.
   const [selectedFiliere, setSelectedFiliere] = useState('') // 'RT', 'GI', 'MTIC', 'AV'
   const [selectedNiveau, setSelectedNiveau] = useState('') // 'L1', 'L2', 'L3'
   const [selectedTypeRattrapage, setSelectedTypeRattrapage] = useState('') // 'avant' ou 'apres'
@@ -18,7 +18,7 @@ const ProcesVerbauxView = () => {
 
   // Promotions disponibles
   const promotions = [
-    { id: '2024-2025', nom: '2024-2025', statut: 'en_cours', nbPV: 12 },
+    { id: '2025-2026', nom: '2025-2026', statut: 'en_cours', nbPV: 12 },
     { id: '2023-2024', nom: '2023-2024', statut: 'archive', nbPV: 24 },
     { id: '2022-2023', nom: '2022-2023', statut: 'archive', nbPV: 24 },
     { id: '2021-2022', nom: '2021-2022', statut: 'archive', nbPV: 24 }
@@ -36,7 +36,7 @@ const ProcesVerbauxView = () => {
   // Données d'exemple pour les PV (envoyés par la Direction des Études)
   // Structure: promotion -> filière -> niveau -> avant/après -> S1/S2/annuel
   const pvData = {
-    '2024-2025': {
+    '2025-2026': {
       'GI': {
         'L1': {
           'avant': {

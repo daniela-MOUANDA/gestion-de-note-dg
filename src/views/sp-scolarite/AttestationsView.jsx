@@ -132,7 +132,7 @@ const AttestationsView = () => {
       const filiere = filieres.find(f => f.id === selectedFiliere)
 
       // Créer l'attestation dans la base de données
-      const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2024-2025')
+      const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2025-2026')
 
       const attestation = {
         numero: attestationData.numero,
@@ -143,7 +143,7 @@ const AttestationsView = () => {
         niveau: niveau?.ordinal || etudiant.niveauOrdinal || '1ère',
         niveauFull: niveau?.nom || etudiant.niveau || '1ère année',
         formation: etudiant.formation,
-        anneeAcademique: promotion?.annee || '2024-2025',
+        anneeAcademique: promotion?.annee || '2025-2026',
         dateGeneration: attestationData.dateGeneration
           ? (typeof attestationData.dateGeneration === 'string'
             ? attestationData.dateGeneration.split('T')[0]
@@ -246,7 +246,7 @@ const AttestationsView = () => {
     const filiereInfo = filieres.find(f => f.id === selectedFiliere)
 
     // Créer l'attestation dans la base de données
-    const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2024-2025')
+    const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2025-2026')
 
     const attestation = {
       etudiant: `${etudiant.nom} ${etudiant.prenom}`,
@@ -254,7 +254,7 @@ const AttestationsView = () => {
       niveau: niveauInfo?.ordinal || etudiant.niveauOrdinal || '1ère',
       filiere: filiereInfo?.nom || etudiant.filiere,
       formation: etudiant.formation,
-      anneeAcademique: promotion?.annee || '2024-2025',
+      anneeAcademique: promotion?.annee || '2025-2026',
       numero: attestationData.numero,
       lieu: 'Libreville',
       dateTexte: new Date(attestationData.dateGeneration).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })

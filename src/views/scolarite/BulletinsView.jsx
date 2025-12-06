@@ -21,7 +21,7 @@ const BulletinsView = () => {
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
 
   const promotions = [
-    { id: '2024-2025', nom: '2024-2025', statut: 'en_cours' },
+    { id: '2025-2026', nom: '2025-2026', statut: 'en_cours' },
     { id: '2023-2024', nom: '2023-2024', statut: 'archive' },
     { id: '2022-2023', nom: '2022-2023', statut: 'archive' }
   ]

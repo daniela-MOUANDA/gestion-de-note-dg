@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faGraduationCap, faSearch, faUsers, faBook, faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faGraduationCap, faSearch, faUsers, faBook, faSpinner, faEye, faTimes } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
-import { getClasses, createClasse, updateClasse, deleteClasse } from '../../api/chefDepartement.js'
+import { getClasses, createClasse, updateClasse, deleteClasse, getEtudiantsByClasse } from '../../api/chefDepartement.js'
 import { getFilieres } from '../../api/scolarite.js'
 
 // Fonction pour obtenir tous les niveaux
@@ -31,7 +31,86 @@ const getAllNiveaux = async () => {
   }
 }
 
+// Modal pour la liste des étudiants
+const StudentListModal = ({ isOpen, onClose, classe, etudiants, loading }) => {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl p-6 sm:p-8 w-full max-w-4xl relative max-h-[90vh] flex flex-col">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <FontAwesomeIcon icon={faTimes} className="text-xl" />
+        </button>
+
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-800">Liste des étudiants</h2>
+          {classe && (
+            <p className="text-slate-600">
+              Classe : <span className="font-semibold">{classe.code}</span> • {classe.nom}
+            </p>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin mb-4" />
+              <p className="text-slate-600">Chargement de la liste...</p>
+            </div>
+          ) : etudiants.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 rounded-lg border border-slate-100">
+              <FontAwesomeIcon icon={faUsers} className="text-4xl text-slate-300 mb-4" />
+              <p className="text-slate-600 font-medium">Aucun étudiant dans cette classe</p>
+              <p className="text-sm text-slate-400 mt-1">Les étudiants répartis apparaîtront ici</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider rounded-tl-lg">Matricule</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Nom</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Prénom</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider rounded-tr-lg">Téléphone</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {etudiants.map((etudiant) => (
+                    <tr key={etudiant.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900">
+                        {etudiant.matricule}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">{etudiant.nom}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-700">{etudiant.prenom}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">{etudiant.email || '-'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-600">{etudiant.telephone || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-slate-200 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ClassesView = () => {
+  // ... (existing hooks)
   const { user } = useAuth()
   const { showAlert } = useAlert()
   const [departementChef, setDepartementChef] = useState('')
@@ -43,6 +122,11 @@ const ClassesView = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // States pour la liste des étudiants
+  const [showStudentModal, setShowStudentModal] = useState(false)
+  const [selectedClassStudents, setSelectedClassStudents] = useState({ classe: null, etudiants: [], loading: false })
+
   const [formData, setFormData] = useState({
     code: '',
     nom: '',
@@ -54,10 +138,11 @@ const ClassesView = () => {
     loadData()
   }, [])
 
+  // ... (loadData function remains same)
   const loadData = async () => {
     try {
       setLoading(true)
-      
+
       // Charger les classes
       const classesResult = await getClasses()
       if (classesResult.success) {
@@ -70,7 +155,7 @@ const ClassesView = () => {
       const filieresResult = await getFilieres()
       if (Array.isArray(filieresResult)) {
         // Filtrer les filières du département de l'utilisateur
-        const userFilieres = filieresResult.filter(f => 
+        const userFilieres = filieresResult.filter(f =>
           f.departement?.id === user?.departementId || f.departementId === user?.departementId
         )
         setFilieres(userFilieres)
@@ -100,6 +185,7 @@ const ClassesView = () => {
     }
   }
 
+  // ... (existing handlers: handleAdd, handleEdit, handleDelete, handleSave)
   const handleAdd = () => {
     setEditingClass(null)
     setFormData({
@@ -172,7 +258,26 @@ const ClassesView = () => {
     }
   }
 
-  const filteredClasses = classes.filter(classe => 
+  const handleViewStudents = async (classe) => {
+    setSelectedClassStudents({ classe, etudiants: [], loading: true })
+    setShowStudentModal(true)
+
+    try {
+      const result = await getEtudiantsByClasse(classe.id)
+      if (result.success) {
+        setSelectedClassStudents(prev => ({ ...prev, etudiants: result.etudiants, loading: false }))
+      } else {
+        showAlert('error', result.error || 'Erreur lors du chargement des étudiants')
+        setSelectedClassStudents(prev => ({ ...prev, loading: false }))
+      }
+    } catch (err) {
+      console.error(err)
+      showAlert('error', 'Erreur technique')
+      setSelectedClassStudents(prev => ({ ...prev, loading: false }))
+    }
+  }
+
+  const filteredClasses = classes.filter(classe =>
     `${classe.code} ${classe.nom || ''} ${classe.niveau || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -261,6 +366,15 @@ const ClassesView = () => {
                     </div>
                   </div>
                   <div className="flex gap-2 pt-4 border-t border-slate-200">
+                    {/* Bouton Voir les étudiants */}
+                    <button
+                      onClick={() => handleViewStudents(classe)}
+                      className="px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors flex items-center justify-center"
+                      title="Voir la liste des étudiants"
+                    >
+                      <FontAwesomeIcon icon={faEye} />
+                    </button>
+
                     <button
                       onClick={() => handleEdit(classe)}
                       className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
@@ -352,6 +466,15 @@ const ClassesView = () => {
               </div>
             </div>
           </Modal>
+
+          {/* Modal liste étudiants */}
+          <StudentListModal
+            isOpen={showStudentModal}
+            onClose={() => setShowStudentModal(false)}
+            classe={selectedClassStudents.classe}
+            etudiants={selectedClassStudents.etudiants}
+            loading={selectedClassStudents.loading}
+          />
         </main>
       </div>
     </div>

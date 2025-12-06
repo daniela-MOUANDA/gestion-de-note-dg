@@ -30,7 +30,7 @@ const EmploiDuTempsView = () => {
     heureFin: '10:00',
     salle: '',
     semestre: 'S1',
-    anneeAcademique: '2024-2025'
+    anneeAcademique: '2025-2026'
   })
 
   const jours = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI']
@@ -106,7 +106,7 @@ const EmploiDuTempsView = () => {
       heureFin: '10:00',
       salle: '',
       semestre: selectedSemestre,
-      anneeAcademique: '2024-2025'
+      anneeAcademique: '2025-2026'
     })
     setShowModal(true)
   }

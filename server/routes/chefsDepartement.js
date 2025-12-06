@@ -4,7 +4,16 @@ import {
   createChefDepartement,
   getAllChefsDepartement,
   updateChefDepartement,
-  deleteChefDepartement
+  deleteChefDepartement,
+  getDepartementEnseignants,
+  getDepartementModules,
+  getDepartementClasses,
+  getDepartementFilieres,
+  getDepartementStatsGlobales,
+  getEtudiantsPourRepartition,
+  createClassesFromRepartition,
+  getNiveaux,
+  getEtudiantsByClasse
 } from '../../src/services/chefDepartementService.js'
 
 const router = express.Router()
@@ -25,11 +34,141 @@ router.use((req, res, next) => {
   next()
 })
 
+// ============================================
+// ROUTES DASHBOARD CHEF DEPARTEMENT
+// ============================================
+
+router.get('/enseignants', async (req, res) => {
+  try {
+    // Note: req.user.departementId vient du middleware authenticate
+    // Si c'est un admin qui consulte, il faudrait peut-être passer l'ID en paramètre ?
+    // Pour l'instant on suppose que c'est le chef connecté qui consulte SON département
+    const departementId = req.user.departementId
+
+    if (!departementId) {
+      // Si c'est un admin, on autorise peut-être? Non, dashboard chef.
+      return res.status(403).json({ success: false, error: "Aucun département associé à votre compte" });
+    }
+
+    const result = await getDepartementEnseignants(departementId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/modules', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await getDepartementModules(departementId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/classes', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await getDepartementClasses(departementId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/filieres', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await getDepartementFilieres(departementId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/stats', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await getDepartementStatsGlobales(departementId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/repartition/count', async (req, res) => {
+  try {
+    // Query params: filiereId, niveauId
+    const { filiereId, niveauId } = req.query
+    const departementId = req.user.departementId
+
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await getEtudiantsPourRepartition(departementId, filiereId, niveauId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.post('/repartition/create', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await createClassesFromRepartition(req.body)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/niveaux', async (req, res) => {
+  try {
+    const result = await getNiveaux()
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+})
+
+router.get('/repartition/classes/:id/etudiants', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await getEtudiantsByClasse(id)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// ============================================
+// ROUTES ADMINISTRATION (CRUD CHEFS)
+// ============================================
+
 // Obtenir tous les chefs de département
 router.get('/', async (req, res) => {
   try {
     const result = await getAllChefsDepartement()
-    
+
     if (!result.success) {
       return res.status(400).json(result)
     }

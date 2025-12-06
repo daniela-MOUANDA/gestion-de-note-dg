@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faUsers,
   faChalkboardTeacher,
   faUserGraduate,
@@ -15,6 +15,7 @@ import {
   faEnvelope
 } from '@fortawesome/free-solid-svg-icons'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { getDashboardStats } from '../../api/chefDepartement'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
@@ -42,16 +43,26 @@ const DashboardChefView = () => {
       }
     }
   }, [isAuthenticated, user, navigate])
-  const [stats] = useState({
-    totalClasses: 12,
-    totalEnseignants: 45,
-    totalEtudiants: 850,
-    notesEnAttente: 23,
-    rattrapagesProgrammes: 8,
-    unitesPubliees: 15,
-    bulletinsPublies: 120,
-    messagesNonLus: 2
+  const [stats, setStats] = useState({
+    totalClasses: 0,
+    totalEnseignants: 0,
+    totalEtudiants: 0,
+    notesEnAttente: 0,
+    rattrapagesProgrammes: 0,
+    unitesPubliees: 0,
+    bulletinsPublies: 0,
+    messagesNonLus: 0
   })
+
+  // State pour les graphes
+  const [graphData, setGraphData] = useState({
+    studentsData: [],
+    levelData: [],
+    genreData: [],
+    tauxReussiteData: []
+  })
+
+
 
   const recentActions = [
     { id: 1, action: 'Note ajoutée pour Module "Base de données"', date: 'Il y a 2 heures', type: 'note' },
@@ -61,29 +72,33 @@ const DashboardChefView = () => {
     { id: 5, action: 'Nouveau message du Directeur des Études', date: 'Il y a 1 heure', type: 'message' }
   ]
 
-  // Données pour les graphiques
-  const studentsData = [
-    { name: 'GI', value: 480, color: '#3b82f6' },
-    { name: 'RT', value: 370, color: '#8b5cf6' }
-  ]
+  // Charger les données
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
 
-  const levelData = [
-    { niveau: 'L1', etudiants: 320 },
-    { niveau: 'L2', etudiants: 280 },
-    { niveau: 'L3', etudiants: 250 }
-  ]
+  const loadDashboardData = async () => {
+    try {
+      // 1. Charger stats globales
+      const statsRes = await getDashboardStats()
+      if (statsRes.success && statsRes.stats) {
+        setGraphData(statsRes.stats)
+      }
+    } catch (error) {
+      console.error("Erreur chargement dashboard:", error)
+    }
+  }
 
-  const tauxReussiteData = [
-    { filiere: 'GI', tauxReussite: 87.5 },
-    { filiere: 'RT', tauxReussite: 82.3 }
-  ]
 
-  const genreData = [
-    { name: 'Masculin', value: 520, color: '#3b82f6', percentage: 61.2 },
-    { name: 'Féminin', value: 330, color: '#ec4899', percentage: 38.8 }
-  ]
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b']
+
+
+
+
+  // Données pour les graphiques (Utilisation du state graphData)
+  // const studentsData = [ ... ] (Supprimé car dynamique)
+
+  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']
 
   const getActionIcon = (type) => {
     const icons = {
@@ -114,7 +129,7 @@ const DashboardChefView = () => {
       <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />
-        
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}
           <div className="mb-6">
@@ -189,12 +204,12 @@ const DashboardChefView = () => {
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
               <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <span className="w-1 h-6 bg-blue-600 rounded"></span>
-                Étudiants par filière
+                Étudiants par filière (Total: {graphData?.studentsData?.reduce((acc, curr) => acc + curr.value, 0) || 0})
               </h3>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={studentsData}
+                    data={graphData.studentsData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -203,28 +218,23 @@ const DashboardChefView = () => {
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {studentsData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    {graphData.studentsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <div>
-                    <p className="text-xs text-slate-600">GI</p>
-                    <p className="text-lg font-bold text-slate-800">480</p>
+                {graphData.studentsData.map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color || COLORS[idx % COLORS.length] }}></div>
+                    <div>
+                      <p className="text-xs text-slate-600">{entry.name}</p>
+                      <p className="text-lg font-bold text-slate-800">{entry.value}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                  <div>
-                    <p className="text-xs text-slate-600">RT</p>
-                    <p className="text-lg font-bold text-slate-800">370</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -237,7 +247,7 @@ const DashboardChefView = () => {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={genreData}
+                    data={graphData.genreData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -246,7 +256,7 @@ const DashboardChefView = () => {
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {genreData.map((entry, index) => (
+                    {graphData.genreData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -254,26 +264,21 @@ const DashboardChefView = () => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <div>
-                    <p className="text-xs text-slate-600">Masculin</p>
-                    <p className="text-lg font-bold text-slate-800">520</p>
+                {graphData.genreData.map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                    <div>
+                      <p className="text-xs text-slate-600">{entry.name}</p>
+                      <p className="text-lg font-bold text-slate-800">{entry.value}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 p-3 bg-pink-50 rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-pink-500"></div>
-                  <div>
-                    <p className="text-xs text-slate-600">Féminin</p>
-                    <p className="text-lg font-bold text-slate-800">330</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
 
           {/* Deuxième ligne de graphiques */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Répartition par niveau */}
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
               <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -281,77 +286,43 @@ const DashboardChefView = () => {
                 Étudiants par niveau
               </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={levelData}>
+                <BarChart data={graphData.levelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="niveau" stroke="#64748b" style={{ fontSize: '14px' }} />
                   <YAxis stroke="#64748b" style={{ fontSize: '14px' }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#fff', 
-                      border: '1px solid #e2e8f0', 
-                      borderRadius: '8px' 
-                    }} 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px'
+                    }}
                   />
                   <Bar dataKey="etudiants" fill="#6366f1" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Taux de réussite */}
+            {/* Taux de réussite (Mocké pour l'instant) */}
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
               <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <span className="w-1 h-6 bg-green-600 rounded"></span>
-                Taux de réussite par filière
+                Taux de réussite par filière (Estimé)
               </h3>
               <div className="space-y-6 mt-8">
-                {/* GI */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-semibold text-slate-700">Génie Informatique</span>
-                    <span className="text-2xl font-bold text-green-600">87.5%</span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                      style={{ width: '87.5%' }}
-                    >
-                      <span className="text-xs font-bold text-white">87.5%</span>
+                {graphData.tauxReussiteData.map((item, idx) => (
+                  <div key={idx}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-semibold text-slate-700">{item.filiere}</span>
+                      <span className="text-2xl font-bold text-green-600">{item.tauxReussite}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                        style={{ width: `${item.tauxReussite}%` }}
+                      ></div>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">420 étudiants sur 480</p>
-                </div>
-
-                {/* RT */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-semibold text-slate-700">Réseau et Télécom</span>
-                    <span className="text-2xl font-bold text-blue-600">82.3%</span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                      style={{ width: '82.3%' }}
-                    >
-                      <span className="text-xs font-bold text-white">82.3%</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">305 étudiants sur 370</p>
-                </div>
-
-                {/* Taux global */}
-                <div className="pt-4 border-t border-slate-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-bold text-slate-800">Taux global</span>
-                    <span className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">85.3%</span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-5 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-green-500 via-emerald-500 to-blue-500 h-5 rounded-full transition-all duration-500"
-                      style={{ width: '85.3%' }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">725 étudiants sur 850 ont réussi</p>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -362,4 +333,3 @@ const DashboardChefView = () => {
 }
 
 export default DashboardChefView
-

@@ -40,7 +40,7 @@ const DocumentsView = () => {
 
   const [fileType, setFileType] = useState('')
   const [selectedDocument, setSelectedDocument] = useState('Attestation de scolarité')
-  const [academicYear, setAcademicYear] = useState('2024-2025')
+  const [academicYear, setAcademicYear] = useState('2025-2026')
 
   const availableDocuments = [
     'Attestation de scolarité',
@@ -57,7 +57,7 @@ const DocumentsView = () => {
   ]
 
   const academicYears = [
-    '2024-2025',
+    '2025-2026',
     '2023-2024',
     '2022-2023'
   ]

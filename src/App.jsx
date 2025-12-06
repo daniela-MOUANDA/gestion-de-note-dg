@@ -8,11 +8,11 @@ import LoadingSpinner from './components/common/LoadingSpinner'
 // Composant pour initialiser la navigation
 const NavigationInit = () => {
   const navigate = useNavigate()
-  
+
   useEffect(() => {
     initNavigation(navigate)
   }, [navigate])
-  
+
   return null
 }
 
@@ -37,7 +37,7 @@ const ClassesChefDepartementView = lazy(() => import('./views/chef-departement/C
 const ModulesChefDepartementView = lazy(() => import('./views/chef-departement/ModulesView'))
 const EnseignantsChefDepartementView = lazy(() => import('./views/chef-departement/EnseignantsView'))
 const EtudiantsInscritsView = lazy(() => import('./views/chef-departement/EtudiantsInscritsView'))
-const RepartitionClasseView = lazy(() => import('./views/chef-departement/RepartitionClasseView'))
+const RepartitionClasseView = lazy(() => import('./views/chef/RepartitionClassesView'))
 const EmploiDuTempsChefDepartementView = lazy(() => import('./views/chef-departement/EmploiDuTempsView'))
 const NotesChefDepartementView = lazy(() => import('./views/chef-departement/NotesView'))
 const MessagerieChefView = lazy(() => import('./views/chef/MessagerieChefView'))
@@ -84,6 +84,7 @@ const RapportsView = lazy(() => import('./views/dep/RapportsView'))
 const StatistiquesDEPView = lazy(() => import('./views/dep/StatistiquesView'))
 const EtudiantsView = lazy(() => import('./views/dep/EtudiantsView'))
 const MeilleursEtudiantsView = lazy(() => import('./views/dep/MeilleursEtudiantsView'))
+const MessagerieDEPView = lazy(() => import('./views/dep/MessagerieDEPView'))
 
 // Routes Administration
 const ProfilAdminView = lazy(() => import('./views/admin/ProfilAdminView'))
@@ -111,552 +112,560 @@ function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Pages de connexion - Accessibles sans authentification */}
-            <Route 
-              path="/login" 
+            <Route
+              path="/login"
               element={
                 <ProtectedRoute requireAuth={false}>
                   <LoginView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/login-etudiant" 
+            <Route
+              path="/login-etudiant"
               element={
                 <ProtectedRoute requireAuth={false}>
                   <LoginStudentView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes Étudiant - Protégées pour le rôle ETUDIANT */}
-            <Route 
-              path="/dashboard" 
+            <Route
+              path="/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <DashboardView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/documents" 
+            <Route
+              path="/documents"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <DocumentsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/emploi-du-temps" 
+            <Route
+              path="/emploi-du-temps"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <EmploiDuTempsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/notes" 
+            <Route
+              path="/notes"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <NotesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/profil" 
+            <Route
+              path="/profil"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <ProfileView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/notifications" 
+            <Route
+              path="/notifications"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <NotificationsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/reclamations" 
+            <Route
+              path="/reclamations"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <ReclamationsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/aide" 
+            <Route
+              path="/aide"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <AideView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes Chef de Département - Protégées pour le rôle CHEF_DEPARTEMENT */}
-            <Route 
-              path="/chef/departement/dashboard" 
+            <Route
+              path="/chef/departement/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <DashboardChefView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/dashboard" 
+            <Route
+              path="/chef/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <DashboardChefView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/messagerie" 
+            <Route
+              path="/chef/messagerie"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <MessagerieChefView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/classes" 
+            <Route
+              path="/chef/classes"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <ClassesChefDepartementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/modules" 
+            <Route
+              path="/chef/modules"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <ModulesChefDepartementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/enseignants" 
+            <Route
+              path="/chef/enseignants"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <EnseignantsChefDepartementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/etudiants" 
+            <Route
+              path="/chef/etudiants"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <EtudiantsInscritsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/repartition" 
+            <Route
+              path="/chef/repartition"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <RepartitionClasseView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/notes" 
+            <Route
+              path="/chef/notes"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <NotesChefDepartementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/notes/ajouter" 
+            <Route
+              path="/chef/notes/ajouter"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <AjouterNotesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/emplois-temps" 
+            <Route
+              path="/chef/emplois-temps"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <EmploiDuTempsChefDepartementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/rattrapages" 
+            <Route
+              path="/chef/rattrapages"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <GererRattrapagesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/unites-enseignement" 
+            <Route
+              path="/chef/unites-enseignement"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <PublierUnitesEnseignementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef/bulletins" 
+            <Route
+              path="/chef/bulletins"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <PublierBulletinsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes Service Scolarité - Protégées pour le rôle AGENT_SCOLARITE */}
-            <Route 
-              path="/scolarite/dashboard" 
+            <Route
+              path="/scolarite/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <DashboardScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/importer-candidats" 
+            <Route
+              path="/scolarite/importer-candidats"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <ImporterCandidatsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/inscriptions" 
+            <Route
+              path="/scolarite/inscriptions"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <GererInscriptionsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/etudiants" 
+            <Route
+              path="/scolarite/etudiants"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <GererEtudiantsScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/messagerie" 
+            <Route
+              path="/scolarite/messagerie"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <MessagerieScolareView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/bulletins" 
+            <Route
+              path="/scolarite/bulletins"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <BulletinsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/diplomes" 
+            <Route
+              path="/scolarite/diplomes"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <DiplomesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/proces-verbaux" 
+            <Route
+              path="/scolarite/proces-verbaux"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <ProcesVerbauxView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/archivage" 
+            <Route
+              path="/scolarite/archivage"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <ArchivageView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/attestations" 
+            <Route
+              path="/scolarite/attestations"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <AttestationsScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/scolarite/archives-attestations" 
+            <Route
+              path="/scolarite/archives-attestations"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <ArchivesAttestationsScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes SP-Scolarité - Protégées pour le rôle SP_SCOLARITE */}
-            <Route 
-              path="/sp-scolarite/dashboard" 
+            <Route
+              path="/sp-scolarite/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
                   <DashboardSPView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/sp-scolarite/attestations" 
+            <Route
+              path="/sp-scolarite/attestations"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
                   <AttestationsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/sp-scolarite/archives" 
+            <Route
+              path="/sp-scolarite/archives"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
                   <ArchivesAttestationsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/sp-scolarite/messagerie" 
+            <Route
+              path="/sp-scolarite/messagerie"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
                   <MessagerieSPView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes communes Administration - Protégées pour tous les rôles authentifiés */}
-            <Route 
-              path="/admin/profil" 
+            <Route
+              path="/admin/profil"
               element={
                 <ProtectedRoute requireAuth={true}>
                   <ProfilAdminView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/parametres" 
+            <Route
+              path="/admin/parametres"
               element={
                 <ProtectedRoute requireAuth={true}>
                   <ParametresAdminView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes Chef de Scolarité - Protégées pour le rôle CHEF_SERVICE_SCOLARITE */}
-            <Route 
-              path="/chef-scolarite/dashboard" 
+            <Route
+              path="/chef-scolarite/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <DashboardChefScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/gestion-comptes" 
+            <Route
+              path="/chef-scolarite/gestion-comptes"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <GestionComptesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/audit" 
+            <Route
+              path="/chef-scolarite/audit"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <AuditView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/statistiques" 
+            <Route
+              path="/chef-scolarite/statistiques"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <StatistiquesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/messagerie" 
+            <Route
+              path="/chef-scolarite/messagerie"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <MessagerieChefScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes Chef de Scolarité - Actions déléguées */}
-            <Route 
-              path="/chef-scolarite/importer-candidats" 
+            <Route
+              path="/chef-scolarite/importer-candidats"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <ImporterCandidatsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/inscriptions" 
+            <Route
+              path="/chef-scolarite/inscriptions"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <GererInscriptionsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/attestations" 
+            <Route
+              path="/chef-scolarite/attestations"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <AttestationsScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/archives-attestations" 
+            <Route
+              path="/chef-scolarite/archives-attestations"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <ArchivesAttestationsScolariteView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/bulletins" 
+            <Route
+              path="/chef-scolarite/bulletins"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <BulletinsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/diplomes" 
+            <Route
+              path="/chef-scolarite/diplomes"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <DiplomesView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/proces-verbaux" 
+            <Route
+              path="/chef-scolarite/proces-verbaux"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <ProcesVerbauxView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/chef-scolarite/archivage" 
+            <Route
+              path="/chef-scolarite/archivage"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <ArchivageView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Route DG - Protégée pour le rôle DG */}
-            <Route 
-              path="/dg/dashboard" 
+            <Route
+              path="/dg/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DG">
                   <DashboardDGView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Routes DEP - Protégées pour le rôle DEP */}
-            <Route 
-              path="/dep/dashboard" 
+            <Route
+              path="/dep/dashboard"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <DashboardDEPView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/chefs-departement" 
+            <Route
+              path="/dep/chefs-departement"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <ChefsDepartementView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/departements" 
+            <Route
+              path="/dep/departements"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <DepartementsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/conseils" 
+            <Route
+              path="/dep/conseils"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <ConseilsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/visas" 
+            <Route
+              path="/dep/visas"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <VisasView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/proces-verbaux" 
+            <Route
+              path="/dep/proces-verbaux"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <ProcesVerbauxDEPView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/rapports" 
+            <Route
+              path="/dep/rapports"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <RapportsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/statistiques" 
+            <Route
+              path="/dep/statistiques"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <StatistiquesDEPView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/etudiants" 
+            <Route
+              path="/dep/etudiants"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <EtudiantsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/dep/meilleurs-etudiants" 
+            <Route
+              path="/dep/meilleurs-etudiants"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="DEP">
                   <MeilleursEtudiantsView />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+            <Route
+              path="/dep/messagerie"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DEP">
+                  <MessagerieDEPView />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Routes par défaut */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login-admin" element={<Navigate to="/login" replace />} />
-            
+
             {/* Route 404 - Page non trouvée */}
-            <Route 
-              path="*" 
+            <Route
+              path="*"
               element={
                 <div className="min-h-screen flex items-center justify-center bg-slate-50">
                   <div className="text-center">
@@ -665,7 +674,7 @@ function App() {
                     <Navigate to="/login" replace />
                   </div>
                 </div>
-              } 
+              }
             />
           </Routes>
         </Suspense>

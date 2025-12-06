@@ -13,7 +13,7 @@ const getAuthHeaders = () => {
 // Obtenir tous les chefs de département
 export const getAllChefsDepartement = async () => {
   try {
-    const response = await fetch(`${API_URL}/chefs-departement`, {
+    const response = await fetch(`${API_URL}/chef-departement`, {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -34,7 +34,7 @@ export const getAllChefsDepartement = async () => {
 // Créer un nouveau chef de département
 export const createChefDepartement = async (chefData) => {
   try {
-    const response = await fetch(`${API_URL}/chefs-departement`, {
+    const response = await fetch(`${API_URL}/chef-departement`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(chefData)
@@ -56,7 +56,7 @@ export const createChefDepartement = async (chefData) => {
 // Mettre à jour un chef de département
 export const updateChefDepartement = async (id, chefData) => {
   try {
-    const response = await fetch(`${API_URL}/chefs-departement/${id}`, {
+    const response = await fetch(`${API_URL}/chef-departement/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(chefData)
@@ -78,7 +78,7 @@ export const updateChefDepartement = async (id, chefData) => {
 // Supprimer un chef de département
 export const deleteChefDepartement = async (id) => {
   try {
-    const response = await fetch(`${API_URL}/chefs-departement/${id}`, {
+    const response = await fetch(`${API_URL}/chef-departement/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     })

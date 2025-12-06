@@ -32,7 +32,7 @@ const NotesView = () => {
     valeur: '',
     coefficient: '1.0',
     semestre: 'S1',
-    anneeAcademique: '2024-2025',
+    anneeAcademique: '2025-2026',
     commentaire: ''
   })
 
@@ -138,7 +138,7 @@ const NotesView = () => {
       valeur: '',
       coefficient: '1.0',
       semestre: selectedSemestre,
-      anneeAcademique: '2024-2025',
+      anneeAcademique: '2025-2026',
       commentaire: ''
     })
     setShowModal(true)
@@ -156,7 +156,7 @@ const NotesView = () => {
       valeur: note.valeur.toString(),
       coefficient: note.coefficient.toString(),
       semestre: selectedSemestre,
-      anneeAcademique: '2024-2025',
+      anneeAcademique: '2025-2026',
       commentaire: note.commentaire || ''
     })
     setShowModal(true)

@@ -8,8 +8,8 @@ import Modal from '../../components/common/Modal'
 const RapportsView = () => {
   const [rapports, setRapports] = useState([
     { id: 1, type: 'Rapport Mensuel', titre: 'Rapport Mensuel - Janvier 2025', periode: 'Janvier 2025', dateGeneration: '2025-01-31', statut: 'GENERÉ', nombrePages: 15 },
-    { id: 2, type: 'Rapport Annuel', titre: 'Rapport Annuel 2024-2025', periode: 'Année 2024-2025', dateGeneration: '2025-01-20', statut: 'GENERÉ', nombrePages: 45 },
-    { id: 3, type: 'Rapport Pédagogique', titre: 'Rapport Pédagogique - Semestre 1', periode: 'Semestre 1 - 2024-2025', dateGeneration: '2025-01-25', statut: 'BROUILLON', nombrePages: 0 },
+    { id: 2, type: 'Rapport Annuel', titre: 'Rapport Annuel 2025-2026', periode: 'Année 2025-2026', dateGeneration: '2025-01-20', statut: 'GENERÉ', nombrePages: 45 },
+    { id: 3, type: 'Rapport Pédagogique', titre: 'Rapport Pédagogique - Semestre 1', periode: 'Semestre 1 - 2025-2026', dateGeneration: '2025-01-25', statut: 'BROUILLON', nombrePages: 0 },
   ])
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({

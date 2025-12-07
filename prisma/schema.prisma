@@ -226,7 +226,7 @@ model Inscription {
   formationId       String
   filiereId         String
   niveauId          String
-  classeId          String
+  classeId          String?  // Optionnel - assigné par le chef de département
   typeInscription   TypeInscription // INSCRIPTION ou REINSCRIPTION
   statut            StatutInscription @default(EN_ATTENTE)
   dateInscription   DateTime @default(now())
@@ -247,7 +247,7 @@ model Inscription {
   formation         Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
   filiere           Filiere @relation(fields: [filiereId], references: [id], onDelete: Cascade)
   niveau            Niveau @relation(fields: [niveauId], references: [id], onDelete: Cascade)
-  classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  classe            Classe? @relation(fields: [classeId], references: [id], onDelete: Cascade)
   notes             Note[]
   
   @@map("inscriptions")

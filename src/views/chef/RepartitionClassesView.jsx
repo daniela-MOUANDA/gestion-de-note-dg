@@ -20,7 +20,8 @@ const RepartitionClassesView = () => {
     const [repartitionResult, setRepartitionResult] = useState({
         count: null,
         loading: false,
-        error: null
+        error: null,
+        etudiants: []
     })
     const [showClassModal, setShowClassModal] = useState(false)
     const [classConfig, setClassConfig] = useState({
@@ -65,7 +66,12 @@ const RepartitionClassesView = () => {
         try {
             const res = await getRepartitionCount(repartition.filiereId, repartition.niveauId)
             if (res.success) {
-                setRepartitionResult({ loading: false, error: null, count: res.count })
+                setRepartitionResult({
+                    loading: false,
+                    error: null,
+                    count: res.count,
+                    etudiants: res.etudiants || []
+                })
 
                 // Préparer pattern
                 const filiere = filieres.find(f => f.id === repartition.filiereId)
@@ -81,10 +87,10 @@ const RepartitionClassesView = () => {
                     preview: calculatePreview(1, `${codeFiliere}-${codeNiveau}`, 'unique')
                 }))
             } else {
-                setRepartitionResult({ loading: false, error: res.error, count: null })
+                setRepartitionResult({ loading: false, error: res.error, count: null, etudiants: [] })
             }
         } catch (err) {
-            setRepartitionResult({ loading: false, error: "Erreur technique", count: null })
+            setRepartitionResult({ loading: false, error: "Erreur technique", count: null, etudiants: [] })
         }
     }
 
@@ -120,9 +126,10 @@ const RepartitionClassesView = () => {
             })
 
             if (res.success) {
-                alert("Classes créées avec succès !")
+                const message = `${res.classes.length} classe(s) créée(s) avec succès!\n${res.etudiantsRepartis || 0} étudiant(s) réparti(s).`
+                alert(message)
                 setShowClassModal(false)
-                setRepartitionResult({ ...repartitionResult, count: null })
+                setRepartitionResult({ count: null, loading: false, error: null, etudiants: [] })
             } else {
                 alert("Erreur: " + res.error)
             }
@@ -213,24 +220,66 @@ const RepartitionClassesView = () => {
 
                         {/* Résultat et Action */}
                         {repartitionResult.count !== null && (
-                            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fadeIn">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                                        {repartitionResult.count}
+                            <div className="mt-6 animate-fadeIn">
+                                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                                            {repartitionResult.count}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-slate-600">Total Étudiants Inscrits (Non répartis)</p>
+                                            <p className="text-xs text-slate-500">Pour {repartition.formation} - {filieres.find(f => f.id === repartition.filiereId)?.code} - {niveaux.find(n => n.id === repartition.niveauId)?.code}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-slate-600">Total Étudiants Inscrits (Non répartis)</p>
-                                        <p className="text-xs text-slate-500">Pour {repartition.formation} - {filieres.find(f => f.id === repartition.filiereId)?.code}</p>
-                                    </div>
+
+                                    <button
+                                        onClick={() => setShowClassModal(true)}
+                                        disabled={repartitionResult.count === 0}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <FontAwesomeIcon icon={faChalkboardTeacher} />
+                                        Répartir en Classes
+                                    </button>
                                 </div>
 
-                                <button
-                                    onClick={() => setShowClassModal(true)}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
-                                >
-                                    <FontAwesomeIcon icon={faChalkboardTeacher} />
-                                    Répartir en Classes
-                                </button>
+                                {/* Table des étudiants */}
+                                {repartitionResult.etudiants && repartitionResult.etudiants.length > 0 && (
+                                    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                                        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                                            <h4 className="font-semibold text-slate-700">Liste des étudiants</h4>
+                                        </div>
+                                        <div className="overflow-x-auto max-h-96">
+                                            <table className="w-full">
+                                                <thead className="bg-slate-50 sticky top-0">
+                                                    <tr>
+                                                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">#</th>
+                                                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Matricule</th>
+                                                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Nom</th>
+                                                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Prénom</th>
+                                                        <th className="px-4 py-2 text-left text-xs font-medium text-slate-600">Email</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {repartitionResult.etudiants.map((etudiant, idx) => (
+                                                        <tr key={etudiant.id} className="hover:bg-slate-50">
+                                                            <td className="px-4 py-2 text-sm text-slate-600">{idx + 1}</td>
+                                                            <td className="px-4 py-2 text-sm font-medium text-slate-800">{etudiant.matricule}</td>
+                                                            <td className="px-4 py-2 text-sm text-slate-800">{etudiant.nom}</td>
+                                                            <td className="px-4 py-2 text-sm text-slate-800">{etudiant.prenom}</td>
+                                                            <td className="px-4 py-2 text-sm text-slate-600">{etudiant.email || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {repartitionResult.count === 0 && (
+                                    <div className="p-4 bg-yellow-50 text-yellow-700 rounded-md text-sm text-center">
+                                        Aucun étudiant inscrit sans classe pour cette filière et ce niveau.
+                                    </div>
+                                )}
                             </div>
                         )}
 

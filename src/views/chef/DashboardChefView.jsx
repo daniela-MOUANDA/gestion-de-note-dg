@@ -82,7 +82,20 @@ const DashboardChefView = () => {
       // 1. Charger stats globales
       const statsRes = await getDashboardStats()
       if (statsRes.success && statsRes.stats) {
+        // Mettre à jour les graphiques
         setGraphData(statsRes.stats)
+
+        // Mettre à jour les statistiques de base
+        setStats({
+          totalClasses: statsRes.stats.totalClasses || 0,
+          totalEnseignants: statsRes.stats.totalEnseignants || 0,
+          totalEtudiants: statsRes.stats.totalEtudiants || 0,
+          notesEnAttente: 0, // À implémenter plus tard
+          rattrapagesProgrammes: 0, // À implémenter plus tard
+          unitesPubliees: 0, // À implémenter plus tard
+          bulletinsPublies: 0, // À implémenter plus tard
+          messagesNonLus: 0 // À implémenter plus tard
+        })
       }
     } catch (error) {
       console.error("Erreur chargement dashboard:", error)

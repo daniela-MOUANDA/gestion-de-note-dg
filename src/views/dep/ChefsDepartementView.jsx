@@ -4,6 +4,7 @@ import { faPlus, faEdit, faTrash, faUserTie, faBuilding, faSearch, faEye, faEyeS
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
+import TelephoneInput from '../../components/common/TelephoneInput'
 import { getAllChefsDepartement, createChefDepartement, updateChefDepartement, deleteChefDepartement } from '../../api/chefsDepartement.js'
 import { getAllDepartements } from '../../api/departements.js'
 
@@ -302,15 +303,13 @@ const ChefsDepartementView = () => {
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
-                  <input
-                    type="tel"
-                    value={formData.telephone}
-                    onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                <TelephoneInput
+                  value={formData.telephone}
+                  onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                  name="telephone"
+                  label="Téléphone"
+                  required={false}
+                />
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Département <span className="text-red-500">*</span></label>
                   <select

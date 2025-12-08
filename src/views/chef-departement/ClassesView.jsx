@@ -148,7 +148,7 @@ const ClassesView = () => {
       if (classesResult.success) {
         setClasses(classesResult.classes)
       } else {
-        showAlert('error', classesResult.error || 'Erreur lors du chargement des classes')
+        showAlert(classesResult.error || 'Erreur lors du chargement des classes', 'error')
       }
 
       // Charger les filières du département
@@ -179,7 +179,7 @@ const ClassesView = () => {
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors du chargement des données')
+      showAlert('Erreur lors du chargement des données', 'error')
     } finally {
       setLoading(false)
     }
@@ -216,20 +216,20 @@ const ClassesView = () => {
     try {
       const result = await deleteClasse(id)
       if (result.success) {
-        showAlert('success', 'Classe supprimée avec succès')
+        showAlert('Classe supprimée avec succès', 'success')
         loadData()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la suppression')
+        showAlert(result.error || 'Erreur lors de la suppression', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la suppression')
+      showAlert('Erreur lors de la suppression', 'error')
     }
   }
 
   const handleSave = async () => {
     if (!formData.code || !formData.nom || !formData.filiereId || !formData.niveauId) {
-      showAlert('error', 'Veuillez remplir tous les champs obligatoires')
+      showAlert('Veuillez remplir tous les champs obligatoires', 'error')
       return
     }
 
@@ -244,15 +244,15 @@ const ClassesView = () => {
       }
 
       if (result.success) {
-        showAlert('success', editingClass ? 'Classe modifiée avec succès' : 'Classe créée avec succès')
+        showAlert(editingClass ? 'Classe modifiée avec succès' : 'Classe créée avec succès', 'success')
         setShowModal(false)
         loadData()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la sauvegarde')
+        showAlert(result.error || 'Erreur lors de la sauvegarde', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la sauvegarde')
+      showAlert('Erreur lors de la sauvegarde', 'error')
     } finally {
       setSaving(false)
     }
@@ -267,12 +267,12 @@ const ClassesView = () => {
       if (result.success) {
         setSelectedClassStudents(prev => ({ ...prev, etudiants: result.etudiants, loading: false }))
       } else {
-        showAlert('error', result.error || 'Erreur lors du chargement des étudiants')
+        showAlert(result.error || 'Erreur lors du chargement des étudiants', 'error')
         setSelectedClassStudents(prev => ({ ...prev, loading: false }))
       }
     } catch (err) {
       console.error(err)
-      showAlert('error', 'Erreur technique')
+      showAlert('Erreur technique', 'error')
       setSelectedClassStudents(prev => ({ ...prev, loading: false }))
     }
   }

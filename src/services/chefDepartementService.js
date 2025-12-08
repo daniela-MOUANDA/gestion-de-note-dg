@@ -517,13 +517,21 @@ export const getDepartementClasses = async (departementId) => {
     // 2. Récupérer les classes liées à ces filières
     const { data: classes, error: classesError } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom), niveaux(nom)')
+      .select('*, filieres(nom, code), niveaux(nom, code)')
       .in('filiere_id', filiereIds)
       .order('nom')
 
     if (classesError) throw classesError
 
-    return { success: true, classes }
+    // Mapper les données pour inclure le niveau et la filière
+    const classesMapped = (classes || []).map(classe => ({
+      ...classe,
+      filiereId: classe.filiere_id,
+      niveauCode: classe.niveaux?.code,
+      niveauNom: classe.niveaux?.nom
+    }))
+
+    return { success: true, classes: classesMapped }
   } catch (error) {
     console.error('Erreur getDepartementClasses:', error)
     return { success: false, error: 'Erreur lors de la récupération des classes' }
@@ -574,7 +582,7 @@ export const getDepartementStatsGlobales = async (departementId) => {
       return { success: false, error: 'ID de département manquant' }
     }
 
-    // 1. Récupérer les filières
+    // 1. Récupérer les filières du département
     const { data: filieres } = await supabaseAdmin
       .from('filieres')
       .select('id, code, nom')
@@ -584,6 +592,9 @@ export const getDepartementStatsGlobales = async (departementId) => {
       return {
         success: true,
         stats: {
+          totalClasses: 0,
+          totalEnseignants: 0,
+          totalEtudiants: 0,
           studentsData: [],
           levelData: [],
           genreData: [],
@@ -594,10 +605,20 @@ export const getDepartementStatsGlobales = async (departementId) => {
 
     const filiereIds = filieres.map(f => f.id)
 
-    // 2. Récupérer tous les étudiants inscrits dans ces filières (via inscriptions)
-    // On suppose que l'inscription lie l'étudiant à une filière
+    // 2. Compter les classes du département
+    const { count: classesCount } = await supabaseAdmin
+      .from('classes')
+      .select('*', { count: 'exact', head: true })
+      .in('filiere_id', filiereIds)
 
-    // Récupérer les inscriptions actives
+    // 3. Compter les enseignants du département
+    const { count: enseignantsCount } = await supabaseAdmin
+      .from('enseignants')
+      .select('*', { count: 'exact', head: true })
+      .eq('departement_id', departementId)
+      .eq('actif', true)
+
+    // 4. Récupérer les inscriptions actives avec informations étudiants
     const { data: inscriptions, error } = await supabaseAdmin
       .from('inscriptions')
       .select(`
@@ -606,7 +627,8 @@ export const getDepartementStatsGlobales = async (departementId) => {
         niveau_id,
         statut,
         etudiants (
-          id
+          id,
+          sexe
         ),
         niveaux (
           code,
@@ -618,39 +640,80 @@ export const getDepartementStatsGlobales = async (departementId) => {
 
     if (error) throw error
 
-    // Traitement des données pour les graphes
+    const totalEtudiants = inscriptions?.length || 0
+
+    // 5. Répartition par filière
     const studentsData = filieres.map(f => {
+      const count = inscriptions.filter(i => i.filiere_id === f.id).length
       return {
         name: f.code,
-        value: inscriptions.filter(i => i.filiere_id === f.id).length,
-        color: f.code === 'GI' ? '#3b82f6' : (f.code === 'RT' ? '#8b5cf6' : '#10b981') // Couleurs basiques
+        value: count,
+        color: f.code === 'GI' ? '#3b82f6' :
+          f.code === 'RT' ? '#8b5cf6' :
+            f.code === 'MMIC' ? '#10b981' :
+              f.code === 'AV' ? '#f59e0b' : '#6366f1'
+      }
+    }).filter(item => item.value > 0) // Ne garder que les filières avec des étudiants
+
+    // 6. Répartition par niveau
+    const levelCounts = {}
+    inscriptions.forEach(i => {
+      const codeNiveau = i.niveaux?.code || 'Inconnu'
+      levelCounts[codeNiveau] = (levelCounts[codeNiveau] || 0) + 1
+    })
+    const levelData = Object.keys(levelCounts)
+      .sort() // Trier L1, L2, L3
+      .map(lvl => ({
+        niveau: lvl,
+        etudiants: levelCounts[lvl]
+      }))
+
+    // 7. Répartition par genre (DONNÉES RÉELLES maintenant)
+    let masculinCount = 0
+    let femininCount = 0
+
+    inscriptions.forEach(i => {
+      if (i.etudiants?.sexe === 'M') {
+        masculinCount++
+      } else if (i.etudiants?.sexe === 'F') {
+        femininCount++
       }
     })
 
-    const levelCounts = {}
-    inscriptions.forEach(i => {
-      const codeNiveau = i.niveau?.code || 'Inconnu'
-      levelCounts[codeNiveau] = (levelCounts[codeNiveau] || 0) + 1
-    })
-    const levelData = Object.keys(levelCounts).map(lvl => ({
-      niveau: lvl,
-      etudiants: levelCounts[lvl]
-    }))
+    const total = masculinCount + femininCount
+    const genreData = total > 0 ? [
+      {
+        name: 'Masculin',
+        value: masculinCount,
+        color: '#3b82f6',
+        percentage: Math.round((masculinCount / total) * 100)
+      },
+      {
+        name: 'Féminin',
+        value: femininCount,
+        color: '#ec4899',
+        percentage: Math.round((femininCount / total) * 100)
+      }
+    ] : []
 
-    // MOCK GENRE DATA (En attendant la colonne sexe)
-    const genreData = [
-      { name: 'Masculin', value: 0, color: '#3b82f6', percentage: 0 },
-      { name: 'Féminin', value: 0, color: '#ec4899', percentage: 0 }
-    ]
+    // 8. Taux de réussite (mocké pour l'instant - nécessite calcul complexe avec notes)
+    const tauxReussiteData = filieres
+      .filter(f => studentsData.find(s => s.name === f.code))
+      .map(f => ({
+        filiere: f.code,
+        tauxReussite: Math.floor(Math.random() * 15) + 75 // 75-90%
+      }))
 
     return {
       success: true,
       stats: {
+        totalClasses: classesCount || 0,
+        totalEnseignants: enseignantsCount || 0,
+        totalEtudiants: totalEtudiants,
         studentsData,
         levelData,
         genreData,
-        // Taux de réussite mocké pour l'instant car complexe à calculer sans notes
-        tauxReussiteData: filieres.map(f => ({ filiere: f.code, tauxReussite: Math.floor(Math.random() * 20) + 70 }))
+        tauxReussiteData
       }
     }
 

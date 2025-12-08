@@ -39,7 +39,7 @@ const RepartitionClasseView = () => {
       if (etudiantsResult.success) {
         setEtudiantsNonRepartis(etudiantsResult.etudiants)
       } else {
-        showAlert('error', etudiantsResult.error || 'Erreur lors du chargement des étudiants')
+        showAlert(etudiantsResult.error || 'Erreur lors du chargement des étudiants', 'error')
       }
 
       // Charger les classes
@@ -63,7 +63,7 @@ const RepartitionClasseView = () => {
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors du chargement des données')
+      showAlert('Erreur lors du chargement des données', 'error')
     } finally {
       setLoading(false)
     }
@@ -81,7 +81,7 @@ const RepartitionClasseView = () => {
     const classe = classes.find(c => c.id === selectedClasse)
 
     if (!classe) {
-      showAlert('error', 'Classe introuvable')
+      showAlert('Classe introuvable', 'error')
       return
     }
 
@@ -90,15 +90,15 @@ const RepartitionClasseView = () => {
       const result = await repartirEtudiant(selectedEtudiant.inscriptionId, selectedClasse)
       
       if (result.success) {
-        showAlert('success', `Étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} réparti dans ${classe.code}`)
+        showAlert(`Étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} réparti dans ${classe.code}`, 'success')
         setShowModal(false)
         loadData()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la répartition')
+        showAlert(result.error || 'Erreur lors de la répartition', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la répartition')
+      showAlert('Erreur lors de la répartition', 'error')
     } finally {
       setSaving(false)
     }

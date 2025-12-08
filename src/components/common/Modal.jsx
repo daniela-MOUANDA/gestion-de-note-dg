@@ -21,34 +21,34 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children, size 
       case 'success':
         return {
           icon: faCheckCircle,
-          iconColor: 'text-green-500',
-          iconBg: 'bg-green-100',
+          iconColor: 'text-white',
+          iconBg: 'bg-green-500',
           border: 'border-green-500',
-          titleColor: 'text-green-800'
+          titleColor: 'text-green-700'
         }
       case 'error':
         return {
           icon: faExclamationTriangle,
-          iconColor: 'text-red-500',
-          iconBg: 'bg-red-100',
+          iconColor: 'text-white',
+          iconBg: 'bg-red-500',
           border: 'border-red-500',
-          titleColor: 'text-red-800'
+          titleColor: 'text-red-700'
         }
       case 'warning':
         return {
           icon: faExclamationTriangle,
-          iconColor: 'text-yellow-500',
-          iconBg: 'bg-yellow-100',
-          border: 'border-yellow-500',
-          titleColor: 'text-yellow-800'
+          iconColor: 'text-white',
+          iconBg: 'bg-orange-500',
+          border: 'border-orange-500',
+          titleColor: 'text-orange-700'
         }
       default:
         return {
           icon: faInfoCircle,
-          iconColor: 'text-blue-500',
-          iconBg: 'bg-blue-100',
+          iconColor: 'text-white',
+          iconBg: 'bg-blue-500',
           border: 'border-blue-500',
-          titleColor: 'text-blue-800'
+          titleColor: 'text-blue-700'
         }
     }
   }
@@ -61,7 +61,12 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children, size 
     lg: 'max-w-lg',
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
-    '3xl': 'max-w-3xl'
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
+    '7xl': 'max-w-7xl',
+    'full': 'max-w-[95vw]'
   }
 
   return (
@@ -73,19 +78,19 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children, size 
       />
       
       {/* Modal avec animation */}
-      <div className={`relative bg-white rounded-2xl shadow-2xl ${sizeClasses[size] || sizeClasses.md} w-full transform transition-all animate-scale-in`}>
+      <div className={`relative bg-white rounded-2xl shadow-2xl ${sizeClasses[size] || sizeClasses.md} w-full max-h-[90vh] overflow-hidden flex flex-col transform transition-all animate-scale-in`}>
         {/* Header */}
-        <div className={`flex items-center justify-between p-6 border-b-2 ${styles.border}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-full ${styles.iconBg} flex items-center justify-center animate-bounce-in`}>
+        <div className={`flex items-center justify-between p-4 border-b-2 ${styles.border} flex-shrink-0`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full ${styles.iconBg} flex items-center justify-center`}>
               <FontAwesomeIcon 
                 icon={styles.icon} 
-                className={`${styles.iconColor} text-xl`}
+                className={`${styles.iconColor} text-lg`}
               />
             </div>
             <div>
               {title && (
-                <h3 className={`text-xl font-bold ${styles.titleColor}`}>
+                <h3 className={`text-lg font-bold ${styles.titleColor}`}>
                   {title}
                 </h3>
               )}
@@ -100,18 +105,20 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children, size 
         </div>
 
         {/* Body */}
-        <div className="p-6">
-          {message && (
-            <p className="text-slate-700 text-base leading-relaxed mb-4">
-              {message}
-            </p>
-          )}
-          {children}
+        <div className="overflow-y-auto flex-1">
+          <div className="p-6">
+            {message && (
+              <p className="text-slate-700 text-base leading-relaxed mb-4">
+                {message}
+              </p>
+            )}
+            {children}
+          </div>
         </div>
 
         {/* Footer - seulement si pas de children */}
         {!children && (
-          <div className="p-6 border-t border-slate-200 flex justify-end">
+          <div className="p-6 border-t border-slate-200 flex justify-end flex-shrink-0">
             <button
               onClick={onClose}
               className={`px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 ${
@@ -120,7 +127,7 @@ const Modal = ({ isOpen, onClose, type = 'info', title, message, children, size 
                   : type === 'error'
                   ? 'bg-red-600 hover:bg-red-700 text-white'
                   : type === 'warning'
-                  ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
             >

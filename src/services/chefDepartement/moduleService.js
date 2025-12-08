@@ -1,20 +1,20 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
 
 // Obtenir tous les modules d'un département
-export const getModulesByDepartement = async (departementId, classeId = null) => {
+export const getModulesByDepartement = async (departementId, filiereId = null) => {
   try {
     let query = supabaseAdmin
       .from('modules')
       .select(`
         *,
-        classes (*, filieres (*), niveaux (*)),
+        filieres (code, nom),
         affectations_module_enseignant (*, enseignants (*))
       `)
       .eq('departement_id', departementId)
       .order('code', { ascending: true })
 
-    if (classeId) {
-      query = query.eq('classe_id', classeId)
+    if (filiereId) {
+      query = query.eq('filiere_id', filiereId)
     }
 
     const { data: modules, error } = await query
@@ -23,27 +23,37 @@ export const getModulesByDepartement = async (departementId, classeId = null) =>
 
     return {
       success: true,
-      modules: (modules || []).map(mod => ({
-        id: mod.id,
-        code: mod.code,
-        nom: mod.nom,
-        credit: mod.credit,
-        semestre: mod.semestre,
-        classe: mod.classes?.code,
-        classeId: mod.classe_id,
-        enseignants: (mod.affectations_module_enseignant || []).map(aff => ({
-          id: aff.enseignants?.id,
-          nom: aff.enseignants?.nom,
-          prenom: aff.enseignants?.prenom
-        })),
-        actif: mod.actif
-      }))
+      modules: (modules || []).map(mod => {
+        // Gérer le cas où affectations_module_enseignant n'est pas un tableau
+        const affectations = Array.isArray(mod.affectations_module_enseignant) 
+          ? mod.affectations_module_enseignant 
+          : (mod.affectations_module_enseignant ? [mod.affectations_module_enseignant] : [])
+        
+        return {
+          id: mod.id,
+          code: mod.code,
+          nom: mod.nom,
+          credit: mod.credit,
+          semestre: mod.semestre,
+          filiere: mod.filieres ? `${mod.filieres.code} - ${mod.filieres.nom}` : '-',
+          filiereId: mod.filiere_id,
+          ue: mod.ue || 'UE1',
+          enseignants: affectations.map(aff => ({
+            id: aff.enseignants?.id,
+            nom: aff.enseignants?.nom,
+            prenom: aff.enseignants?.prenom
+          })),
+          actif: mod.actif
+        }
+      })
     }
   } catch (error) {
-    console.error('Erreur lors de la récupération des modules:', error)
+    console.error('❌ Erreur lors de la récupération des modules:', error)
+    console.error('❌ Message d\'erreur:', error.message)
+    console.error('❌ Stack:', error.stack)
     return {
       success: false,
-      error: 'Une erreur est survenue lors de la récupération des modules'
+      error: `Erreur lors de la récupération des modules: ${error.message}`
     }
   }
 }
@@ -51,26 +61,27 @@ export const getModulesByDepartement = async (departementId, classeId = null) =>
 // Créer un nouveau module
 export const createModule = async (data, departementId) => {
   try {
-    const { code, nom, credit, semestre, classeId } = data
+    const { code, nom, credit, semestre, filiereId, ue } = data
 
-    if (!code || !nom || !credit || !semestre || !classeId) {
+    if (!code || !nom || !credit || !semestre || !filiereId || !ue) {
       return {
         success: false,
         error: 'Tous les champs obligatoires doivent être remplis'
       }
     }
 
-    // Vérifier que la classe appartient au département
-    const { data: classe } = await supabaseAdmin
-      .from('classes')
-      .select('*, filieres (*, departements (*))')
-      .eq('id', classeId)
+    // Vérifier que la filière appartient au département
+    const { data: filiere } = await supabaseAdmin
+      .from('filieres')
+      .select('*')
+      .eq('id', filiereId)
+      .eq('departement_id', departementId)
       .single()
 
-    if (!classe || classe.filieres?.departement_id !== departementId) {
+    if (!filiere) {
       return {
         success: false,
-        error: 'Classe introuvable ou n\'appartient pas à votre département'
+        error: 'Filière introuvable ou n\'appartient pas à votre département'
       }
     }
 
@@ -79,13 +90,14 @@ export const createModule = async (data, departementId) => {
       .from('modules')
       .select('id')
       .eq('code', code)
-      .eq('classe_id', classeId)
+      .eq('filiere_id', filiereId)
+      .eq('semestre', semestre)
       .single()
 
     if (existing) {
       return {
         success: false,
-        error: 'Un module avec ce code existe déjà pour cette classe'
+        error: 'Un module avec ce code existe déjà pour cette filière et ce semestre'
       }
     }
 
@@ -96,11 +108,12 @@ export const createModule = async (data, departementId) => {
         nom,
         credit: parseInt(credit),
         semestre,
-        classe_id: classeId,
+        filiere_id: filiereId,
         departement_id: departementId,
-        actif: true
+        ue,
+        actif: data.actif !== undefined ? data.actif : true
       })
-      .select('*, classes (*)')
+      .select('*, filieres (*)')
       .single()
 
     if (error) throw error
@@ -113,8 +126,9 @@ export const createModule = async (data, departementId) => {
         nom: module.nom,
         credit: module.credit,
         semestre: module.semestre,
-        classe: module.classes?.code,
-        classeId: module.classe_id,
+        filiere: module.filieres ? `${module.filieres.code} - ${module.filieres.nom}` : '-',
+        filiereId: module.filiere_id,
+        ue: module.ue,
         actif: module.actif
       }
     }
@@ -148,48 +162,51 @@ export const updateModule = async (id, data, departementId) => {
       nom: data.nom,
       credit: data.credit ? parseInt(data.credit) : existing.credit,
       semestre: data.semestre,
+      ue: data.ue || existing.ue || 'UE1',
       actif: data.actif !== undefined ? data.actif : existing.actif
     }
 
-    // Si classeId est fourni et différent, vérifier qu'elle appartient au département
-    if (data.classeId && data.classeId !== existing.classe_id) {
-      const { data: classe } = await supabaseAdmin
-        .from('classes')
-        .select('*, filieres (*, departements (*))')
-        .eq('id', data.classeId)
+    // Si filiereId est fourni et différent, vérifier qu'elle appartient au département
+    if (data.filiereId && data.filiereId !== existing.filiere_id) {
+      const { data: filiere } = await supabaseAdmin
+        .from('filieres')
+        .select('*')
+        .eq('id', data.filiereId)
+        .eq('departement_id', departementId)
         .single()
 
-      if (!classe || classe.filieres?.departement_id !== departementId) {
+      if (!filiere) {
         return {
           success: false,
-          error: 'Classe introuvable ou n\'appartient pas à votre département'
+          error: 'Filière introuvable ou n\'appartient pas à votre département'
         }
       }
 
-      // Vérifier l'unicité du code dans la nouvelle classe
+      // Vérifier l'unicité du code dans la nouvelle filière
       const { data: existingCode } = await supabaseAdmin
         .from('modules')
         .select('id')
         .eq('code', data.code)
-        .eq('classe_id', data.classeId)
+        .eq('filiere_id', data.filiereId)
+        .eq('semestre', data.semestre)
         .neq('id', id)
         .single()
 
       if (existingCode) {
         return {
           success: false,
-          error: 'Un module avec ce code existe déjà pour cette classe'
+          error: 'Un module avec ce code existe déjà pour cette filière et ce semestre'
         }
       }
 
-      updateData.classe_id = data.classeId
+      updateData.filiere_id = data.filiereId
     }
 
     const { data: module, error } = await supabaseAdmin
       .from('modules')
       .update(updateData)
       .eq('id', id)
-      .select('*, classes (*)')
+      .select('*, filieres (*)')
       .single()
 
     if (error) throw error
@@ -202,8 +219,9 @@ export const updateModule = async (id, data, departementId) => {
         nom: module.nom,
         credit: module.credit,
         semestre: module.semestre,
-        classe: module.classes?.code,
-        classeId: module.classe_id,
+        filiere: module.filieres ? `${module.filieres.code} - ${module.filieres.nom}` : '-',
+        filiereId: module.filiere_id,
+        ue: module.ue,
         actif: module.actif
       }
     }

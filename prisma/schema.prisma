@@ -40,6 +40,7 @@ model Utilisateur {
   photo         String?  // URL de la photo de profil
   telephone     String?  // Numéro de téléphone
   adresse       String?  // Adresse
+  sexe          Sexe?    // Sexe de l'utilisateur (M/F)
   roleId        String   // ID du rôle (relation avec la table Role)
   actif         Boolean  @default(true)
   dateCreation  DateTime @default(now())
@@ -178,6 +179,7 @@ model Etudiant {
   dateNaissance   DateTime?
   lieuNaissance   String?
   nationalite     String?
+  sexe            Sexe?    // Sexe de l'étudiant (M/F)
   email           String?  @unique
   telephone       String?
   adresse         String?
@@ -604,4 +606,9 @@ enum TypeNote {
   RATTRAPAGE
   ORAL
   PRATIQUE
+}
+
+enum Sexe {
+  M  // Masculin
+  F  // Féminin
 }

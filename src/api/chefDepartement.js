@@ -209,3 +209,27 @@ export const deleteNote = async (id) => {
   })
 }
 
+// Paramètres de notation
+export const getParametresNotation = async (moduleId, semestre) => {
+  return request(`/notes/parametres/${moduleId}?semestre=${semestre}`)
+}
+
+export const saveParametresNotation = async (data) => {
+  return request('/notes/parametres', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
+// Notes par module et classe
+export const getNotesByModuleClasse = async (moduleId, classeId, semestre) => {
+  return request(`/notes/module/${moduleId}/classe/${classeId}?semestre=${semestre}`)
+}
+
+export const saveNotes = async (notes) => {
+  return request('/notes/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ notes })
+  })
+}
+

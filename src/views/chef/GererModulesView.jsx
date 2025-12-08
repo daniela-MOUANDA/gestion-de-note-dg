@@ -1,28 +1,64 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBook, faPlus, faEdit, faTrash, faSearch, faCheckCircle, faTimes } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAlert } from '../../contexts/AlertContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { getFilieres } from '../../api/chefDepartement'
 
 const GererModulesView = () => {
   const { showAlert } = useAlert()
+  const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
+  const [filieres, setFilieres] = useState([])
   const [modules, setModules] = useState([
-    { id: 1, code: 'BDD-301', nom: 'Base de données', credit: 4, semestre: 'S6', estActif: true, uniteEnseignement: 'UE-301' },
-    { id: 2, code: 'PW-301', nom: 'Programmation web', credit: 5, semestre: 'S6', estActif: true, uniteEnseignement: 'UE-301' },
-    { id: 3, code: 'RES-301', nom: 'Réseaux', credit: 3, semestre: 'S6', estActif: true, uniteEnseignement: 'UE-301' },
-    { id: 4, code: 'MATH-201', nom: 'Mathématiques', credit: 4, semestre: 'S4', estActif: false, uniteEnseignement: 'UE-201' },
+    { id: 1, code: 'BDD-301', nom: 'Base de données', credit: 4, semestre: 'S6', estActif: true, uniteEnseignement: 'UE-301', filiereId: '' },
+    { id: 2, code: 'PW-301', nom: 'Programmation web', credit: 5, semestre: 'S6', estActif: true, uniteEnseignement: 'UE-301', filiereId: '' },
+    { id: 3, code: 'RES-301', nom: 'Réseaux', credit: 3, semestre: 'S6', estActif: true, uniteEnseignement: 'UE-301', filiereId: '' },
+    { id: 4, code: 'MATH-201', nom: 'Mathématiques', credit: 4, semestre: 'S4', estActif: false, uniteEnseignement: 'UE-201', filiereId: '' },
   ])
   const [showAddModal, setShowAddModal] = useState(false)
   const [newModule, setNewModule] = useState({
-    code: '',
+    filiereId: '',
     nom: '',
     credit: '',
     semestre: '',
     uniteEnseignement: '',
     estActif: true
   })
+
+  // Charger les filières du département
+  useEffect(() => {
+    const loadFilieres = async () => {
+      try {
+        const res = await getFilieres()
+        if (res.success) {
+          setFilieres(res.filieres || [])
+        }
+      } catch (error) {
+        console.error('Erreur chargement filières:', error)
+      }
+    }
+    loadFilieres()
+  }, [])
+
+  // Générer le code du module automatiquement
+  const generateModuleCode = (nom, semestre) => {
+    if (!nom || !semestre) return ''
+
+    // Prendre les 3 premières lettres du nom (ou moins si nom court)
+    const prefix = nom
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '') // Retirer les caractères non-alphabétiques
+      .substring(0, 3)
+      .padEnd(3, 'X') // Compléter avec X si moins de 3 lettres
+
+    // Extraire le numéro du semestre (S1 -> 1, S6 -> 6)
+    const semestreNum = semestre.replace('S', '')
+
+    return `${prefix}-${semestreNum}01`
+  }
 
   const filteredModules = modules.filter(module =>
     module.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,15 +68,20 @@ const GererModulesView = () => {
 
   const handleAddModule = (e) => {
     e.preventDefault()
+
+    // Générer le code automatiquement
+    const code = generateModuleCode(newModule.nom, newModule.semestre)
+
     const moduleToAdd = {
       id: modules.length + 1,
       ...newModule,
+      code,
       credit: parseInt(newModule.credit)
     }
     setModules([...modules, moduleToAdd])
     setShowAddModal(false)
     setNewModule({
-      code: '',
+      filiereId: '',
       nom: '',
       credit: '',
       semestre: '',
@@ -58,12 +99,15 @@ const GererModulesView = () => {
     })
   }
 
+  // Prévisualiser le code généré
+  const previewCode = generateModuleCode(newModule.nom, newModule.semestre)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />
-        
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>
@@ -74,7 +118,7 @@ const GererModulesView = () => {
                 Gérez les modules de votre département
               </p>
             </div>
-            <button 
+            <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 shadow-md hover:shadow-lg">
               <FontAwesomeIcon icon={faPlus} className="mr-2" />
@@ -85,8 +129,8 @@ const GererModulesView = () => {
           {/* Barre de recherche */}
           <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
             <div className="relative">
-              <FontAwesomeIcon 
-                icon={faSearch} 
+              <FontAwesomeIcon
+                icon={faSearch}
                 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"
               />
               <input
@@ -132,11 +176,10 @@ const GererModulesView = () => {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600">{module.uniteEnseignement}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          module.estActif 
-                            ? 'bg-green-100 text-green-700' 
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${module.estActif
+                            ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
-                        }`}>
+                          }`}>
                           {module.estActif ? 'Actif' : 'Inactif'}
                         </span>
                       </td>
@@ -163,29 +206,32 @@ const GererModulesView = () => {
               <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl flex justify-between items-center">
                   <h2 className="text-2xl font-bold">Ajouter un nouveau module</h2>
-                  <button 
+                  <button
                     onClick={() => setShowAddModal(false)}
                     className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
                     <FontAwesomeIcon icon={faTimes} className="text-xl" />
                   </button>
                 </div>
-                
+
                 <form onSubmit={handleAddModule} className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Code du module */}
+                    {/* Filière */}
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-2">
-                        Code du module *
+                        Filière *
                       </label>
-                      <input
-                        type="text"
-                        name="code"
-                        value={newModule.code}
+                      <select
+                        name="filiereId"
+                        value={newModule.filiereId}
                         onChange={handleInputChange}
                         required
-                        placeholder="Ex: BDD-301"
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                      >
+                        <option value="">Sélectionner une filière</option>
+                        {filieres.map(f => (
+                          <option key={f.id} value={f.id}>{f.code} - {f.nom}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Nom du module */}
@@ -225,7 +271,7 @@ const GererModulesView = () => {
                     {/* Semestre */}
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-2">
-                        Semestre *
+                        Semestre * <span className="text-xs text-slate-500">(S1-S2: L1, S3-S4: L2, S5-S6: L3)</span>
                       </label>
                       <select
                         name="semestre"
@@ -235,16 +281,26 @@ const GererModulesView = () => {
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Sélectionner un semestre</option>
-                        <option value="S1">S1</option>
-                        <option value="S2">S2</option>
-                        <option value="S3">S3</option>
-                        <option value="S4">S4</option>
-                        <option value="S5">S5</option>
-                        <option value="S6">S6</option>
-                        <option value="S7">S7</option>
-                        <option value="S8">S8</option>
+                        <option value="S1">S1 (1ère année - Semestre 1)</option>
+                        <option value="S2">S2 (1ère année - Semestre 2)</option>
+                        <option value="S3">S3 (2ème année - Semestre 1)</option>
+                        <option value="S4">S4 (2ème année - Semestre 2)</option>
+                        <option value="S5">S5 (3ème année - Semestre 1)</option>
+                        <option value="S6">S6 (3ème année - Semestre 2)</option>
                       </select>
                     </div>
+
+                    {/* Code généré automatiquement - Affichage seulement */}
+                    {previewCode && (
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          Code du module (généré automatiquement)
+                        </label>
+                        <div className="w-full px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-700 font-mono">
+                          {previewCode}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Unité d'enseignement */}
                     <div className="md:col-span-2">

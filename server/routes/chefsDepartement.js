@@ -15,6 +15,26 @@ import {
   getNiveaux,
   getEtudiantsByClasse
 } from '../../src/services/chefDepartementService.js'
+import {
+  getModulesByDepartement,
+  createModule,
+  updateModule as updateModuleService,
+  deleteModule as deleteModuleService
+} from '../../src/services/chefDepartement/moduleService.js'
+import {
+  getEnseignantsByDepartement,
+  createEnseignant,
+  updateEnseignant as updateEnseignantService,
+  deleteEnseignant as deleteEnseignantService,
+  affecterModules
+} from '../../src/services/chefDepartement/enseignantService.js'
+import {
+  getParametresNotation,
+  saveParametresNotation,
+  getNotesByModuleClasse,
+  saveNotesBulk,
+  deleteNote as deleteNoteService
+} from '../../src/services/chefDepartement/noteService.js'
 
 const router = express.Router()
 
@@ -40,17 +60,13 @@ router.use((req, res, next) => {
 
 router.get('/enseignants', async (req, res) => {
   try {
-    // Note: req.user.departementId vient du middleware authenticate
-    // Si c'est un admin qui consulte, il faudrait peut-être passer l'ID en paramètre ?
-    // Pour l'instant on suppose que c'est le chef connecté qui consulte SON département
     const departementId = req.user.departementId
 
     if (!departementId) {
-      // Si c'est un admin, on autorise peut-être? Non, dashboard chef.
       return res.status(403).json({ success: false, error: "Aucun département associé à votre compte" });
     }
 
-    const result = await getDepartementEnseignants(departementId)
+    const result = await getEnseignantsByDepartement(departementId)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
   } catch (error) {
@@ -58,15 +74,167 @@ router.get('/enseignants', async (req, res) => {
   }
 })
 
+// Créer un enseignant
+router.post('/enseignants', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const result = await createEnseignant(req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.status(201).json(result)
+  } catch (error) {
+    console.error('Erreur création enseignant:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Modifier un enseignant
+router.put('/enseignants/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await updateEnseignantService(id, req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur modification enseignant:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer un enseignant
+router.delete('/enseignants/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await deleteEnseignantService(id, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur suppression enseignant:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Affecter des modules à un enseignant
+router.post('/enseignants/:id/affecter-modules', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const { moduleIds } = req.body
+
+    const result = await affecterModules(id, moduleIds, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur affectation modules:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// ============================================
+// ROUTES MODULES
+// ============================================
+
+// Obtenir tous les modules du département
 router.get('/modules', async (req, res) => {
   try {
     const departementId = req.user.departementId
     if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
 
-    const result = await getDepartementModules(departementId)
+    const result = await getModulesByDepartement(departementId)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Créer un nouveau module
+router.post('/modules', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const result = await createModule(req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.status(201).json(result)
+  } catch (error) {
+    console.error('Erreur création module:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Modifier un module
+router.put('/modules/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await updateModuleService(id, req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur modification module:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer un module
+router.delete('/modules/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await deleteModuleService(id, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur suppression module:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -272,6 +440,95 @@ router.delete('/:id', async (req, res) => {
       success: false,
       error: 'Une erreur est survenue lors de la suppression du chef de département'
     })
+  }
+})
+
+// ============================================
+// ROUTES NOTES ET PARAMÈTRES DE NOTATION
+// ============================================
+
+// Obtenir les paramètres de notation d'un module
+router.get('/notes/parametres/:moduleId', async (req, res) => {
+  try {
+    const { moduleId } = req.params
+    const { semestre } = req.query
+
+    const result = await getParametresNotation(moduleId, semestre)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Sauvegarder les paramètres de notation
+router.post('/notes/parametres', async (req, res) => {
+  try {
+    const result = await saveParametresNotation(req.body)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Obtenir les notes par module et classe
+router.get('/notes/module/:moduleId/classe/:classeId', async (req, res) => {
+  try {
+    const { moduleId, classeId } = req.params
+    const { semestre } = req.query
+
+    const result = await getNotesByModuleClasse(moduleId, classeId, semestre)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Sauvegarder plusieurs notes en une fois
+router.post('/notes/bulk', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    const result = await saveNotesBulk(req.body.notes, departementId)
+    
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer une note
+router.delete('/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const result = await deleteNoteService(id)
+    
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
   }
 })
 

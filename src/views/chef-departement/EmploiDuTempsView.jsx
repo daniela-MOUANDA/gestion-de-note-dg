@@ -74,7 +74,7 @@ const EmploiDuTempsView = () => {
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors du chargement des données')
+      showAlert('Erreur lors du chargement des données', 'error')
     } finally {
       setLoading(false)
     }
@@ -88,11 +88,11 @@ const EmploiDuTempsView = () => {
       if (result.success) {
         setEmploisTemps(result.emploisTemps)
       } else {
-        showAlert('error', result.error || 'Erreur lors du chargement de l\'emploi du temps')
+        showAlert(result.error || 'Erreur lors du chargement de l\'emploi du temps', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors du chargement de l\'emploi du temps')
+      showAlert('Erreur lors du chargement de l\'emploi du temps', 'error')
     }
   }
 
@@ -113,7 +113,7 @@ const EmploiDuTempsView = () => {
 
   const handleSave = async () => {
     if (!formData.classeId || !formData.moduleId || !formData.enseignantId || !formData.jour || !formData.heureDebut || !formData.heureFin) {
-      showAlert('error', 'Veuillez remplir tous les champs obligatoires')
+      showAlert('Veuillez remplir tous les champs obligatoires', 'error')
       return
     }
 
@@ -122,15 +122,15 @@ const EmploiDuTempsView = () => {
       const result = await createEmploiDuTemps(formData)
       
       if (result.success) {
-        showAlert('success', 'Emploi du temps ajouté avec succès')
+        showAlert('Emploi du temps ajouté avec succès', 'success')
         setShowModal(false)
         loadEmploiDuTemps()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la sauvegarde')
+        showAlert(result.error || 'Erreur lors de la sauvegarde', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la sauvegarde')
+      showAlert('Erreur lors de la sauvegarde', 'error')
     } finally {
       setSaving(false)
     }
@@ -144,14 +144,14 @@ const EmploiDuTempsView = () => {
     try {
       const result = await deleteEmploiDuTemps(id)
       if (result.success) {
-        showAlert('success', 'Emploi du temps supprimé avec succès')
+        showAlert('Emploi du temps supprimé avec succès', 'success')
         loadEmploiDuTemps()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la suppression')
+        showAlert(result.error || 'Erreur lors de la suppression', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la suppression')
+      showAlert('Erreur lors de la suppression', 'error')
     }
   }
 

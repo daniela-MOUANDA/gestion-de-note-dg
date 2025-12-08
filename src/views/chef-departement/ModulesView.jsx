@@ -6,18 +6,18 @@ import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
-import { getModules, createModule, updateModule, deleteModule, getClasses } from '../../api/chefDepartement.js'
+import { getModules, createModule, updateModule, deleteModule, getFilieres } from '../../api/chefDepartement.js'
 
 const ModulesView = () => {
   const { user } = useAuth()
   const { showAlert } = useAlert()
   const [departementChef, setDepartementChef] = useState('')
   const [modules, setModules] = useState([])
-  const [classes, setClasses] = useState([])
+  const [filieres, setFilieres] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [editingModule, setEditingModule] = useState(null)
-  const [selectedClasse, setSelectedClasse] = useState('')
+  const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -27,13 +27,31 @@ const ModulesView = () => {
     nom: '',
     credit: '',
     semestre: '',
-    classeId: '',
+    filiereId: '',
+    ue: 'UE1',
     actif: true
   })
 
   useEffect(() => {
     loadData()
   }, [])
+
+  // Générer le code du module automatiquement
+  const generateModuleCode = (nom, semestre) => {
+    if (!nom || !semestre) return ''
+
+    // Prendre les 3 premières lettres du nom (ou moins si nom court)
+    const prefix = nom
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '') // Retirer les caractères non-alphabétiques
+      .substring(0, 3)
+      .padEnd(3, 'X') // Compléter avec X si moins de 3 lettres
+
+    // Extraire le numéro du semestre (S1 -> 1, S6 -> 6)
+    const semestreNum = semestre.replace('S', '')
+
+    return `${prefix}-${semestreNum}01`
+  }
 
   const loadData = async () => {
     try {
@@ -44,13 +62,13 @@ const ModulesView = () => {
       if (modulesResult.success) {
         setModules(modulesResult.modules)
       } else {
-        showAlert('error', modulesResult.error || 'Erreur lors du chargement des modules')
+        showAlert(modulesResult.error || 'Erreur lors du chargement des modules', 'error')
       }
 
-      // Charger les classes
-      const classesResult = await getClasses()
-      if (classesResult.success) {
-        setClasses(classesResult.classes)
+      // Charger les filières
+      const filieresResult = await getFilieres()
+      if (filieresResult.success) {
+        setFilieres(filieresResult.filieres)
       }
 
       // Récupérer le nom du département
@@ -59,7 +77,7 @@ const ModulesView = () => {
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors du chargement des données')
+      showAlert('Erreur lors du chargement des données', 'error')
     } finally {
       setLoading(false)
     }
@@ -72,7 +90,8 @@ const ModulesView = () => {
       nom: '', 
       credit: '', 
       semestre: '', 
-      classeId: '', 
+      filiereId: '', 
+      ue: 'UE1',
       actif: true 
     })
     setShowModal(true)
@@ -85,7 +104,8 @@ const ModulesView = () => {
       nom: module.nom,
       credit: module.credit.toString(),
       semestre: module.semestre,
-      classeId: module.classeId,
+      filiereId: module.filiereId,
+      ue: module.ue || 'UE1',
       actif: module.actif
     })
     setShowModal(true)
@@ -99,62 +119,67 @@ const ModulesView = () => {
     try {
       const result = await deleteModule(id)
       if (result.success) {
-        showAlert('success', 'Module supprimé avec succès')
+        showAlert('Module supprimé avec succès', 'success')
         loadData()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la suppression')
+        showAlert(result.error || 'Erreur lors de la suppression', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la suppression')
+      showAlert('Erreur lors de la suppression', 'error')
     }
   }
 
   const handleSave = async () => {
-    if (!formData.code || !formData.nom || !formData.credit || !formData.semestre || !formData.classeId) {
-      showAlert('error', 'Veuillez remplir tous les champs obligatoires')
+    if (!formData.nom || !formData.credit || !formData.semestre || !formData.filiereId || !formData.ue) {
+      showAlert('Veuillez remplir tous les champs obligatoires', 'error')
       return
     }
 
     try {
       setSaving(true)
+      
+      // Générer le code automatiquement
+      const code = generateModuleCode(formData.nom, formData.semestre)
+      const dataToSend = { ...formData, code }
+      
       let result
 
       if (editingModule) {
-        result = await updateModule(editingModule.id, formData)
+        result = await updateModule(editingModule.id, dataToSend)
       } else {
-        result = await createModule(formData)
+        result = await createModule(dataToSend)
       }
 
       if (result.success) {
-        showAlert('success', editingModule ? 'Module modifié avec succès' : 'Module créé avec succès')
+        showAlert(editingModule ? 'Module modifié avec succès' : 'Module créé avec succès', 'success')
         setShowModal(false)
         loadData()
       } else {
-        showAlert('error', result.error || 'Erreur lors de la sauvegarde')
+        showAlert(result.error || 'Erreur lors de la sauvegarde', 'error')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      showAlert('error', 'Erreur lors de la sauvegarde')
+      showAlert('Erreur lors de la sauvegarde', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   const handleFileUpload = () => {
-    if (!selectedFile || !selectedClasse) {
-      showAlert('error', 'Veuillez sélectionner un fichier et une classe')
+    if (!selectedFile || !selectedFiliere) {
+      showAlert('Veuillez sélectionner un fichier et une filière', 'error')
       return
     }
     // TODO: Implémenter l'upload Excel
-    showAlert('info', `Fichier Excel "${selectedFile.name}" sera importé pour la classe ${selectedClasse}`)
+    showAlert(`Fichier Excel "${selectedFile.name}" sera importé pour la filière ${selectedFiliere}`, 'info')
     setShowUploadModal(false)
     setSelectedFile(null)
-    setSelectedClasse('')
+    setSelectedFiliere('')
   }
 
   const filteredModules = modules.filter(module => 
-    `${module.code} ${module.nom} ${module.classe || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
+    `${module.code} ${module.nom} ${module.filiere || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   if (loading) {
@@ -212,7 +237,7 @@ const ModulesView = () => {
               <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm" />
               <input
                 type="text"
-                placeholder="Rechercher un module par code, nom ou classe..."
+                placeholder="Rechercher un module par code, nom ou filière..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-800 placeholder-slate-400"
@@ -230,7 +255,8 @@ const ModulesView = () => {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Nom</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Crédits</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Semestre</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Classe</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">UE</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Filière</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Statut</th>
                     <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -238,7 +264,7 @@ const ModulesView = () => {
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {filteredModules.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-6 py-16 text-center">
+                      <td colSpan="8" className="px-6 py-16 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <FontAwesomeIcon icon={faBook} className="text-6xl text-slate-300 mb-4" />
                           <p className="text-lg font-medium text-slate-500 mb-2">Aucun module trouvé</p>
@@ -269,7 +295,14 @@ const ModulesView = () => {
                             {module.semestre}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.classe || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            module.ue === 'UE1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            {module.ue || 'UE1'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.filiere || '-'}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                             module.actif ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -311,16 +344,6 @@ const ModulesView = () => {
           >
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Code du module *</label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: BDD-301"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nom du module *</label>
                 <input
                   type="text"
@@ -344,28 +367,73 @@ const ModulesView = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Semestre *</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.semestre}
-                    onChange={(e) => setFormData({ ...formData, semestre: e.target.value.toUpperCase() })}
+                    onChange={(e) => setFormData({ ...formData, semestre: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: S6"
-                  />
+                  >
+                    <option value="">Sélectionner</option>
+                    <option value="S1">S1 (L1)</option>
+                    <option value="S2">S2 (L1)</option>
+                    <option value="S3">S3 (L2)</option>
+                    <option value="S4">S4 (L2)</option>
+                    <option value="S5">S5 (L3)</option>
+                    <option value="S6">S6 (L3)</option>
+                  </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Classe *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Filière *</label>
                 <select
-                  value={formData.classeId}
-                  onChange={(e) => setFormData({ ...formData, classeId: e.target.value })}
+                  value={formData.filiereId}
+                  onChange={(e) => setFormData({ ...formData, filiereId: e.target.value })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Sélectionner une classe</option>
-                  {classes.map((classe) => (
-                    <option key={classe.id} value={classe.id}>{classe.code} - {classe.nom || ''}</option>
+                  <option value="">Sélectionner une filière</option>
+                  {filieres.map((filiere) => (
+                    <option key={filiere.id} value={filiere.id}>{filiere.code} - {filiere.nom}</option>
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Unité d'Enseignement (UE) *</label>
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ue"
+                      value="UE1"
+                      checked={formData.ue === 'UE1'}
+                      onChange={(e) => setFormData({ ...formData, ue: e.target.value })}
+                      className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">UE1</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ue"
+                      value="UE2"
+                      checked={formData.ue === 'UE2'}
+                      onChange={(e) => setFormData({ ...formData, ue: e.target.value })}
+                      className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">UE2</span>
+                  </label>
+                </div>
+              </div>
+              {formData.nom && formData.semestre && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Code du module (auto-généré)</label>
+                  <input
+                    type="text"
+                    value={generateModuleCode(formData.nom, formData.semestre)}
+                    readOnly
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-600"
+                    placeholder="Ex: BDD-301"
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -404,15 +472,15 @@ const ModulesView = () => {
           >
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Sélectionner une classe</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Sélectionner une filière</label>
                 <select
-                  value={selectedClasse}
-                  onChange={(e) => setSelectedClasse(e.target.value)}
+                  value={selectedFiliere}
+                  onChange={(e) => setSelectedFiliere(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Sélectionner une classe</option>
-                  {classes.map((classe) => (
-                    <option key={classe.id} value={classe.id}>{classe.code}</option>
+                  <option value="">Sélectionner une filière</option>
+                  {filieres.map((filiere) => (
+                    <option key={filiere.id} value={filiere.id}>{filiere.code} - {filiere.nom}</option>
                   ))}
                 </select>
               </div>
@@ -451,7 +519,7 @@ const ModulesView = () => {
                 </button>
                 <button
                   onClick={handleFileUpload}
-                  disabled={!selectedFile || !selectedClasse}
+                  disabled={!selectedFile || !selectedFiliere}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <FontAwesomeIcon icon={faUpload} />

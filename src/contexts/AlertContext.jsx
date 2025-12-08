@@ -41,31 +41,31 @@ export const AlertProvider = ({ children }) => {
     switch (type) {
       case 'success':
         return {
-          bg: 'bg-green-50 border-green-200',
-          text: 'text-green-800',
+          bg: 'bg-green-500 border-green-600',
+          text: 'text-white',
           icon: faCheckCircle,
-          iconColor: 'text-green-600'
+          iconColor: 'text-white'
         }
       case 'error':
         return {
-          bg: 'bg-red-50 border-red-200',
-          text: 'text-red-800',
+          bg: 'bg-red-500 border-red-600',
+          text: 'text-white',
           icon: faExclamationTriangle,
-          iconColor: 'text-red-600'
+          iconColor: 'text-white'
         }
       case 'warning':
         return {
-          bg: 'bg-yellow-50 border-yellow-200',
-          text: 'text-yellow-800',
+          bg: 'bg-orange-500 border-orange-600',
+          text: 'text-white',
           icon: faExclamationTriangle,
-          iconColor: 'text-yellow-600'
+          iconColor: 'text-white'
         }
       default:
         return {
-          bg: 'bg-blue-50 border-blue-200',
-          text: 'text-blue-800',
+          bg: 'bg-blue-500 border-blue-600',
+          text: 'text-white',
           icon: faInfoCircle,
-          iconColor: 'text-blue-600'
+          iconColor: 'text-white'
         }
     }
   }

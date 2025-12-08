@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { validateTelephone } from '../../utils/validation.js'
 
 // Obtenir tous les enseignants d'un département
 export const getEnseignantsByDepartement = async (departementId) => {
@@ -26,6 +27,8 @@ export const getEnseignantsByDepartement = async (departementId) => {
         prenom: ens.prenom,
         email: ens.email,
         telephone: ens.telephone,
+        statut: ens.statut || 'PERMANENT',
+        grade: ens.grade,
         modules: (ens.affectations_module_enseignant || []).map(aff => ({
           id: aff.modules?.id,
           code: aff.modules?.code,
@@ -48,12 +51,23 @@ export const getEnseignantsByDepartement = async (departementId) => {
 // Créer un nouvel enseignant
 export const createEnseignant = async (data, departementId) => {
   try {
-    const { nom, prenom, email, telephone } = data
+    const { nom, prenom, email, telephone, statut, grade } = data
 
     if (!nom || !prenom || !email) {
       return {
         success: false,
         error: 'Nom, prénom et email sont obligatoires'
+      }
+    }
+
+    // Valider le téléphone si fourni
+    if (telephone) {
+      const telValidation = validateTelephone(telephone)
+      if (!telValidation.isValid) {
+        return {
+          success: false,
+          error: telValidation.error
+        }
       }
     }
 
@@ -78,6 +92,8 @@ export const createEnseignant = async (data, departementId) => {
         prenom,
         email,
         telephone,
+        statut: statut || 'PERMANENT',
+        grade: grade || null,
         departement_id: departementId,
         actif: true
       })
@@ -124,6 +140,17 @@ export const updateEnseignant = async (id, data, departementId) => {
       }
     }
 
+    // Valider le téléphone si fourni
+    if (data.telephone) {
+      const telValidation = validateTelephone(data.telephone)
+      if (!telValidation.isValid) {
+        return {
+          success: false,
+          error: telValidation.error
+        }
+      }
+    }
+
     const { data: enseignant, error } = await supabaseAdmin
       .from('enseignants')
       .update({
@@ -131,6 +158,8 @@ export const updateEnseignant = async (id, data, departementId) => {
         prenom: data.prenom,
         email: data.email,
         telephone: data.telephone,
+        statut: data.statut || existing.statut || 'PERMANENT',
+        grade: data.grade !== undefined ? data.grade : existing.grade,
         actif: data.actif !== undefined ? data.actif : existing.actif
       })
       .eq('id', id)
@@ -259,7 +288,32 @@ export const affecterModules = async (enseignantId, moduleIds, departementId) =>
       }
     }
 
-    // Supprimer les anciennes affectations
+    // Vérifier qu'aucun module n'est déjà affecté à un autre enseignant
+    const { data: existingAffectations, error: affError } = await supabaseAdmin
+      .from('affectations_module_enseignant')
+      .select('module_id, enseignants(nom, prenom)')
+      .in('module_id', moduleIds)
+      .neq('enseignant_id', enseignantId)
+
+    if (affError) throw affError
+
+    if (existingAffectations && existingAffectations.length > 0) {
+      // Récupérer les détails des modules déjà affectés
+      const modulesDejaAffectes = await supabaseAdmin
+        .from('modules')
+        .select('code, nom')
+        .in('id', existingAffectations.map(aff => aff.module_id))
+
+      const nomModules = (modulesDejaAffectes.data || []).map(m => m.code).join(', ')
+      const enseignant = existingAffectations[0].enseignants
+      
+      return {
+        success: false,
+        error: `Les module(s) ${nomModules} sont déjà affectés à un autre enseignant (${enseignant?.prenom} ${enseignant?.nom}). Un module ne peut être affecté qu'à un seul enseignant à la fois.`
+      }
+    }
+
+    // Supprimer les anciennes affectations de cet enseignant
     await supabaseAdmin
       .from('affectations_module_enseignant')
       .delete()

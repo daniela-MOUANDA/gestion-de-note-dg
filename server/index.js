@@ -19,6 +19,8 @@ import scolariteRoutes from './routes/scolarite.js'
 import comptesRoutes from './routes/comptes.js'
 import chefsDepartementRoutes from './routes/chefsDepartement.js'
 import departementsRoutes from './routes/departements.js'
+import studentRoutes from './routes/student.js'
+
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -180,6 +182,7 @@ app.use('/api/scolarite', scolariteRoutes)
 app.use('/api/comptes', comptesRoutes)
 app.use('/api/chef-departement', chefsDepartementRoutes)
 app.use('/api/departements', departementsRoutes)
+app.use('/api/student', studentRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

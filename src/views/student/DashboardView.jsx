@@ -1,54 +1,98 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
-  faUser, 
-  faChartLine, 
-  faMedal, 
-  faBook, 
+import {
+  faUser,
+  faChartLine,
+  faMedal,
+  faBook,
   faTrophy,
   faClock,
   faChevronLeft,
   faChevronRight,
   faChalkboardTeacher,
   faMapMarkerAlt,
-  faCheckCircle
+  faCheckCircle,
+  faSpinner,
+  faExclamationTriangle
 } from '@fortawesome/free-solid-svg-icons'
 import { StudentModel } from '../../models/StudentModel'
 import { DashboardController } from '../../controllers/DashboardController'
 import Sidebar from '../../components/common/Sidebar'
 import Header from '../../components/common/Header'
+import { useAuth } from '../../contexts/AuthContext'
+import { getMyInfo } from '../../api/student'
 
 const DashboardView = () => {
-  // Données par défaut pour l'affichage sans connexion
-  const defaultStudentData = {
-    id: 1,
-    email: 'lidvige.mbo@example.com',
-    matricule: '1045937',
-    nom: 'MBO',
-    prenom: 'Lidvige',
-    programme: 'GI 2025 Génie Informatique',
-    niveau: 'L3',
-    moyenneGenerale: 14.5,
-    credits: 24,
-    totalModules: 15,
-    rangClasse: 5,
-    estActif: true,
-    estBoursier: true,
-    semestre: 'Semestre 5',
-    derniereConnexion: new Date().toISOString()
-  }
+  const navigate = useNavigate()
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
 
-  const [student, setStudent] = useState(() => {
-    // Essayer de récupérer depuis localStorage, sinon utiliser les données par défaut
-    const studentData = localStorage.getItem('student')
-    if (studentData) {
-      return new StudentModel(JSON.parse(studentData))
-    }
-    return new StudentModel(defaultStudentData)
-  })
-  
+  const [student, setStudent] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
   const [controller] = useState(() => new DashboardController())
   const [viewModel, setViewModel] = useState(controller.viewModel)
+
+  // Charger les données de l'étudiant au montage du composant
+  useEffect(() => {
+    const loadStudentData = async () => {
+      // Vérifier que l'utilisateur est authentifié et est un étudiant
+      if (!isAuthenticated || !user) {
+        navigate('/login-student')
+        return
+      }
+
+      if (user.role !== 'ETUDIANT') {
+        setError('Accès refusé. Vous devez être un étudiant pour accéder à cette page.')
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Récupérer les données de l'étudiant depuis l'API
+        const result = await getMyInfo()
+
+        if (result.success && result.data) {
+          // Créer un objet StudentModel avec les données récupérées
+          const studentData = new StudentModel({
+            id: result.data.id,
+            email: result.data.email,
+            matricule: result.data.matricule,
+            nom: result.data.nom,
+            prenom: result.data.prenom,
+            programme: result.data.programme,
+            niveau: result.data.niveau,
+            moyenneGenerale: result.data.moyenneGenerale || 0,
+            credits: result.data.credits || 0,
+            totalModules: result.data.totalModules || 0,
+            rangClasse: result.data.rangClasse || 0,
+            estActif: result.data.estActif || false,
+            estBoursier: result.data.estBoursier || false,
+            semestre: result.data.semestre || '',
+            derniereConnexion: user.derniereConnexion || new Date().toISOString()
+          })
+
+          setStudent(studentData)
+        } else {
+          setError(result.error || 'Erreur lors du chargement des données')
+        }
+      } catch (err) {
+        console.error('Erreur lors du chargement des données de l\'étudiant:', err)
+        setError('Une erreur est survenue lors du chargement de vos données')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (!authLoading) {
+      loadStudentData()
+    }
+  }, [isAuthenticated, user, authLoading, navigate])
+
 
   const handlePreviousWeek = () => {
     const updated = controller.previousWeek()
@@ -62,12 +106,66 @@ const DashboardView = () => {
 
   const daysOfWeek = controller.getDaysOfWeek()
 
+  // État de chargement
+  if (loading || authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <FontAwesomeIcon icon={faSpinner} className="text-6xl text-blue-600 animate-spin mb-4" />
+          <p className="text-xl text-slate-700 font-semibold">Chargement de vos données...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // État d'erreur
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full border border-red-200">
+          <div className="text-center">
+            <FontAwesomeIcon icon={faExclamationTriangle} className="text-6xl text-red-500 mb-4" />
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Erreur</h2>
+            <p className="text-slate-600 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Si pas de données étudiant
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+          <div className="text-center">
+            <FontAwesomeIcon icon={faExclamationTriangle} className="text-6xl text-yellow-500 mb-4" />
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Aucune donnée</h2>
+            <p className="text-slate-600 mb-6">Aucune information d'étudiant n'a été trouvée.</p>
+            <button
+              onClick={() => navigate('/login-student')}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Retour à la connexion
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
-        
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}
           <div className="mb-6 sm:mb-8">
@@ -117,14 +215,14 @@ const DashboardView = () => {
                 <h3 className="text-sm font-medium text-slate-600">Dernière connexion</h3>
               </div>
               <p className="text-base sm:text-lg font-semibold text-slate-800">
-                {student.derniereConnexion 
+                {student.derniereConnexion
                   ? new Date(student.derniereConnexion).toLocaleDateString('fr-FR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })
                   : 'N/A'}
               </p>
             </div>

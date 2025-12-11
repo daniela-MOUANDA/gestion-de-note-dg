@@ -87,7 +87,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         console.log('DEBUG: Recherche modules avec:', { semestre, filiereId, departementId })
         const { data: modules, error: errorModules } = await supabaseAdmin
             .from('modules')
-            .select('id, code, nom, credit, semestre, filiere_id, departement_id')
+            .select('id, code, nom, credit, semestre, filiere_id, departement_id, ue')
             .eq('semestre', semestre)
             .eq('filiere_id', filiereId)
             .eq('departement_id', departementId)
@@ -98,7 +98,18 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         }
         console.log('DEBUG: Modules found', modules?.length)
         if (modules && modules.length > 0) {
-            console.log('DEBUG: Modules codes', modules.map(m => `${m.code} (filiere: ${m.filiere_id}, dept: ${m.departement_id})`))
+            // Trier les modules par UE : UE1 d'abord, puis UE2
+            modules.sort((a, b) => {
+                const ueA = (a.ue || 'UE1').toUpperCase()
+                const ueB = (b.ue || 'UE1').toUpperCase()
+                if (ueA === ueB) {
+                    // Si même UE, trier par code
+                    return (a.code || '').localeCompare(b.code || '')
+                }
+                // UE1 avant UE2
+                return ueA === 'UE1' ? -1 : 1
+            })
+            console.log('DEBUG: Modules codes (triés par UE):', modules.map(m => `${m.code} (UE: ${m.ue || 'UE1'}, filiere: ${m.filiere_id})`))
         } else {
             // Vérifier s'il y a des modules pour ce semestre mais d'une autre filière
             const { data: modulesAutreFiliere } = await supabaseAdmin
@@ -154,15 +165,35 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 // Utiliser les modules trouvés dans les notes
                 if (modulesUtilises.length > 0) {
                     console.log('DEBUG: Utilisation des modules trouvés dans les notes au lieu des modules de la filière')
-                    modules = modulesUtilises.map(m => ({
-                        id: m.id,
-                        code: m.code,
-                        nom: m.nom,
-                        credit: m.credit || 0,
-                        semestre: semestre,
-                        filiere_id: m.filiere_id,
-                        departement_id: departementId
-                    }))
+                    // Récupérer les modules avec leur UE
+                    const { data: modulesAvecUE } = await supabaseAdmin
+                        .from('modules')
+                        .select('id, code, nom, credit, ue')
+                        .in('id', moduleIdsUtilises)
+                    
+                    modules = modulesUtilises.map(m => {
+                        const moduleAvecUE = modulesAvecUE?.find(mm => mm.id === m.id)
+                        return {
+                            id: m.id,
+                            code: m.code,
+                            nom: m.nom,
+                            credit: m.credit || 0,
+                            semestre: semestre,
+                            filiere_id: m.filiere_id,
+                            departement_id: departementId,
+                            ue: moduleAvecUE?.ue || 'UE1'
+                        }
+                    })
+                    
+                    // Trier par UE
+                    modules.sort((a, b) => {
+                        const ueA = (a.ue || 'UE1').toUpperCase()
+                        const ueB = (b.ue || 'UE1').toUpperCase()
+                        if (ueA === ueB) {
+                            return (a.code || '').localeCompare(b.code || '')
+                        }
+                        return ueA === 'UE1' ? -1 : 1
+                    })
                 } else {
                     return {
                         success: true,
@@ -361,6 +392,16 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                     valide: estValide
                 })
             })
+            
+            // Trier les modules par UE (UE1 d'abord, puis UE2)
+            modulesResult.sort((a, b) => {
+                const ueA = (a.ue || 'UE1').toUpperCase()
+                const ueB = (b.ue || 'UE1').toUpperCase()
+                if (ueA === ueB) {
+                    return (a.code || '').localeCompare(b.code || '')
+                }
+                return ueA === 'UE1' ? -1 : 1
+            })
 
             const moyenneGenerale = totalCreditsSemestre > 0
                 ? parseFloat((totalPointsSemestre / totalCreditsSemestre).toFixed(2))
@@ -379,19 +420,34 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             }
         })
 
-        // 7. Calcul du rang
-        // Tri par moyenne générale décroissante (les null en dernier)
-        bulletin.sort((a, b) => {
-            if (a.moyenneGenerale === null && b.moyenneGenerale === null) return 0
-            if (a.moyenneGenerale === null) return 1
-            if (b.moyenneGenerale === null) return -1
-            return (b.moyenneGenerale || 0) - (a.moyenneGenerale || 0)
-        })
+        // 7. Calcul du rang (seulement si au moins un étudiant a des notes)
+        const etudiantsAvecNotesList = bulletin.filter(b => b.moyenneGenerale !== null && b.moyenneGenerale !== undefined)
+        
+        if (etudiantsAvecNotesList.length > 0) {
+            // Tri par moyenne générale décroissante (les null en dernier)
+            bulletin.sort((a, b) => {
+                if (a.moyenneGenerale === null && b.moyenneGenerale === null) return 0
+                if (a.moyenneGenerale === null) return 1
+                if (b.moyenneGenerale === null) return -1
+                return (b.moyenneGenerale || 0) - (a.moyenneGenerale || 0)
+            })
 
-        // Assigner les rangs (attention aux ex-aequo si besoin, ici simple rang séquentiel)
-        bulletin.forEach((item, index) => {
-            item.rang = index + 1
-        })
+            // Assigner les rangs seulement aux étudiants avec des notes
+            let rangActuel = 1
+            bulletin.forEach((item, index) => {
+                if (item.moyenneGenerale !== null && item.moyenneGenerale !== undefined) {
+                    item.rang = rangActuel
+                    rangActuel++
+                } else {
+                    item.rang = null // Pas de rang si pas de notes
+                }
+            })
+        } else {
+            // Aucun étudiant n'a de notes, pas de rang
+            bulletin.forEach((item) => {
+                item.rang = null
+            })
+        }
 
         console.log('DEBUG: Bulletin calculé avec', bulletin.length, 'étudiants')
         if (bulletin.length > 0) {
@@ -404,7 +460,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         }
 
         // Statistiques
-        const etudiantsAvecNotes = bulletin.filter(b => b.moyenneGenerale !== null).length
+        const etudiantsAvecNotes = etudiantsAvecNotesList.length
         const etudiantsSansNotes = bulletin.filter(b => b.moyenneGenerale === null).length
         console.log(`📊 Statistiques: ${etudiantsAvecNotes} avec notes, ${etudiantsSansNotes} sans notes`)
 

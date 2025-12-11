@@ -205,13 +205,32 @@ const RelevesNotesView = () => {
                                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 w-16">Rang</th>
                                             <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider sticky left-16 bg-slate-50 z-10 w-64">Étudiant</th>
 
-                                            {/* En-têtes Modules */}
-                                            {bulletinData[0].modules.map(mod => (
-                                                <th key={mod.id} className="px-2 py-3 text-center text-xs font-semibold text-slate-700 border-l border-slate-100 min-w-[100px]">
-                                                    <div className="truncate w-24 mx-auto" title={mod.nom}>{mod.code}</div>
-                                                    <div className="text-[10px] text-slate-500 font-normal">({mod.credit} Crédits)</div>
-                                                </th>
-                                            ))}
+                                            {/* En-têtes Modules groupés par UE */}
+                                            {bulletinData[0].modules.map((mod, index) => {
+                                                const ue = mod.ue || 'UE1'
+                                                const prevMod = index > 0 ? bulletinData[0].modules[index - 1] : null
+                                                const prevUE = prevMod?.ue || 'UE1'
+                                                const isFirstOfUE = ue !== prevUE
+                                                
+                                                return (
+                                                    <th 
+                                                        key={mod.id} 
+                                                        className={`px-2 py-3 text-center text-xs font-semibold text-slate-700 border-l min-w-[100px] ${
+                                                            isFirstOfUE ? 'border-l-2 border-l-blue-400 bg-blue-50/30' : 'border-slate-100'
+                                                        }`}
+                                                    >
+                                                        <div className="truncate w-24 mx-auto" title={mod.nom}>
+                                                            {mod.code}
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-500 font-normal">
+                                                            ({mod.credit} Crédits)
+                                                        </div>
+                                                        <div className="text-[9px] font-bold text-blue-600 mt-0.5">
+                                                            {ue}
+                                                        </div>
+                                                    </th>
+                                                )
+                                            })}
 
                                             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider border-l border-slate-200 bg-blue-50/50">Moy. Gen.</th>
                                             <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider bg-blue-50/50">Crédits</th>
@@ -222,28 +241,46 @@ const RelevesNotesView = () => {
                                         {bulletinData.map((item) => (
                                             <tr key={item.etudiant?.id || Math.random()} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-4 py-3 sticky left-0 bg-white z-10 font-medium text-slate-900 border-r border-slate-100">
-                                                    {item.rang === 1 && <FontAwesomeIcon icon={faTrophy} className="text-yellow-500 mr-1" />}
-                                                    {item.rang === 2 && <FontAwesomeIcon icon={faTrophy} className="text-slate-400 mr-1" />}
-                                                    {item.rang === 3 && <FontAwesomeIcon icon={faTrophy} className="text-amber-600 mr-1" />}
-                                                    {item.rang}e
+                                                    {item.rang !== null && item.rang !== undefined ? (
+                                                        <>
+                                                            {item.rang === 1 && <FontAwesomeIcon icon={faTrophy} className="text-yellow-500 mr-1" />}
+                                                            {item.rang === 2 && <FontAwesomeIcon icon={faTrophy} className="text-slate-400 mr-1" />}
+                                                            {item.rang === 3 && <FontAwesomeIcon icon={faTrophy} className="text-amber-600 mr-1" />}
+                                                            {item.rang}e
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-slate-400">-</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 sticky left-16 bg-white z-10 border-r border-slate-100 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
                                                     <div className="font-medium text-slate-900">{item.etudiant?.nom || ''} {item.etudiant?.prenom || ''}</div>
                                                     <div className="text-xs text-slate-500">{item.etudiant?.matricule || ''}</div>
                                                 </td>
 
-                                                {/* Notes Modules */}
-                                                {item.modules?.map(mod => (
-                                                    <td key={mod.id} className="px-2 py-3 text-center border-l border-slate-100">
-                                                        {mod.moyenne !== null && mod.moyenne !== undefined ? (
-                                                            <span className={`text-sm font-medium ${mod.valide ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {mod.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-xs text-slate-400 italic">-</span>
-                                                        )}
-                                                    </td>
-                                                )) || <td colSpan={bulletinData[0]?.modules?.length || 1} className="text-center text-slate-400">Aucun module</td>}
+                                                {/* Notes Modules (déjà triés par UE dans le service) */}
+                                                {item.modules?.map((mod, index) => {
+                                                    const ue = mod.ue || 'UE1'
+                                                    const prevMod = index > 0 ? item.modules[index - 1] : null
+                                                    const prevUE = prevMod?.ue || 'UE1'
+                                                    const isFirstOfUE = ue !== prevUE
+                                                    
+                                                    return (
+                                                        <td 
+                                                            key={mod.id} 
+                                                            className={`px-2 py-3 text-center border-l ${
+                                                                isFirstOfUE ? 'border-l-2 border-l-blue-400 bg-blue-50/30' : 'border-slate-100'
+                                                            }`}
+                                                        >
+                                                            {mod.moyenne !== null && mod.moyenne !== undefined ? (
+                                                                <span className={`text-sm font-medium ${mod.valide ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {mod.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-xs text-slate-400 italic">-</span>
+                                                            )}
+                                                        </td>
+                                                    )
+                                                }) || <td colSpan={bulletinData[0]?.modules?.length || 1} className="text-center text-slate-400">Aucun module</td>}
 
                                                 <td className="px-4 py-3 text-center border-l border-slate-200 bg-blue-50/30">
                                                     <span className={`font-bold ${item.moyenneGenerale >= 10 ? 'text-green-700' : 'text-red-700'}`}>

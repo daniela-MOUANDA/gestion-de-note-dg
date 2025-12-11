@@ -42,7 +42,7 @@ export const getClassesByDepartement = async (departementId) => {
         niveau: classe.niveaux?.code,
         filiere: classe.filieres?.code,
         effectif: classe.effectif,
-        nombreModules: modulesCount || 0,
+        nombreModules: classe.nombre_modules || 0,
         filiereId: classe.filiere_id,
         niveauId: classe.niveau_id
       }
@@ -110,7 +110,8 @@ export const createClasse = async (data, departementId) => {
         nom,
         filiere_id: filiereId,
         niveau_id: niveauId,
-        effectif: 0
+        effectif: 0,
+        nombre_modules: data.nombreModules || 0
       })
       .select('*, filieres (*), niveaux (*)')
       .single()
@@ -125,7 +126,8 @@ export const createClasse = async (data, departementId) => {
         nom: classe.nom,
         niveau: classe.niveaux?.code,
         filiere: classe.filieres?.code,
-        effectif: classe.effectif
+        effectif: classe.effectif,
+        nombreModules: classe.nombre_modules || 0
       }
     }
   } catch (error) {
@@ -160,15 +162,21 @@ export const updateClasse = async (id, data, departementId) => {
       }
     }
 
+    // Convertir nombreModules en entier pour s'assurer que c'est un nombre
+    const nombreModulesValue = parseInt(data.nombreModules) || 0
+    
     const { data: classe, error } = await supabaseAdmin
       .from('classes')
       .update({
         code: data.code,
-        nom: data.nom
+        nom: data.nom,
+        nombre_modules: nombreModulesValue
       })
       .eq('id', id)
       .select('*, filieres (*), niveaux (*)')
       .single()
+    
+    console.log(`✅ Classe ${classe?.code} mise à jour: nombre_modules = ${nombreModulesValue}`)
 
     if (error) throw error
 
@@ -180,7 +188,8 @@ export const updateClasse = async (id, data, departementId) => {
         nom: classe.nom,
         niveau: classe.niveaux?.code,
         filiere: classe.filieres?.code,
-        effectif: classe.effectif
+        effectif: classe.effectif,
+        nombreModules: classe.nombre_modules || 0
       }
     }
   } catch (error) {

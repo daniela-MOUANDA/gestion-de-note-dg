@@ -508,82 +508,224 @@ const NotesView = () => {
     const newNotes = { ...notes }
     let count = 0
     let errors = []
+    let skipped = 0
 
     // Debug: Voir les colonnes du fichier importé
     if (jsonData.length > 0) {
-      console.log('Colonnes trouvées dans le fichier:', Object.keys(jsonData[0]))
+      console.log('📊 Colonnes trouvées dans le fichier:', Object.keys(jsonData[0]))
+      console.log('📊 Nombre de lignes:', jsonData.length)
     }
 
-    // Récupérer les mapping des colonnes
-    const evalMapping = {}
-
-    // Reconstruire les en-têtes attendus
+    // Construire la liste ordonnée des évaluations attendues
+    const evaluationsAttendues = []
     parametres.evaluations.forEach(evaluation => {
       const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
       for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
-        // Le header exact attendu
         const headerName = `${typeLabel} ${i} (/${evaluation.noteMax})`
-
-        evalMapping[headerName] = {
+        evaluationsAttendues.push({
+          headerName,
           id: `${evaluation.id}_${i}`,
           max: evaluation.noteMax,
-          // Version normalisée pour la recherche (minuscule, sans espaces multiples)
-          normalized: headerName.toLowerCase().replace(/\s+/g, ' ').trim()
-        }
+          type: evaluation.type,
+          typeLabel,
+          numero: i,
+          normalized: headerName.toLowerCase().replace(/\s+/g, ' ').trim(),
+          variants: [
+            headerName.toLowerCase().replace(/\s+/g, ' ').trim(),
+            `${typeLabel} ${i}`.toLowerCase().replace(/\s+/g, ' ').trim(),
+            `${typeLabel.toLowerCase()} ${i}`.trim(),
+            `${evaluation.type} ${i}`.toLowerCase().trim()
+          ]
+        })
       }
     })
 
-    console.log('Mapping attendu:', evalMapping)
+    console.log('📋 Évaluations attendues:', evaluationsAttendues.map(e => e.headerName))
+    console.log('📋 Nombre d\'évaluations attendues:', evaluationsAttendues.length)
+
+    // Créer un mapping des colonnes Excel (en tenant compte de l'ordre)
+    // Identifier les colonnes de notes (après Matricule, Nom, Prénom)
+    const firstRow = jsonData[0] || {}
+    const allColumns = Object.keys(firstRow)
+    const noteColumns = allColumns.filter(col => {
+      const colLower = col.toLowerCase().trim()
+      return colLower !== 'matricule' && colLower !== 'nom' && colLower !== 'prenom' && 
+             colLower !== 'prénom' && colLower !== 'matricule ' && colLower !== 'nom ' && colLower !== 'prenom '
+    })
+    
+    console.log('📊 Colonnes de notes trouvées dans Excel:', noteColumns)
+    console.log('📊 Nombre de colonnes de notes:', noteColumns.length)
 
     jsonData.forEach((row, index) => {
+      // Set pour suivre les colonnes déjà utilisées pour cette ligne
+      const usedColumns = new Set()
       // Recherche flexible du matricule (parfois "Matricule " avec espace)
-      const matriculeKey = Object.keys(row).find(k => k.trim().toLowerCase() === 'matricule')
-      const matricule = matriculeKey ? row[matriculeKey] : null
+      const matriculeKey = Object.keys(row).find(k => 
+        k.trim().toLowerCase() === 'matricule' || 
+        k.trim().toLowerCase().includes('matricule')
+      )
+      const matricule = matriculeKey ? String(row[matriculeKey]).trim() : null
 
-      if (!matricule) return
+      if (!matricule || matricule === '') {
+        skipped++
+        return
+      }
 
-      const etudiant = etudiants.find(e => e.matricule == matricule) // == pour gérer string/number
+      const etudiant = etudiants.find(e => String(e.matricule).trim() == String(matricule).trim())
       if (!etudiant) {
         errors.push(`Ligne ${index + 2}: Étudiant avec matricule ${matricule} non trouvé`)
+        skipped++
         return
       }
 
       if (!newNotes[etudiant.id]) newNotes[etudiant.id] = {}
 
-      // Parcourir chaque colonne attendue
-      Object.keys(evalMapping).forEach(expectedHeader => {
-        const config = evalMapping[expectedHeader]
+      // Mapper les colonnes Excel aux évaluations attendues par ordre
+      // Utiliser l'ordre des colonnes pour éviter les conflits avec les noms dupliqués
+      evaluationsAttendues.forEach((expectedEval, evalIndex) => {
+        let rowKey = null
+        let matchedColumnIndex = -1
 
-        // Chercher la colonne correspondante dans la ligne Excel
-        // On cherche une clé qui correspond "à peu près" au header attendu
-        const rowKey = Object.keys(row).find(k => {
-          const normalizedKey = k.toLowerCase().replace(/\s+/g, ' ').trim()
-          return normalizedKey === config.normalized || k.trim() === expectedHeader.trim()
-        })
+        // Stratégie 1: Correspondance par position (si le nombre de colonnes correspond)
+        // C'est la méthode la plus fiable quand les colonnes sont dans le bon ordre
+        if (noteColumns.length === evaluationsAttendues.length) {
+          if (evalIndex < noteColumns.length && !usedColumns.has(evalIndex)) {
+            rowKey = noteColumns[evalIndex]
+            matchedColumnIndex = evalIndex
+            usedColumns.add(matchedColumnIndex)
+            console.log(`📍 Mapping par position: ${expectedEval.headerName} -> ${rowKey} (index ${evalIndex})`)
+          }
+        }
 
-        if (rowKey && row[rowKey] !== undefined) {
+        // Stratégie 2: Si pas de mapping par position, chercher par nom
+        if (!rowKey) {
+          // Chercher toutes les colonnes qui correspondent au nom
+          const matchingColumns = noteColumns
+            .map((col, colIndex) => {
+              if (usedColumns.has(colIndex)) return null // Ignorer les colonnes déjà utilisées
+              
+              const colNormalized = col.toLowerCase().replace(/\s+/g, ' ').trim()
+              // Correspondance exacte
+              if (colNormalized === expectedEval.normalized || col.trim() === expectedEval.headerName.trim()) {
+                return { col, colIndex, score: 100 }
+              }
+              // Correspondance avec variantes
+              const variantMatch = expectedEval.variants.findIndex(v => 
+                colNormalized.includes(v) || v.includes(colNormalized)
+              )
+              if (variantMatch >= 0) {
+                return { col, colIndex, score: 80 - variantMatch * 10 }
+              }
+              // Correspondance partielle par type et numéro
+              if (colNormalized.includes(expectedEval.typeLabel.toLowerCase()) && 
+                  colNormalized.includes(String(expectedEval.numero))) {
+                return { col, colIndex, score: 50 }
+              }
+              return null
+            })
+            .filter(Boolean)
+            .sort((a, b) => {
+              // Trier par score, puis par proximité de la position attendue
+              if (b.score !== a.score) return b.score - a.score
+              return Math.abs(a.colIndex - evalIndex) - Math.abs(b.colIndex - evalIndex)
+            })
+
+          // Prendre la meilleure correspondance
+          if (matchingColumns.length > 0) {
+            const bestMatch = matchingColumns[0]
+            rowKey = bestMatch.col
+            matchedColumnIndex = bestMatch.colIndex
+            usedColumns.add(matchedColumnIndex)
+            console.log(`🔍 Mapping par nom: ${expectedEval.headerName} -> ${rowKey} (index ${matchedColumnIndex}, score: ${bestMatch.score})`)
+          }
+        }
+
+        if (rowKey && row[rowKey] !== undefined && row[rowKey] !== null && row[rowKey] !== '') {
           const val = row[rowKey]
-
-          if (val === '' || val === null) return
-
           const numVal = parseFloat(val)
+
           if (isNaN(numVal)) {
-            errors.push(`Ligne ${index + 2}: Note invalide pour ${expectedHeader} (${etudiant.nom})`)
-          } else if (numVal < 0 || numVal > config.max) {
-            errors.push(`Ligne ${index + 2}: Note hors limites pour ${expectedHeader} (${etudiant.nom}). Max: ${config.max}`)
+            errors.push(`Ligne ${index + 2}: Note invalide pour ${expectedEval.headerName} (${etudiant.nom}): "${val}"`)
+          } else if (numVal < 0) {
+            errors.push(`Ligne ${index + 2}: Note négative pour ${expectedEval.headerName} (${etudiant.nom}): ${numVal}`)
+          } else if (numVal > expectedEval.max) {
+            // Note hors limites : on l'importe quand même mais on ajuste à la limite max
+            console.log(`⚠️ Note hors limites pour ${etudiant.nom} - ${expectedEval.headerName}: ${numVal} > ${expectedEval.max}, ajustée à ${expectedEval.max}`)
+            newNotes[etudiant.id][expectedEval.id] = expectedEval.max
+            count++
+            errors.push(`Ligne ${index + 2}: Note ${numVal} ajustée à ${expectedEval.max} (max) pour ${expectedEval.headerName} (${etudiant.nom})`)
           } else {
-            console.log(`Import: ${etudiant.nom} - ${expectedHeader} (${config.id}) = ${numVal}`)
-            newNotes[etudiant.id][config.id] = numVal
+            console.log(`✅ Import: ${etudiant.nom} - ${expectedEval.headerName} (${expectedEval.id}) = ${numVal}`)
+            newNotes[etudiant.id][expectedEval.id] = numVal
             count++
           }
+        } else {
+          // Colonne non trouvée - message d'erreur clair
+          const colonnesDisponibles = noteColumns.filter(col => 
+            col.toLowerCase().includes(expectedEval.typeLabel.toLowerCase()) ||
+            col.toLowerCase().includes(expectedEval.type.toLowerCase())
+          )
+          
+          if (colonnesDisponibles.length > 0) {
+            errors.push(`Ligne ${index + 2}: Colonne "${expectedEval.headerName}" non trouvée pour ${etudiant.nom}. Colonnes similaires trouvées: ${colonnesDisponibles.slice(0, 3).join(', ')}`)
+          } else {
+            errors.push(`Ligne ${index + 2}: Le nom de la colonne "${expectedEval.headerName}" ne correspond pas aux colonnes du système pour ${etudiant.nom}. Vérifiez que le nom de la colonne dans Excel correspond exactement à celui du template.`)
+          }
+          console.log(`ℹ️ Colonne "${expectedEval.headerName}" non trouvée pour ${etudiant.nom} (ligne ${index + 2})`)
         }
       })
     })
 
+    console.log(`📊 Import terminé: ${count} notes importées, ${errors.length} erreurs, ${skipped} lignes ignorées`)
+
+    // Afficher un message résumé avec des messages d'erreur clairs
     if (errors.length > 0) {
-      showAlert(`Import effectué avec des erreurs :\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`, 'warning')
-    } else {
+      // Grouper les erreurs par type pour un message plus clair
+      const erreursColonnes = errors.filter(e => e.includes('ne correspond pas') || e.includes('non trouvée'))
+      const autresErreurs = errors.filter(e => !e.includes('ne correspond pas') && !e.includes('non trouvée'))
+      
+      let errorMessage = ''
+      
+      if (erreursColonnes.length > 0) {
+        errorMessage += `⚠️ PROBLÈME DE CORRESPONDANCE DES COLONNES\n\n`
+        errorMessage += `Les noms des colonnes dans votre fichier Excel ne correspondent pas exactement aux noms attendus par le système.\n\n`
+        errorMessage += `📋 Colonnes attendues par le système :\n`
+        evaluationsAttendues.forEach((e, idx) => {
+          errorMessage += `${idx + 1}. ${e.headerName}\n`
+        })
+        errorMessage += `\n📊 Colonnes trouvées dans votre fichier :\n`
+        noteColumns.forEach((c, idx) => {
+          errorMessage += `${idx + 1}. ${c}\n`
+        })
+        errorMessage += `\n💡 SOLUTION :\n`
+        errorMessage += `Téléchargez le template Excel depuis le système (bouton "Télécharger Template") et utilisez-le comme base. Ne modifiez pas les noms des colonnes.\n\n`
+      }
+      
+      if (autresErreurs.length > 0) {
+        errorMessage += `⚠️ AUTRES ERREURS :\n`
+        autresErreurs.slice(0, 5).forEach(err => {
+          errorMessage += `• ${err}\n`
+        })
+        if (autresErreurs.length > 5) {
+          errorMessage += `... et ${autresErreurs.length - 5} autre(s) erreur(s)\n`
+        }
+      }
+      
+      showAlert(
+        `Import effectué : ${count} notes importées avec ${errors.length} problème(s)\n\n${errorMessage}`,
+        'warning'
+      )
+    } else if (count > 0) {
       showAlert(`${count} notes importées avec succès pour ${jsonData.length} étudiants`, 'success')
+    } else {
+      showAlert(
+        `Aucune note valide trouvée dans le fichier.\n\n` +
+        `Vérifiez que :\n` +
+        `- Les noms des colonnes correspondent exactement au template\n` +
+        `- Les notes sont des nombres valides\n` +
+        `- Les matricules des étudiants sont corrects`,
+        'warning'
+      )
     }
 
     setNotes(newNotes)

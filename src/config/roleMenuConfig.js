@@ -103,6 +103,7 @@ export const ROLE_MENUS = {
         { path: '/chef/classes', icon: faBuilding, label: 'Classes' },
         { path: '/chef/repartition', icon: faUsers, label: 'Répartition' },
         { path: '/chef/releves', icon: faFileAlt, label: 'Relevé de notes' },
+        { path: '/chef/bulletins', icon: faClipboardList, label: 'Bulletins' },
         { path: '/chef/statistiques', icon: faChartLine, label: 'Statistiques' },
         { path: '/admin/profil', icon: faUser, label: 'Profil' },
         { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },

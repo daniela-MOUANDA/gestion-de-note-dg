@@ -41,6 +41,8 @@ const RepartitionClasseView = lazy(() => import('./views/chef/RepartitionClasses
 const EmploiDuTempsChefDepartementView = lazy(() => import('./views/chef-departement/EmploiDuTempsView'))
 const NotesChefDepartementView = lazy(() => import('./views/chef-departement/NotesView'))
 const RelevesNotesView = lazy(() => import('./views/chef-departement/RelevesNotesView'))
+const BulletinsChefDepartementView = lazy(() => import('./views/chef-departement/BulletinsView'))
+const StatistiquesChefDepartementView = lazy(() => import('./views/chef-departement/StatistiquesView'))
 const MessagerieChefView = lazy(() => import('./views/chef/MessagerieChefView'))
 const GererClassesView = lazy(() => import('./views/chef/GererClassesView'))
 const GererEnseignantsView = lazy(() => import('./views/chef/GererEnseignantsView'))
@@ -314,6 +316,22 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <RelevesNotesView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chef/bulletins"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <BulletinsChefDepartementView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chef/statistiques"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <StatistiquesChefDepartementView />
                 </ProtectedRoute>
               }
             />

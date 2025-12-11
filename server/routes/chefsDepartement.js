@@ -22,6 +22,12 @@ import {
   deleteModule as deleteModuleService
 } from '../../src/services/chefDepartement/moduleService.js'
 import {
+  getClassesByDepartement,
+  createClasse as createClasseService,
+  updateClasse as updateClasseService,
+  deleteClasse as deleteClasseService
+} from '../../src/services/chefDepartement/classeService.js'
+import {
   getEnseignantsByDepartement,
   createEnseignant,
   updateEnseignant as updateEnseignantService,
@@ -47,6 +53,8 @@ import {
 } from '../../src/services/chefDepartement/emploiDuTempsPeriodeService.js'
 
 import { getBulletinData } from '../../src/services/chefDepartement/relevesService.js'
+import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartementService.js'
+import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
 
 const router = express.Router()
 
@@ -256,10 +264,72 @@ router.get('/classes', async (req, res) => {
     const departementId = req.user.departementId
     if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
 
-    const result = await getDepartementClasses(departementId)
+    const result = await getClassesByDepartement(departementId)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Créer une nouvelle classe
+router.post('/classes', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const result = await createClasseService(req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.status(201).json(result)
+  } catch (error) {
+    console.error('Erreur création classe:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Modifier une classe
+router.put('/classes/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await updateClasseService(id, req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur modification classe:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer une classe
+router.delete('/classes/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await deleteClasseService(id, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur suppression classe:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -741,6 +811,103 @@ router.get('/releves/bulletin/:classeId', async (req, res) => {
     }
 
     const result = await getBulletinData(classeId, semestre, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Récupérer les meilleurs étudiants par filière
+router.get('/statistiques/meilleurs-etudiants', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const result = await getMeilleursEtudiantsParFiliere(departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Récupérer l'état des bulletins pour toutes les classes
+router.get('/bulletins/etat-toutes-classes', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { semestre } = req.query
+
+    const result = await getEtatBulletinsToutesClasses(departementId, semestre)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Vérifier l'état des bulletins pour une classe et un semestre
+router.get('/bulletins/verifier/:classeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { classeId } = req.params
+    const { semestre } = req.query
+
+    if (!semestre) {
+      return res.status(400).json({ success: false, error: "Le paramètre semestre est requis" })
+    }
+
+    const result = await verifierEtatBulletins(classeId, semestre, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Générer les bulletins pour une classe et un semestre
+router.post('/bulletins/generer/:classeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    const chefDepartementId = req.user.id
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { classeId } = req.params
+    const { semestre } = req.query
+
+    if (!semestre) {
+      return res.status(400).json({ success: false, error: "Le paramètre semestre est requis" })
+    }
+
+    const result = await genererBulletins(classeId, semestre, departementId, chefDepartementId)
     if (!result.success) {
       return res.status(400).json(result)
     }

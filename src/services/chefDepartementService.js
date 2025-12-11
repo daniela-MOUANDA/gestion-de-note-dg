@@ -696,13 +696,182 @@ export const getDepartementStatsGlobales = async (departementId) => {
       }
     ] : []
 
-    // 8. Taux de réussite (mocké pour l'instant - nécessite calcul complexe avec notes)
-    const tauxReussiteData = filieres
-      .filter(f => studentsData.find(s => s.name === f.code))
-      .map(f => ({
-        filiere: f.code,
-        tauxReussite: Math.floor(Math.random() * 15) + 75 // 75-90%
-      }))
+    // 8. Taux de réussite par filière (calcul dynamique basé sur les notes réelles)
+    // Utiliser une requête SQL plus efficace pour calculer les moyennes
+    const tauxReussiteData = await Promise.all(
+      filieres
+        .filter(f => studentsData.find(s => s.name === f.code))
+        .map(async (f) => {
+          try {
+            // Récupérer les classes de cette filière
+            const { data: classes } = await supabaseAdmin
+              .from('classes')
+              .select('id')
+              .eq('filiere_id', f.id)
+
+            if (!classes || classes.length === 0) {
+              return {
+                filiere: f.code,
+                tauxReussite: 0,
+                etudiantsAvecNotes: 0,
+                totalEtudiants: 0
+              }
+            }
+
+            const classeIds = classes.map(c => c.id)
+            
+            // Récupérer les étudiants de cette filière
+            const { data: inscriptionsFiliere } = await supabaseAdmin
+              .from('inscriptions')
+              .select('etudiants(id)')
+              .in('classe_id', classeIds)
+              .eq('statut', 'INSCRIT')
+
+            const totalEtudiantsFiliere = inscriptionsFiliere?.length || 0
+
+            if (totalEtudiantsFiliere === 0) {
+              return {
+                filiere: f.code,
+                tauxReussite: 0,
+                etudiantsAvecNotes: 0,
+                totalEtudiants: 0
+              }
+            }
+
+            const etudiantIds = inscriptionsFiliere.map(i => i.etudiants?.id).filter(Boolean)
+            
+            if (etudiantIds.length === 0) {
+              return {
+                filiere: f.code,
+                tauxReussite: 0,
+                etudiantsAvecNotes: 0,
+                totalEtudiants: totalEtudiantsFiliere
+              }
+            }
+
+            // Pour chaque étudiant, calculer sa moyenne générale en utilisant la logique du relevé
+            // On va utiliser une approche simplifiée : récupérer les notes et calculer les moyennes
+            let etudiantsReussis = 0
+            let etudiantsAvecNotes = 0
+
+            // Pour chaque classe, calculer les moyennes des étudiants
+            for (const classe of classes) {
+              // Récupérer les modules de cette filière et semestre
+              const { data: modules } = await supabaseAdmin
+                .from('modules')
+                .select('id, code, credit, semestre')
+                .eq('filiere_id', f.id)
+                .eq('departement_id', departementId)
+
+              if (!modules || modules.length === 0) continue
+
+              // Pour chaque semestre, calculer les moyennes
+              const semestres = [...new Set(modules.map(m => m.semestre))]
+              
+              for (const semestre of semestres) {
+                const modulesSemestre = modules.filter(m => m.semestre === semestre)
+                const moduleIds = modulesSemestre.map(m => m.id)
+
+                // Récupérer les paramètres de notation
+                const { data: parametresList } = await supabaseAdmin
+                  .from('parametres_notation')
+                  .select('module_id, evaluations')
+                  .in('module_id', moduleIds)
+                  .eq('semestre', semestre)
+
+                const parametresMap = {}
+                if (parametresList) {
+                  parametresList.forEach(p => {
+                    parametresMap[p.module_id] = p.evaluations || []
+                  })
+                }
+
+                // Récupérer les notes pour cette classe et ce semestre
+                const { data: notes } = await supabaseAdmin
+                  .from('notes')
+                  .select('etudiant_id, module_id, valeur, evaluation_id')
+                  .eq('classe_id', classe.id)
+                  .eq('semestre', semestre)
+                  .in('module_id', moduleIds)
+
+                if (!notes || notes.length === 0) continue
+
+                // Grouper par étudiant
+                const notesParEtudiant = {}
+                notes.forEach(note => {
+                  if (!notesParEtudiant[note.etudiant_id]) {
+                    notesParEtudiant[note.etudiant_id] = []
+                  }
+                  notesParEtudiant[note.etudiant_id].push(note)
+                })
+
+                // Calculer les moyennes pour chaque étudiant
+                Object.keys(notesParEtudiant).forEach(etudiantId => {
+                  const notesEtudiant = notesParEtudiant[etudiantId]
+                  let totalPointsSemestre = 0
+                  let totalCreditsSemestre = 0
+
+                  modulesSemestre.forEach(module => {
+                    const evaluationsConfig = parametresMap[module.id] || []
+                    let totalPointsModule = 0
+                    let totalCoeffModule = 0
+
+                    evaluationsConfig.forEach(evaluation => {
+                      for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+                        const evalId = `${evaluation.id}_${i}`
+                        const noteEntry = notesEtudiant.find(n =>
+                          n.module_id === module.id &&
+                          n.evaluation_id === evalId
+                        )
+
+                        if (noteEntry) {
+                          const noteSur20 = (noteEntry.valeur / evaluation.noteMax) * 20
+                          totalPointsModule += noteSur20 * evaluation.coefficient
+                          totalCoeffModule += evaluation.coefficient
+                        }
+                      }
+                    })
+
+                    if (totalCoeffModule > 0) {
+                      const moyenneModule = totalPointsModule / totalCoeffModule
+                      totalPointsSemestre += moyenneModule * module.credit
+                      totalCreditsSemestre += module.credit
+                    }
+                  })
+
+                  if (totalCreditsSemestre > 0) {
+                    const moyenneGenerale = totalPointsSemestre / totalCreditsSemestre
+                    if (moyenneGenerale >= 10) {
+                      etudiantsReussis++
+                    }
+                    etudiantsAvecNotes++
+                  }
+                })
+              }
+            }
+
+            const tauxReussite = etudiantsAvecNotes > 0 
+              ? Math.round((etudiantsReussis / etudiantsAvecNotes) * 100)
+              : 0
+
+            return {
+              filiere: f.code,
+              tauxReussite,
+              etudiantsAvecNotes,
+              totalEtudiants: totalEtudiantsFiliere,
+              etudiantsReussis
+            }
+          } catch (error) {
+            console.error(`Erreur calcul taux réussite pour ${f.code}:`, error)
+            return {
+              filiere: f.code,
+              tauxReussite: 0,
+              etudiantsAvecNotes: 0,
+              totalEtudiants: 0
+            }
+          }
+        })
+    )
 
     return {
       success: true,
@@ -720,6 +889,206 @@ export const getDepartementStatsGlobales = async (departementId) => {
   } catch (error) {
     console.error('Erreur getDepartementStatsGlobales:', error)
     return { success: false, error: 'Erreur récupération stats' }
+  }
+}
+
+// Récupérer les meilleurs étudiants par filière
+export const getMeilleursEtudiantsParFiliere = async (departementId) => {
+  try {
+    if (!departementId) {
+      return { success: false, error: 'ID de département manquant' }
+    }
+
+    // 1. Récupérer les filières du département
+    const { data: filieres } = await supabaseAdmin
+      .from('filieres')
+      .select('id, code, nom')
+      .eq('departement_id', departementId)
+
+    if (!filieres || filieres.length === 0) {
+      return { success: true, data: {} }
+    }
+
+    const result = {}
+
+    // Pour chaque filière, calculer les meilleurs étudiants
+    for (const filiere of filieres) {
+      try {
+        // Récupérer les classes de cette filière
+        const { data: classes } = await supabaseAdmin
+          .from('classes')
+          .select('id, nom, code, niveaux(code)')
+          .eq('filiere_id', filiere.id)
+
+        if (!classes || classes.length === 0) {
+          result[filiere.id] = []
+          continue
+        }
+
+        const classeIds = classes.map(c => c.id)
+
+        // Pour chaque classe, calculer les moyennes des étudiants
+        const etudiantsAvecMoyennes = []
+
+        for (const classe of classes) {
+          const niveauCode = classe.niveaux?.code
+          if (!niveauCode) continue
+
+          // Déterminer les semestres autorisés pour ce niveau
+          const semestresAutorises = {
+            'L1': ['S1', 'S2'],
+            'L2': ['S3', 'S4'],
+            'L3': ['S5', 'S6']
+          }[niveauCode] || []
+
+          // Pour chaque semestre, calculer les moyennes
+          for (const semestre of semestresAutorises) {
+            // Récupérer les modules de cette filière et ce semestre
+            const { data: modules } = await supabaseAdmin
+              .from('modules')
+              .select('id, code, nom, credit, semestre')
+              .eq('filiere_id', filiere.id)
+              .eq('departement_id', departementId)
+              .eq('semestre', semestre)
+
+            if (!modules || modules.length === 0) continue
+
+            const moduleIds = modules.map(m => m.id)
+
+            // Récupérer les paramètres de notation
+            const { data: parametresList } = await supabaseAdmin
+              .from('parametres_notation')
+              .select('module_id, evaluations')
+              .in('module_id', moduleIds)
+              .eq('semestre', semestre)
+
+            const parametresMap = {}
+            if (parametresList) {
+              parametresList.forEach(p => {
+                parametresMap[p.module_id] = p.evaluations || []
+              })
+            }
+
+            // Récupérer les notes pour cette classe et ce semestre
+            const { data: notes } = await supabaseAdmin
+              .from('notes')
+              .select('etudiant_id, module_id, valeur, evaluation_id')
+              .eq('classe_id', classe.id)
+              .eq('semestre', semestre)
+              .in('module_id', moduleIds)
+
+            if (!notes || notes.length === 0) continue
+
+            // Calculer les moyennes pour chaque étudiant
+            // Récupérer les inscriptions de cette classe
+            const { data: inscriptionsClasse } = await supabaseAdmin
+              .from('inscriptions')
+              .select('etudiants(id, nom, prenom, matricule)')
+              .eq('classe_id', classe.id)
+              .eq('statut', 'INSCRIT')
+
+            const etudiantsClasse = inscriptionsClasse
+              ?.map(i => i.etudiants)
+              .filter(e => e !== null && e !== undefined) || []
+
+            etudiantsClasse.forEach(etudiant => {
+              let totalPointsSemestre = 0
+              let totalCreditsSemestre = 0
+              let totalCreditsValides = 0
+
+              modules.forEach(module => {
+                const evaluationsConfig = parametresMap[module.id] || []
+                let totalPointsModule = 0
+                let totalCoeffModule = 0
+
+                evaluationsConfig.forEach(evaluation => {
+                  for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+                    const evalId = `${evaluation.id}_${i}`
+                    const noteEntry = notes.find(n =>
+                      n.etudiant_id === etudiant.id &&
+                      n.module_id === module.id &&
+                      n.evaluation_id === evalId
+                    )
+
+                    if (noteEntry) {
+                      const noteSur20 = (noteEntry.valeur / evaluation.noteMax) * 20
+                      totalPointsModule += noteSur20 * evaluation.coefficient
+                      totalCoeffModule += evaluation.coefficient
+                    }
+                  }
+                })
+
+                if (totalCoeffModule > 0) {
+                  const moyenneModule = totalPointsModule / totalCoeffModule
+                  if (moyenneModule >= 10) {
+                    totalCreditsValides += module.credit
+                  }
+                  totalPointsSemestre += moyenneModule * module.credit
+                  totalCreditsSemestre += module.credit
+                }
+              })
+
+              if (totalCreditsSemestre > 0) {
+                const moyenneGenerale = totalPointsSemestre / totalCreditsSemestre
+                const statut = moyenneGenerale >= 10 ? 'VALIDE' : 'AJOURNE'
+
+                // Vérifier si l'étudiant existe déjà dans la liste (par semestre)
+                const key = `${etudiant.id}_${semestre}`
+                const existingIndex = etudiantsAvecMoyennes.findIndex(e => 
+                  e.id === etudiant.id && e.semestre === semestre
+                )
+                
+                if (existingIndex >= 0) {
+                  // Mettre à jour si la moyenne est meilleure
+                  if (moyenneGenerale > etudiantsAvecMoyennes[existingIndex].moyenneGenerale) {
+                    etudiantsAvecMoyennes[existingIndex] = {
+                      ...etudiant,
+                      classe: classe.nom || classe.code,
+                      semestre,
+                      moyenneGenerale: parseFloat(moyenneGenerale.toFixed(2)),
+                      totalCreditsValides,
+                      statut
+                    }
+                  }
+                } else {
+                  etudiantsAvecMoyennes.push({
+                    ...etudiant,
+                    classe: classe.nom || classe.code,
+                    semestre,
+                    moyenneGenerale: parseFloat(moyenneGenerale.toFixed(2)),
+                    totalCreditsValides,
+                    statut
+                  })
+                }
+              }
+            })
+          }
+        }
+
+        // Grouper par étudiant et prendre la meilleure moyenne
+        const etudiantsUniques = {}
+        etudiantsAvecMoyennes.forEach(etudiant => {
+          if (!etudiantsUniques[etudiant.id] || 
+              etudiant.moyenneGenerale > etudiantsUniques[etudiant.id].moyenneGenerale) {
+            etudiantsUniques[etudiant.id] = etudiant
+          }
+        })
+
+        // Trier par moyenne générale décroissante
+        const etudiantsTries = Object.values(etudiantsUniques)
+          .sort((a, b) => (b.moyenneGenerale || 0) - (a.moyenneGenerale || 0))
+
+        result[filiere.id] = etudiantsTries || []
+      } catch (error) {
+        console.error(`Erreur calcul meilleurs étudiants pour ${filiere.code}:`, error)
+        result[filiere.id] = []
+      }
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error('Erreur getMeilleursEtudiantsParFiliere:', error)
+    return { success: false, error: 'Erreur lors de la récupération des meilleurs étudiants' }
   }
 }
 

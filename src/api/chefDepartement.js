@@ -15,6 +15,17 @@ const request = async (endpoint, options = {}) => {
       headers
     })
 
+    // Vérifier si la réponse est du JSON
+    const contentType = response.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text()
+      console.error('Réponse non-JSON reçue:', text)
+      return {
+        success: false,
+        error: `Erreur serveur (${response.status}): ${text.substring(0, 100)}`
+      }
+    }
+
     const data = await response.json()
     return data
   } catch (error) {
@@ -35,6 +46,31 @@ export const getFilieres = async () => {
 
 export const getDashboardStats = async () => {
   return request('/stats')
+}
+
+export const getMeilleursEtudiantsParFiliere = async () => {
+  return request('/statistiques/meilleurs-etudiants')
+}
+
+// ============================================
+// BULLETINS
+// ============================================
+
+export const verifierEtatBulletins = async (classeId, semestre) => {
+  return request(`/bulletins/verifier/${classeId}?semestre=${semestre}`)
+}
+
+export const getEtatBulletinsToutesClasses = async (semestre = null) => {
+  const url = semestre 
+    ? `/bulletins/etat-toutes-classes?semestre=${semestre}`
+    : '/bulletins/etat-toutes-classes'
+  return request(url)
+}
+
+export const genererBulletins = async (classeId, semestre) => {
+  return request(`/bulletins/generer/${classeId}?semestre=${semestre}`, {
+    method: 'POST'
+  })
 }
 
 export const getNiveaux = async () => {

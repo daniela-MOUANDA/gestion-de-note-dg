@@ -131,7 +131,8 @@ const ClassesView = () => {
     code: '',
     nom: '',
     filiereId: '',
-    niveauId: ''
+    niveauId: '',
+    nombreModules: 0
   })
 
   useEffect(() => {
@@ -192,7 +193,8 @@ const ClassesView = () => {
       code: '',
       nom: '',
       filiereId: filieres[0]?.id || '',
-      niveauId: niveaux[0]?.id || ''
+      niveauId: niveaux[0]?.id || '',
+      nombreModules: 0
     })
     setShowModal(true)
   }
@@ -203,7 +205,8 @@ const ClassesView = () => {
       code: classe.code,
       nom: classe.nom,
       filiereId: classe.filiereId,
-      niveauId: classe.niveauId
+      niveauId: classe.niveauId,
+      nombreModules: classe.nombreModules || 0
     })
     setShowModal(true)
   }
@@ -446,6 +449,18 @@ const ClassesView = () => {
                     <option key={niveau.id} value={niveau.id}>{niveau.code} - {niveau.nom}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de modules</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.nombreModules}
+                  onChange={(e) => setFormData({ ...formData, nombreModules: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: 20"
+                />
+                <p className="text-xs text-slate-500 mt-1">Nombre de modules requis pour générer les bulletins</p>
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <button

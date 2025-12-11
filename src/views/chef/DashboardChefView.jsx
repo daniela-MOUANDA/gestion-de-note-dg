@@ -315,28 +315,68 @@ const DashboardChefView = () => {
               </ResponsiveContainer>
             </div>
 
-            {/* Taux de réussite (Mocké pour l'instant) */}
+            {/* Taux de réussite par filière */}
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
               <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <span className="w-1 h-6 bg-green-600 rounded"></span>
-                Taux de réussite par filière (Estimé)
+                Taux de réussite par filière
               </h3>
-              <div className="space-y-6 mt-8">
-                {graphData.tauxReussiteData.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-semibold text-slate-700">{item.filiere}</span>
-                      <span className="text-2xl font-bold text-green-600">{item.tauxReussite}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-green-500 to-green-600 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                        style={{ width: `${item.tauxReussite}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {graphData.tauxReussiteData && graphData.tauxReussiteData.length > 0 ? (
+                <div className="space-y-6 mt-8">
+                  {graphData.tauxReussiteData.map((item, idx) => {
+                    const taux = item.tauxReussite || 0
+                    const colorClass = taux >= 70 ? 'from-green-500 to-green-600' : 
+                                      taux >= 50 ? 'from-yellow-500 to-yellow-600' : 
+                                      'from-red-500 to-red-600'
+                    const textColor = taux >= 70 ? 'text-green-600' : 
+                                     taux >= 50 ? 'text-yellow-600' : 
+                                     'text-red-600'
+                    
+                    return (
+                      <div key={idx} className="space-y-2">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-slate-700">{item.filiere}</span>
+                            {item.etudiantsAvecNotes !== undefined && (
+                              <span className="text-xs text-slate-500">
+                                ({item.etudiantsAvecNotes || 0} étudiant{item.etudiantsAvecNotes !== 1 ? 's' : ''} avec notes)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-2xl font-bold ${textColor}`}>{taux}%</span>
+                            {item.etudiantsReussis !== undefined && item.etudiantsAvecNotes > 0 && (
+                              <p className="text-xs text-slate-500">
+                                {item.etudiantsReussis}/{item.etudiantsAvecNotes} réussis
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-6 overflow-hidden relative">
+                          <div
+                            className={`bg-gradient-to-r ${colorClass} h-6 rounded-full transition-all duration-500 flex items-center justify-end pr-3`}
+                            style={{ width: `${Math.min(taux, 100)}%` }}
+                          >
+                            {taux > 10 && (
+                              <span className="text-xs font-semibold text-white">{taux}%</span>
+                            )}
+                          </div>
+                          {taux === 0 && item.etudiantsAvecNotes === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs text-slate-400">Aucune note disponible</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <p>Aucune donnée de taux de réussite disponible</p>
+                  <p className="text-sm mt-2">Les notes doivent être saisies pour calculer le taux de réussite</p>
+                </div>
+              )}
             </div>
           </div>
         </main>

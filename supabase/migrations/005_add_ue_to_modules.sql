@@ -18,3 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_modules_ue ON modules(ue);
 COMMENT ON COLUMN modules.ue IS 'Unité d''Enseignement (UE1 ou UE2)';
 
 
+
+
+
+

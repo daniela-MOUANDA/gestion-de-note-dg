@@ -1,17 +1,18 @@
+import * as XLSX from 'xlsx'
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
-  faGraduationCap, faSave, faEdit, faTrash, faSpinner, faFileExcel, 
-  faUpload, faPlus, faCog, faCheckCircle, faTimes, faChartLine 
+import {
+  faGraduationCap, faSave, faEdit, faTrash, faSpinner, faFileExcel,
+  faUpload, faPlus, faCog, faCheckCircle, faTimes, faChartLine, faDownload
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
-import { 
-  getClasses, 
-  getModules, 
+import {
+  getClasses,
+  getModules,
   getEtudiantsByClasse,
   getParametresNotation,
   saveParametresNotation,
@@ -35,8 +36,9 @@ const NotesView = () => {
   const [saving, setSaving] = useState(false)
   const [showParametresModal, setShowParametresModal] = useState(false)
   const [showNotesModal, setShowNotesModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
-  
+
   const [formParametres, setFormParametres] = useState({
     evaluations: [
       { id: Date.now(), type: 'TP', noteMax: 20, nombreEvaluations: 2, coefficient: 1 }
@@ -100,7 +102,7 @@ const NotesView = () => {
         }
 
         const semestresAutorises = correspondanceNiveauSemestre[niveauCode] || []
-        
+
         // Vérification de sécurité (ne devrait normalement jamais se produire car le dropdown est filtré)
         if (!semestresAutorises.includes(selectedSemestre)) {
           console.error(`Semestre ${selectedSemestre} non autorisé pour ${niveauCode}`)
@@ -118,7 +120,7 @@ const NotesView = () => {
             return moduleFiliereId === filiereId && module.semestre === selectedSemestre
           })
           setModules(modulesFiltered)
-          
+
           // Réinitialiser le module sélectionné si il n'est plus dans la liste
           if (selectedModule && !modulesFiltered.find(m => m.id === selectedModule)) {
             setSelectedModule('')
@@ -145,7 +147,7 @@ const NotesView = () => {
   const loadEtudiantsAndNotes = async () => {
     try {
       setLoading(true)
-      
+
       // Charger les étudiants
       const etudiantsResult = await getEtudiantsByClasse(selectedClasse)
       if (etudiantsResult.success) {
@@ -173,9 +175,9 @@ const NotesView = () => {
           const etudiantId = note.etudiantId || note.etudiant_id
           const evaluationId = note.evaluationId || note.evaluation_id
           const valeur = note.valeur
-          
+
           console.log('📝 Note organisée:', { etudiantId, evaluationId, valeur })
-          
+
           if (!notesOrganisees[etudiantId]) {
             notesOrganisees[etudiantId] = {}
           }
@@ -233,10 +235,10 @@ const NotesView = () => {
 
   const handleSaveParametres = async () => {
     // Vérifier que toutes les évaluations ont une note max et un coefficient
-    const hasInvalidEvaluation = formParametres.evaluations.some(e => 
+    const hasInvalidEvaluation = formParametres.evaluations.some(e =>
       !e.noteMax || !e.coefficient || e.nombreEvaluations < 1
     )
-    
+
     if (hasInvalidEvaluation) {
       showAlert('Veuillez remplir tous les champs pour chaque évaluation', 'error')
       return
@@ -245,7 +247,7 @@ const NotesView = () => {
     // Vérifier qu'il n'y a pas de types en double
     const types = formParametres.evaluations.map(e => e.type)
     const duplicates = types.filter((type, index) => types.indexOf(type) !== index)
-    
+
     if (duplicates.length > 0) {
       const typeLabel = typesEvaluation.find(t => t.value === duplicates[0])?.label || duplicates[0]
       showAlert(`⚠️ Vous avez créé plusieurs lignes pour "${typeLabel}". Supprimez les doublons et créez UNE SEULE ligne avec le nombre total d'évaluations.`, 'warning')
@@ -286,7 +288,7 @@ const NotesView = () => {
     try {
       setSaving(true)
       const notesEtudiant = notes[selectedEtudiant.id] || {}
-      
+
       // Préparer les notes pour l'envoi
       const notesToSave = Object.entries(notesEtudiant).map(([evaluationId, valeur]) => ({
         etudiantId: selectedEtudiant.id,
@@ -299,7 +301,7 @@ const NotesView = () => {
       })).filter(note => note.valeur && !isNaN(note.valeur))
 
       console.log('📤 Envoi des notes:', { notesToSave, selectedEtudiant, selectedModule, selectedClasse, selectedSemestre })
-      
+
       if (notesToSave.length === 0) {
         showAlert('Veuillez saisir au moins une note', 'warning')
         setSaving(false)
@@ -323,6 +325,55 @@ const NotesView = () => {
     }
   }
 
+  const handleSaveAll = async () => {
+    if (!selectedClasse || !selectedModule || !selectedSemestre) return
+
+    if (!window.confirm('Voulez-vous vraiment enregistrer toutes les notes affichées ?')) {
+      return
+    }
+
+    try {
+      setSaving(true)
+      const allNotesToSave = []
+
+      Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
+        Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
+          if (valeur !== undefined && valeur !== '' && !isNaN(parseFloat(valeur))) {
+            allNotesToSave.push({
+              etudiantId,
+              moduleId: selectedModule,
+              classeId: selectedClasse,
+              semestre: selectedSemestre,
+              evaluationId,
+              valeur: parseFloat(valeur),
+              anneeAcademique: '2024-2025'
+            })
+          }
+        })
+      })
+
+      if (allNotesToSave.length === 0) {
+        showAlert('Aucune note à enregistrer', 'warning')
+        setSaving(false)
+        return
+      }
+
+      const result = await saveNotes(allNotesToSave)
+
+      if (result.success) {
+        showAlert('Toutes les notes ont été enregistrées avec succès', 'success')
+        loadEtudiantsAndNotes()
+      } else {
+        showAlert(result.error || 'Erreur lors de la sauvegarde globale', 'error')
+      }
+    } catch (error) {
+      console.error('Erreur:', error)
+      showAlert('Erreur lors de la sauvegarde globale', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const calculerMoyenne = (etudiantId) => {
     if (!parametres || !notes[etudiantId]) return null
 
@@ -333,7 +384,7 @@ const NotesView = () => {
       for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
         const evalId = `${evaluation.id}_${i}`
         const note = notes[etudiantId]?.[evalId]
-        
+
         if (note !== undefined && note !== null && note !== '') {
           // Convertir la note sur 20
           const noteSur20 = (parseFloat(note) / evaluation.noteMax) * 20
@@ -353,12 +404,12 @@ const NotesView = () => {
   // Obtenir les semestres autorisés pour la classe sélectionnée
   const getSemestresAutorises = () => {
     if (!selectedClasse) return []
-    
+
     const classeSelectionnee = classes.find(c => c.id === selectedClasse)
     if (!classeSelectionnee) return []
-    
+
     const niveauCode = classeSelectionnee.niveauCode || classeSelectionnee.niveaux?.code
-    
+
     const correspondanceNiveauSemestre = {
       'L1': [
         { value: 'S1', label: 'Semestre 1 (L1)' },
@@ -373,7 +424,7 @@ const NotesView = () => {
         { value: 'S6', label: 'Semestre 6 (L3)' }
       ]
     }
-    
+
     return correspondanceNiveauSemestre[niveauCode] || []
   }
 
@@ -394,6 +445,172 @@ const NotesView = () => {
     )
   }
 
+  // Gestion de l'import Excel
+  const handleImportClick = () => {
+    if (!selectedClasse || !selectedModule || !selectedSemestre) {
+      showAlert('Veuillez d\'abord sélectionner une classe, un module et un semestre', 'warning')
+      return
+    }
+    if (!parametres) {
+      showAlert('Veuillez d\'abord configurer les paramètres de notation', 'warning')
+      return
+    }
+    setShowImportModal(true)
+  }
+
+  const handleDownloadTemplate = () => {
+    if (!etudiants.length || !parametres) return
+
+    // 1. Préparer les en-têtes
+    const headers = ['Matricule', 'Nom', 'Prénom']
+    const evalIds = []
+
+    parametres.evaluations.forEach(evaluation => {
+      const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
+      for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+        headers.push(`${typeLabel} ${i} (/${evaluation.noteMax})`)
+        evalIds.push(`${evaluation.id}_${i}`) // Stocker l'ID pour le mapping inverse si besoin
+      }
+    })
+
+    // 2. Préparer les données
+    const data = etudiants.map(etudiant => {
+      const row = {
+        'Matricule': etudiant.matricule,
+        'Nom': etudiant.nom,
+        'Prénom': etudiant.prenom
+      }
+      // Initialiser les colonnes de notes à vide
+      headers.slice(3).forEach(h => row[h] = '')
+      return row
+    })
+
+    // 3. Créer le workbook
+    const ws = XLSX.utils.json_to_sheet(data, { header: headers })
+
+    // Ajuster la largeur des colonnes
+    const wscols = [
+      { wch: 15 }, // Matricule
+      { wch: 20 }, // Nom
+      { wch: 20 }, // Prénom
+      ...headers.slice(3).map(() => ({ wch: 15 })) // Colonnes de notes
+    ]
+    ws['!cols'] = wscols
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Notes")
+
+    // 4. Télécharger
+    XLSX.writeFile(wb, `Notes_${classes.find(c => c.id === selectedClasse)?.nom}_${selectedModule}_${selectedSemestre}.xlsx`)
+  }
+
+  const processExcelData = (jsonData) => {
+    const newNotes = { ...notes }
+    let count = 0
+    let errors = []
+
+    // Debug: Voir les colonnes du fichier importé
+    if (jsonData.length > 0) {
+      console.log('Colonnes trouvées dans le fichier:', Object.keys(jsonData[0]))
+    }
+
+    // Récupérer les mapping des colonnes
+    const evalMapping = {}
+
+    // Reconstruire les en-têtes attendus
+    parametres.evaluations.forEach(evaluation => {
+      const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
+      for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+        // Le header exact attendu
+        const headerName = `${typeLabel} ${i} (/${evaluation.noteMax})`
+
+        evalMapping[headerName] = {
+          id: `${evaluation.id}_${i}`,
+          max: evaluation.noteMax,
+          // Version normalisée pour la recherche (minuscule, sans espaces multiples)
+          normalized: headerName.toLowerCase().replace(/\s+/g, ' ').trim()
+        }
+      }
+    })
+
+    console.log('Mapping attendu:', evalMapping)
+
+    jsonData.forEach((row, index) => {
+      // Recherche flexible du matricule (parfois "Matricule " avec espace)
+      const matriculeKey = Object.keys(row).find(k => k.trim().toLowerCase() === 'matricule')
+      const matricule = matriculeKey ? row[matriculeKey] : null
+
+      if (!matricule) return
+
+      const etudiant = etudiants.find(e => e.matricule == matricule) // == pour gérer string/number
+      if (!etudiant) {
+        errors.push(`Ligne ${index + 2}: Étudiant avec matricule ${matricule} non trouvé`)
+        return
+      }
+
+      if (!newNotes[etudiant.id]) newNotes[etudiant.id] = {}
+
+      // Parcourir chaque colonne attendue
+      Object.keys(evalMapping).forEach(expectedHeader => {
+        const config = evalMapping[expectedHeader]
+
+        // Chercher la colonne correspondante dans la ligne Excel
+        // On cherche une clé qui correspond "à peu près" au header attendu
+        const rowKey = Object.keys(row).find(k => {
+          const normalizedKey = k.toLowerCase().replace(/\s+/g, ' ').trim()
+          return normalizedKey === config.normalized || k.trim() === expectedHeader.trim()
+        })
+
+        if (rowKey && row[rowKey] !== undefined) {
+          const val = row[rowKey]
+
+          if (val === '' || val === null) return
+
+          const numVal = parseFloat(val)
+          if (isNaN(numVal)) {
+            errors.push(`Ligne ${index + 2}: Note invalide pour ${expectedHeader} (${etudiant.nom})`)
+          } else if (numVal < 0 || numVal > config.max) {
+            errors.push(`Ligne ${index + 2}: Note hors limites pour ${expectedHeader} (${etudiant.nom}). Max: ${config.max}`)
+          } else {
+            console.log(`Import: ${etudiant.nom} - ${expectedHeader} (${config.id}) = ${numVal}`)
+            newNotes[etudiant.id][config.id] = numVal
+            count++
+          }
+        }
+      })
+    })
+
+    if (errors.length > 0) {
+      showAlert(`Import effectué avec des erreurs :\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`, 'warning')
+    } else {
+      showAlert(`${count} notes importées avec succès pour ${jsonData.length} étudiants`, 'success')
+    }
+
+    setNotes(newNotes)
+    setShowImportModal(false)
+  }
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result
+        const wb = XLSX.read(bstr, { type: 'binary' })
+        const wsname = wb.SheetNames[0]
+        const ws = wb.Sheets[wsname]
+        const data = XLSX.utils.sheet_to_json(ws)
+        processExcelData(data)
+      } catch (error) {
+        console.error('Erreur lecture Excel:', error)
+        showAlert('Erreur lors de la lecture du fichier Excel', 'error')
+      }
+    }
+    reader.readAsBinaryString(file)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <AdminSidebar />
@@ -405,13 +622,23 @@ const NotesView = () => {
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Gestion des Notes</h1>
               <p className="text-sm text-slate-600">Ajoutez et gérez les notes des étudiants par classe et module</p>
             </div>
-            <button
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-              onClick={() => showAlert('Fonctionnalité d\'import Excel en cours de développement', 'info')}
-            >
-              <FontAwesomeIcon icon={faUpload} />
-              Importer Excel
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                onClick={handleSaveAll}
+                disabled={saving || !selectedClasse}
+              >
+                <FontAwesomeIcon icon={faSave} />
+                Tout Enregistrer
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                onClick={handleImportClick}
+              >
+                <FontAwesomeIcon icon={faUpload} />
+                Importer Excel
+              </button>
+            </div>
           </div>
 
           {/* Filtres */}
@@ -519,8 +746,8 @@ const NotesView = () => {
                           </th>
                           {(parametres.evaluations || []).map((evaluation, evalIndex) => (
                             Array.from({ length: evaluation.nombreEvaluations }).map((_, i) => (
-                              <th key={`${evaluation.id}_${i+1}`} className="px-4 py-3 text-center text-xs font-semibold text-slate-700">
-                                {typesEvaluation.find(t => t.value === evaluation.type)?.label.substring(0, 10)} {i+1}
+                              <th key={`${evaluation.id}_${i + 1}`} className="px-4 py-3 text-center text-xs font-semibold text-slate-700">
+                                {typesEvaluation.find(t => t.value === evaluation.type)?.label.substring(0, 10)} {i + 1}
                                 <br />
                                 <span className="text-xs text-slate-500">
                                   (/{evaluation.noteMax} • Coef: {evaluation.coefficient})
@@ -539,8 +766,8 @@ const NotesView = () => {
                       <tbody className="divide-y divide-slate-200">
                         {etudiants.length === 0 ? (
                           <tr>
-                            <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3} 
-                                className="px-6 py-12 text-center text-slate-500">
+                            <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3}
+                              className="px-6 py-12 text-center text-slate-500">
                               Aucun étudiant trouvé dans cette classe.
                             </td>
                           </tr>
@@ -562,15 +789,14 @@ const NotesView = () => {
                                 </td>
                                 {(parametres.evaluations || []).map((evaluation, evalIndex) => (
                                   Array.from({ length: evaluation.nombreEvaluations || 0 }).map((_, i) => {
-                                    const evalId = `${evaluation.id}_${i+1}`
+                                    const evalId = `${evaluation.id}_${i + 1}`
                                     const note = notes[etudiant.id]?.[evalId]
                                     const noteSur20 = note ? (parseFloat(note) / evaluation.noteMax) * 20 : null
                                     return (
                                       <td key={`${etudiant.id}_${evalId}`} className="px-4 py-3 text-center">
                                         {note !== undefined && note !== null && note !== '' ? (
-                                          <span className={`inline-block px-3 py-1 rounded text-sm font-semibold ${
-                                            noteSur20 >= 10 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                          }`}>
+                                          <span className={`inline-block px-3 py-1 rounded text-sm font-semibold ${noteSur20 >= 10 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}>
                                             {parseFloat(note).toFixed(2)}/{evaluation.noteMax}
                                           </span>
                                         ) : (
@@ -582,9 +808,8 @@ const NotesView = () => {
                                 ))}
                                 <td className="px-4 py-3 text-center bg-blue-50">
                                   {moyenne ? (
-                                    <span className={`inline-block px-3 py-1.5 rounded-lg text-sm font-bold ${
-                                      parseFloat(moyenne) >= 10 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-                                    }`}>
+                                    <span className={`inline-block px-3 py-1.5 rounded-lg text-sm font-bold ${parseFloat(moyenne) >= 10 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                                      }`}>
                                       {moyenne}/20
                                     </span>
                                   ) : (
@@ -673,66 +898,66 @@ const NotesView = () => {
                       const types = formParametres.evaluations.map(e => e.type)
                       const isDuplicate = types.filter(t => t === evaluation.type).length > 1
                       return (
-                      <tr key={evaluation.id} className={`border-b border-slate-200 hover:bg-slate-50 ${isDuplicate ? 'bg-orange-50' : ''}`}>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
+                        <tr key={evaluation.id} className={`border-b border-slate-200 hover:bg-slate-50 ${isDuplicate ? 'bg-orange-50' : ''}`}>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={evaluation.type}
+                                onChange={(e) => modifierEvaluation(evaluation.id, 'type', e.target.value)}
+                                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDuplicate ? 'border-orange-500 border-2' : 'border-slate-300'}`}
+                              >
+                                {typesEvaluation.map(type => (
+                                  <option key={type.value} value={type.value}>{type.label}</option>
+                                ))}
+                              </select>
+                              {isDuplicate && (
+                                <span className="text-orange-600 text-xs font-bold" title="Type en double!">⚠️</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={evaluation.nombreEvaluations}
+                              onChange={(e) => modifierEvaluation(evaluation.id, 'nombreEvaluations', parseInt(e.target.value) || 1)}
+                              min="1"
+                              max="10"
+                              className="w-full px-3 py-1.5 text-sm text-center border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
                             <select
-                              value={evaluation.type}
-                              onChange={(e) => modifierEvaluation(evaluation.id, 'type', e.target.value)}
-                              className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDuplicate ? 'border-orange-500 border-2' : 'border-slate-300'}`}
+                              value={evaluation.noteMax}
+                              onChange={(e) => modifierEvaluation(evaluation.id, 'noteMax', parseFloat(e.target.value))}
+                              className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                              {typesEvaluation.map(type => (
-                                <option key={type.value} value={type.value}>{type.label}</option>
-                              ))}
+                              <option value="10">/10</option>
+                              <option value="20">/20</option>
                             </select>
-                            {isDuplicate && (
-                              <span className="text-orange-600 text-xs font-bold" title="Type en double!">⚠️</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              value={evaluation.coefficient}
+                              onChange={(e) => modifierEvaluation(evaluation.id, 'coefficient', parseFloat(e.target.value) || 1)}
+                              min="0.5"
+                              max="10"
+                              step="0.5"
+                              className="w-full px-3 py-1.5 text-sm text-center border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {formParametres.evaluations.length > 1 && (
+                              <button
+                                onClick={() => supprimerEvaluation(evaluation.id)}
+                                className="text-red-600 hover:bg-red-100 p-1.5 rounded-lg transition-colors"
+                                title="Supprimer"
+                              >
+                                <FontAwesomeIcon icon={faTimes} />
+                              </button>
                             )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            value={evaluation.nombreEvaluations}
-                            onChange={(e) => modifierEvaluation(evaluation.id, 'nombreEvaluations', parseInt(e.target.value) || 1)}
-                            min="1"
-                            max="10"
-                            className="w-full px-3 py-1.5 text-sm text-center border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            value={evaluation.noteMax}
-                            onChange={(e) => modifierEvaluation(evaluation.id, 'noteMax', parseFloat(e.target.value))}
-                            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="10">/10</option>
-                            <option value="20">/20</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            value={evaluation.coefficient}
-                            onChange={(e) => modifierEvaluation(evaluation.id, 'coefficient', parseFloat(e.target.value) || 1)}
-                            min="0.5"
-                            max="10"
-                            step="0.5"
-                            className="w-full px-3 py-1.5 text-sm text-center border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {formParametres.evaluations.length > 1 && (
-                            <button
-                              onClick={() => supprimerEvaluation(evaluation.id)}
-                              className="text-red-600 hover:bg-red-100 p-1.5 rounded-lg transition-colors"
-                              title="Supprimer"
-                            >
-                              <FontAwesomeIcon icon={faTimes} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                        </tr>
                       )
                     })}
                   </tbody>
@@ -747,7 +972,7 @@ const NotesView = () => {
                   <FontAwesomeIcon icon={faPlus} />
                   Ajouter une ligne
                 </button>
-                
+
                 <div className="text-sm font-semibold text-blue-600 bg-blue-50 px-4 py-2 rounded-lg">
                   Total coefficients: <span className="text-lg">{getTotalCoefficients()}</span>
                 </div>
@@ -795,9 +1020,8 @@ const NotesView = () => {
                       </div>
                       <div className="ml-auto">
                         <span className="text-xs text-slate-600">Moyenne: </span>
-                        <span className={`text-lg font-bold ${
-                          calculerMoyenne(selectedEtudiant.id) >= 10 ? 'text-green-600' : 'text-red-600'
-                        }`}>
+                        <span className={`text-lg font-bold ${calculerMoyenne(selectedEtudiant.id) >= 10 ? 'text-green-600' : 'text-red-600'
+                          }`}>
                           {calculerMoyenne(selectedEtudiant.id) || '-'}/20
                         </span>
                       </div>
@@ -814,8 +1038,8 @@ const NotesView = () => {
                           </th>
                           {parametres.evaluations.map(evaluation => (
                             Array.from({ length: evaluation.nombreEvaluations }).map((_, i) => (
-                              <th key={`${evaluation.id}_${i+1}`} className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300">
-                                {typesEvaluation.find(t => t.value === evaluation.type)?.label.split(' ')[0]} {i+1}
+                              <th key={`${evaluation.id}_${i + 1}`} className="px-3 py-2 text-center text-xs font-semibold text-slate-700 border-r border-slate-300">
+                                {typesEvaluation.find(t => t.value === evaluation.type)?.label.split(' ')[0]} {i + 1}
                                 <br />
                                 <span className="text-xs font-normal text-slate-500">
                                   /{evaluation.noteMax} (×{evaluation.coefficient})
@@ -832,7 +1056,7 @@ const NotesView = () => {
                           </td>
                           {parametres.evaluations.map(evaluation => (
                             Array.from({ length: evaluation.nombreEvaluations }).map((_, i) => {
-                              const evalId = `${evaluation.id}_${i+1}`
+                              const evalId = `${evaluation.id}_${i + 1}`
                               return (
                                 <td key={evalId} className="px-2 py-2 border-r border-slate-300">
                                   <input
@@ -883,6 +1107,65 @@ const NotesView = () => {
                   </div>
                 </>
               )}
+            </div>
+          </Modal>
+
+          {/* Modal d'import Excel */}
+          <Modal
+            isOpen={showImportModal}
+            onClose={() => setShowImportModal(false)}
+            title="Importer des notes depuis Excel"
+            size="2xl"
+          >
+            <div className="p-6 space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                  <FontAwesomeIcon icon={faDownload} />
+                  Étape 1 : Télécharger le modèle
+                </h4>
+                <p className="text-sm text-blue-800 mb-4">
+                  Téléchargez le fichier Excel modèle contenant la liste des étudiants de cette classe.
+                  Ce fichier inclut automatiquement les colonnes pour les évaluations configurées.
+                </p>
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="w-full py-2 bg-white border-2 border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium flex items-center justify-center gap-2"
+                >
+                  <FontAwesomeIcon icon={faFileExcel} />
+                  Télécharger le modèle Excel
+                </button>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h4 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                  <FontAwesomeIcon icon={faUpload} />
+                  Étape 2 : Remplir et Importer
+                </h4>
+                <p className="text-sm text-purple-800 mb-4">
+                  Remplissez les notes dans le fichier téléchargé (sans modifier les matricules) puis importez-le ici.
+                  Seules les notes valides seront importées.
+                </p>
+                <div className="relative border-2 border-dashed border-purple-300 rounded-lg p-8 text-center hover:bg-purple-100 transition-colors cursor-pointer group">
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <FontAwesomeIcon icon={faFileExcel} className="text-4xl text-purple-400 mb-2 group-hover:text-purple-600 transition-colors" />
+                  <p className="text-purple-900 font-medium">Cliquez ou glissez le fichier ici</p>
+                  <p className="text-xs text-purple-600 mt-1">Formats acceptés : .xlsx, .xls</p>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="px-5 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </Modal>
         </main>

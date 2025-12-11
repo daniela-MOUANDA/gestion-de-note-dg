@@ -226,6 +226,7 @@ export const getNotesByModuleClasse = async (moduleId, classeId, semestre) => {
   return request(`/notes/module/${moduleId}/classe/${classeId}?semestre=${semestre}`)
 }
 
+
 export const saveNotes = async (notes) => {
   return request('/notes/bulk', {
     method: 'POST',
@@ -233,3 +234,62 @@ export const saveNotes = async (notes) => {
   })
 }
 
+// ============================================
+// EMPLOI DU TEMPS PÉRIODIQUE
+// ============================================
+
+export const createEmploiDuTempsPeriode = async (data) => {
+  return request('/emploi-du-temps/periode', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
+export const getEmploiDuTempsPeriode = async (classeId, semestre, dateDebut, dateFin) => {
+  let url = `/emploi-du-temps/periode/${classeId}?semestre=${semestre}`
+  if (dateDebut && dateFin) {
+    url += `&dateDebut=${dateDebut}&dateFin=${dateFin}`
+  }
+  return request(url)
+}
+
+export const getHistoriqueEmploisDuTemps = async () => {
+  return request('/emploi-du-temps/historique')
+}
+
+export const deleteEmploiDuTempsPeriode = async (classeId, dateDebut, dateFin) => {
+  let url = `/emploi-du-temps/periode?classeId=${classeId}&dateDebut=${dateDebut}&dateFin=${dateFin}`
+  return request(url, {
+    method: 'DELETE'
+  })
+}
+
+export const updateGroupeRecurrence = async (groupeId, data) => {
+  return request(`/emploi-du-temps/groupe/${groupeId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  })
+}
+
+export const deleteGroupeRecurrence = async (groupeId) => {
+  return request(`/emploi-du-temps/groupe/${groupeId}`, {
+    method: 'DELETE'
+  })
+}
+
+export const deleteEmploiDuTempsId = async (id) => {
+  return request(`/emploi-du-temps/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+export const getBulletinData = async (classeId, semestre) => {
+  return request(`/releves/bulletin/${classeId}?semestre=${semestre}`)
+}
+
+export const updateEmploiDuTempsId = async (id, data) => {
+  return request(`/emploi-du-temps/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  })
+}

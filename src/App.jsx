@@ -40,6 +40,7 @@ const EtudiantsInscritsView = lazy(() => import('./views/chef-departement/Etudia
 const RepartitionClasseView = lazy(() => import('./views/chef/RepartitionClassesView'))
 const EmploiDuTempsChefDepartementView = lazy(() => import('./views/chef-departement/EmploiDuTempsView'))
 const NotesChefDepartementView = lazy(() => import('./views/chef-departement/NotesView'))
+const RelevesNotesView = lazy(() => import('./views/chef-departement/RelevesNotesView'))
 const MessagerieChefView = lazy(() => import('./views/chef/MessagerieChefView'))
 const GererClassesView = lazy(() => import('./views/chef/GererClassesView'))
 const GererEnseignantsView = lazy(() => import('./views/chef/GererEnseignantsView'))
@@ -106,8 +107,8 @@ const PageLoader = () => (
 
 function App() {
   return (
-    <ErrorBoundary>
-      <Router future={{ v7_relativeSplatPath: true }}>
+    <Router future={{ v7_relativeSplatPath: true }}>
+      <ErrorBoundary>
         <NavigationInit />
         <Suspense fallback={<PageLoader />}>
           <Routes>
@@ -277,7 +278,7 @@ function App() {
               }
             />
             <Route
-              path="/chef/emplois-temps"
+              path="/chef/emplois-du-temps"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <EmploiDuTempsChefDepartementView />
@@ -305,6 +306,14 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <PublierBulletinsView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chef/releves"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <RelevesNotesView />
                 </ProtectedRoute>
               }
             />
@@ -678,8 +687,8 @@ function App() {
             />
           </Routes>
         </Suspense>
-      </Router>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </Router>
   )
 }
 

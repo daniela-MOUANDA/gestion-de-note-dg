@@ -18,3 +18,7 @@ COMMENT ON COLUMN enseignants.statut IS 'Statut de l''enseignant (PERMANENT ou V
 COMMENT ON COLUMN enseignants.grade IS 'Grade académique de l''enseignant (Dr, Pr, MC, MA, etc.)';
 
 
+
+
+
+

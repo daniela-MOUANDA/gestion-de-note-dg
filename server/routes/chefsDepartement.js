@@ -35,6 +35,18 @@ import {
   saveNotesBulk,
   deleteNote as deleteNoteService
 } from '../../src/services/chefDepartement/noteService.js'
+import {
+  createEmploiDuTempsAvecPeriode,
+  getEmploiDuTempsByPeriode,
+  updateGroupeRecurrence,
+  deleteGroupeRecurrence,
+  deleteEmploiDuTempsById,
+  updateEmploiDuTempsById,
+  getHistoriqueEmploisDuTemps,
+  deleteEmploiDuTempsPeriode
+} from '../../src/services/chefDepartement/emploiDuTempsPeriodeService.js'
+
+import { getBulletinData } from '../../src/services/chefDepartement/relevesService.js'
 
 const router = express.Router()
 
@@ -503,7 +515,7 @@ router.post('/notes/bulk', async (req, res) => {
   try {
     const departementId = req.user.departementId
     const result = await saveNotesBulk(req.body.notes, departementId)
-    
+
     if (!result.success) {
       return res.status(400).json(result)
     }
@@ -520,7 +532,215 @@ router.delete('/notes/:id', async (req, res) => {
   try {
     const { id } = req.params
     const result = await deleteNoteService(id)
-    
+
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// ============================================
+// ROUTES EMPLOI DU TEMPS AVEC PÉRIODE
+// ============================================
+
+// Créer un emploi du temps avec période et réplication automatique
+router.post('/emploi-du-temps/periode', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const result = await createEmploiDuTempsAvecPeriode(req.body, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.status(201).json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Obtenir l'emploi du temps par période
+router.get('/emploi-du-temps/periode/:classeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { classeId } = req.params
+    const { semestre, dateDebut, dateFin } = req.query
+
+    const result = await getEmploiDuTempsByPeriode(classeId, semestre, dateDebut, dateFin, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer un emploi du temps pour une période (Historique)
+router.delete('/emploi-du-temps/periode', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { classeId, dateDebut, dateFin } = req.query
+
+    if (!classeId || !dateDebut || !dateFin) {
+      return res.status(400).json({ success: false, error: "Paramètres manquants (classeId, dateDebut, dateFin)" })
+    }
+
+    const result = await deleteEmploiDuTempsPeriode(classeId, dateDebut, dateFin, departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Obtenir l'historique des périodes
+router.get('/emploi-du-temps/historique', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const result = await getHistoriqueEmploisDuTemps(departementId)
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Mettre à jour un groupe de récurrence
+router.put('/emploi-du-temps/groupe/:groupeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { groupeId } = req.params
+    const result = await updateGroupeRecurrence(groupeId, req.body, departementId)
+
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer un groupe de récurrence
+router.delete('/emploi-du-temps/groupe/:groupeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { groupeId } = req.params
+    const result = await deleteGroupeRecurrence(groupeId, departementId)
+
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Supprimer une occurrence spécifique
+router.delete('/emploi-du-temps/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await deleteEmploiDuTempsById(id, departementId)
+
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Mettre à jour une occurrence spécifique
+router.put('/emploi-du-temps/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { id } = req.params
+    const result = await updateEmploiDuTempsById(id, req.body, departementId)
+
+    if (!result.success) {
+      return res.status(400).json(result)
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Obtenir le bulletin de notes (relevé)
+router.get('/releves/bulletin/:classeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { classeId } = req.params
+    const { semestre } = req.query
+
+    if (!semestre) {
+      return res.status(400).json({ success: false, error: "Le paramètre semestre est requis" })
+    }
+
+    const result = await getBulletinData(classeId, semestre, departementId)
     if (!result.success) {
       return res.status(400).json(result)
     }

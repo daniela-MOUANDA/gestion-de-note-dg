@@ -565,7 +565,16 @@ model EmploiDuTemps {
   salle           String?
   semestre        String   // "S1", "S2"
   anneeAcademique String
-  dateCreation     DateTime @default(now())
+  
+  // Nouveaux champs pour la gestion par période
+  dateDebut       DateTime // Date de début de la période
+  dateFin         DateTime // Date de fin de la période
+  typeActivite    TypeActivite @default(COURS) // Type d'activité
+  estRecurrent    Boolean  @default(true) // Si l'activité se répète
+  dateSpecifique  DateTime? // Date spécifique pour les devoirs ponctuels
+  groupeRecurrence String? // UUID pour regrouper les occurrences d'un même cours
+  
+  dateCreation    DateTime @default(now())
   
   // Relations
   classe          Classe   @relation(fields: [classeId], references: [id], onDelete: Cascade)
@@ -573,6 +582,13 @@ model EmploiDuTemps {
   enseignant      Enseignant @relation(fields: [enseignantId], references: [id], onDelete: Cascade)
   
   @@map("emplois_du_temps")
+}
+
+enum TypeActivite {
+  COURS
+  TP
+  TD
+  DEVOIR
 }
 
 model Note {

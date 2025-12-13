@@ -9,17 +9,28 @@ const request = async (endpoint, options = {}) => {
     ...options.headers
   }
 
+  const url = `${API_BASE_URL}${endpoint}`
+  console.log(`🌐 [API] ${options.method || 'GET'} ${url}`)
+  console.log(`🔑 [API] Token présent:`, !!token)
+
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(url, {
       ...options,
       headers
+    })
+
+    console.log(`📥 [API] Réponse reçue:`, {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      contentType: response.headers.get('content-type')
     })
 
     // Vérifier si la réponse est du JSON
     const contentType = response.headers.get('content-type')
     if (!contentType || !contentType.includes('application/json')) {
       const text = await response.text()
-      console.error('Réponse non-JSON reçue:', text)
+      console.error('❌ [API] Réponse non-JSON reçue:', text)
       return {
         success: false,
         error: `Erreur serveur (${response.status}): ${text.substring(0, 100)}`
@@ -27,9 +38,10 @@ const request = async (endpoint, options = {}) => {
     }
 
     const data = await response.json()
+    console.log(`✅ [API] Données reçues:`, data)
     return data
   } catch (error) {
-    console.error('Erreur API:', error)
+    console.error('❌ [API] Erreur de connexion:', error)
     return {
       success: false,
       error: error.message || 'Erreur de connexion'
@@ -71,6 +83,10 @@ export const genererBulletins = async (classeId, semestre) => {
   return request(`/bulletins/generer/${classeId}?semestre=${semestre}`, {
     method: 'POST'
   })
+}
+
+export const getBulletinsGeneres = async (classeId, semestre) => {
+  return request(`/bulletins/classe/${classeId}?semestre=${semestre}`)
 }
 
 export const getNiveaux = async () => {

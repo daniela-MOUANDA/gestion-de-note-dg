@@ -304,14 +304,6 @@ function App() {
               }
             />
             <Route
-              path="/chef/bulletins"
-              element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
-                  <PublierBulletinsView />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/chef/releves"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">

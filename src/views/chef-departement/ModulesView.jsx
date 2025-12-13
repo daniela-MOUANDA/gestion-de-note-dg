@@ -20,6 +20,9 @@ const ModulesView = () => {
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterSemestre, setFilterSemestre] = useState('')
+  const [filterUE, setFilterUE] = useState('')
+  const [filterFiliere, setFilterFiliere] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
@@ -178,9 +181,58 @@ const ModulesView = () => {
     setSelectedFiliere('')
   }
 
-  const filteredModules = modules.filter(module => 
-    `${module.code} ${module.nom} ${module.filiere || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Extraire les valeurs uniques pour les filtres
+  const semestresUniques = [...new Set(modules.map(m => m.semestre).filter(Boolean))].sort()
+  const ueUniques = [...new Set(modules.map(m => m.ue || 'UE1').filter(Boolean))].sort()
+  
+  // Extraire les filières uniques (peut être un code ou un ID)
+  const filieresUniques = [...new Set(
+    modules
+      .map(m => {
+        // Priorité: filiere (code) puis filiereId
+        return m.filiere || (m.filiereId && filieres.find(f => f.id === m.filiereId)?.code) || m.filiereId
+      })
+      .filter(Boolean)
+  )].sort()
+
+  // Filtrer les modules selon les critères
+  const filteredModules = modules.filter(module => {
+    // Filtre de recherche textuelle
+    const matchesSearch = !searchQuery || 
+      `${module.code} ${module.nom} ${module.filiere || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    // Filtre par semestre
+    const matchesSemestre = !filterSemestre || module.semestre === filterSemestre
+    
+    // Filtre par UE
+    const moduleUE = module.ue || 'UE1'
+    const matchesUE = !filterUE || moduleUE === filterUE
+    
+    // Filtre par filière
+    let matchesFiliere = true
+    if (filterFiliere) {
+      const moduleFiliereCode = module.filiere
+      const moduleFiliereId = module.filiereId
+      
+      // Vérifier si le code correspond
+      if (moduleFiliereCode === filterFiliere) {
+        matchesFiliere = true
+      } 
+      // Vérifier si l'ID correspond (et récupérer le code de la filière)
+      else if (moduleFiliereId) {
+        const filiereObj = filieres.find(f => f.id === moduleFiliereId)
+        if (filiereObj && (filiereObj.code === filterFiliere || filiereObj.id === filterFiliere)) {
+          matchesFiliere = true
+        } else {
+          matchesFiliere = false
+        }
+      } else {
+        matchesFiliere = false
+      }
+    }
+    
+    return matchesSearch && matchesSemestre && matchesUE && matchesFiliere
+  })
 
   if (loading) {
     return (
@@ -231,8 +283,9 @@ const ModulesView = () => {
             </div>
           </div>
 
-          {/* Barre de recherche */}
-          <div className="mb-6">
+          {/* Barre de recherche et filtres */}
+          <div className="mb-6 space-y-4">
+            {/* Barre de recherche */}
             <div className="relative">
               <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm" />
               <input
@@ -243,7 +296,102 @@ const ModulesView = () => {
                 className="w-full pl-11 pr-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-800 placeholder-slate-400"
               />
             </div>
+
+            {/* Filtres */}
+            <div className="bg-white rounded-xl shadow-md p-4 border border-slate-200">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-700 whitespace-nowrap">Filtres :</span>
+                </div>
+                
+                {/* Filtre Semestre */}
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Semestre</label>
+                  <select
+                    value={filterSemestre}
+                    onChange={(e) => setFilterSemestre(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">Tous les semestres</option>
+                    {semestresUniques.map(semestre => (
+                      <option key={semestre} value={semestre}>{semestre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtre UE */}
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Unité d'Enseignement</label>
+                  <select
+                    value={filterUE}
+                    onChange={(e) => setFilterUE(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">Toutes les UE</option>
+                    {ueUniques.map(ue => (
+                      <option key={ue} value={ue}>{ue}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtre Filière */}
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Filière</label>
+                  <select
+                    value={filterFiliere}
+                    onChange={(e) => setFilterFiliere(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">Toutes les filières</option>
+                    {filieresUniques.map(filiere => (
+                      <option key={filiere} value={filiere}>{filiere}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Bouton réinitialiser les filtres */}
+                {(filterSemestre || filterUE || filterFiliere) && (
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        setFilterSemestre('')
+                        setFilterUE('')
+                        setFilterFiliere('')
+                      }}
+                      className="px-4 py-2 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors whitespace-nowrap"
+                    >
+                      Réinitialiser
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* Indicateur de résultats */}
+          {(filterSemestre || filterUE || filterFiliere || searchQuery) && (
+            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-blue-800">
+                  {filteredModules.length} module{filteredModules.length > 1 ? 's' : ''} trouvé{filteredModules.length > 1 ? 's' : ''}
+                </span>
+                <span className="text-xs text-blue-600">
+                  (sur {modules.length} au total)
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  setFilterSemestre('')
+                  setFilterUE('')
+                  setFilterFiliere('')
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Réinitialiser tous les filtres
+              </button>
+            </div>
+          )}
 
           {/* Tableau */}
           <div className="bg-white rounded-xl shadow-md overflow-hidden">

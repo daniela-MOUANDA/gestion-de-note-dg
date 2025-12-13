@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faFilePdf, 
@@ -14,9 +14,12 @@ import {
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAlert } from '../../contexts/AlertContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { getFilieres, getClasses } from '../../api/chefDepartement'
 
 const PublierBulletinsView = () => {
   const { showAlert } = useAlert()
+  const { user } = useAuth()
   
   // États pour la navigation multi-étapes
   const [currentStep, setCurrentStep] = useState(1)
@@ -25,39 +28,81 @@ const PublierBulletinsView = () => {
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [selectedClasse, setSelectedClasse] = useState(null)
   const [showHistorique, setShowHistorique] = useState(false)
-
-  // Données statiques
-  const filieres = ['GI', 'RT']
+  const [filieres, setFilieres] = useState([])
+  const [loadingFilieres, setLoadingFilieres] = useState(true)
+  const [classes, setClasses] = useState([])
+  const [loadingClasses, setLoadingClasses] = useState(false)
   const niveaux = ['L1', 'L2', 'L3']
-  
-  const classesByFiliere = {
-    'GI': {
-      'L1': ['GI-L1-A', 'GI-L1-B'],
-      'L2': ['GI-L2-A', 'GI-L2-B'],
-      'L3': ['GI-L3-A', 'GI-L3-B']
-    },
-    'RT': {
-      'L1': ['RT-L1-A', 'RT-L1-B'],
-      'L2': ['RT-L2-A', 'RT-L2-B'],
-      'L3': ['RT-L3-A', 'RT-L3-B']
-    }
-  }
 
-  // État des classes (notes saisies ou non)
-  const [classesStatus, setClassesStatus] = useState({
-    'GI-L1-A': { notesCompletes: false, pourcentage: 45, modules: 12, modulesRemplis: 5 },
-    'GI-L1-B': { notesCompletes: false, pourcentage: 30, modules: 12, modulesRemplis: 4 },
-    'GI-L2-A': { notesCompletes: true, pourcentage: 100, modules: 14, modulesRemplis: 14 },
-    'GI-L2-B': { notesCompletes: false, pourcentage: 85, modules: 14, modulesRemplis: 12 },
-    'GI-L3-A': { notesCompletes: true, pourcentage: 100, modules: 16, modulesRemplis: 16 },
-    'GI-L3-B': { notesCompletes: true, pourcentage: 100, modules: 16, modulesRemplis: 16 },
-    'RT-L1-A': { notesCompletes: false, pourcentage: 60, modules: 12, modulesRemplis: 7 },
-    'RT-L1-B': { notesCompletes: false, pourcentage: 50, modules: 12, modulesRemplis: 6 },
-    'RT-L2-A': { notesCompletes: true, pourcentage: 100, modules: 14, modulesRemplis: 14 },
-    'RT-L2-B': { notesCompletes: false, pourcentage: 70, modules: 14, modulesRemplis: 10 },
-    'RT-L3-A': { notesCompletes: true, pourcentage: 100, modules: 16, modulesRemplis: 16 },
-    'RT-L3-B': { notesCompletes: false, pourcentage: 90, modules: 16, modulesRemplis: 14 }
-  })
+  // Charger les filières du département du chef connecté
+  useEffect(() => {
+    const loadFilieres = async () => {
+      try {
+        setLoadingFilieres(true)
+        const result = await getFilieres()
+        if (result.success && result.filieres) {
+          // Extraire uniquement les codes des filières pour l'affichage
+          const filiereCodes = result.filieres.map(f => ({
+            code: f.code,
+            nom: f.nom,
+            id: f.id
+          }))
+          setFilieres(filiereCodes)
+        } else {
+          showAlert(result.error || 'Erreur lors du chargement des filières', 'error')
+          setFilieres([])
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des filières:', error)
+        showAlert('Erreur lors du chargement des filières', 'error')
+        setFilieres([])
+      } finally {
+        setLoadingFilieres(false)
+      }
+    }
+
+    loadFilieres()
+  }, [showAlert])
+
+  // Charger les classes quand une filière et un niveau sont sélectionnés
+  useEffect(() => {
+    const loadClasses = async () => {
+      if (!selectedFiliere || !selectedNiveau) {
+        setClasses([])
+        return
+      }
+
+      try {
+        setLoadingClasses(true)
+        const result = await getClasses()
+        if (result.success && result.classes) {
+          // Filtrer les classes par filière et niveau
+          const filiereObj = filieres.find(f => f.code === selectedFiliere)
+          if (!filiereObj) {
+            setClasses([])
+            return
+          }
+
+          const filteredClasses = result.classes.filter(classe => {
+            const classeFiliere = classe.filiere || classe.filieres?.code
+            const classeNiveau = classe.niveau || classe.niveaux?.code
+            return classeFiliere === selectedFiliere && classeNiveau === selectedNiveau
+          })
+
+          setClasses(filteredClasses)
+        } else {
+          setClasses([])
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des classes:', error)
+        setClasses([])
+      } finally {
+        setLoadingClasses(false)
+      }
+    }
+
+    loadClasses()
+  }, [selectedFiliere, selectedNiveau, filieres])
 
   // Historique des bulletins générés
   const [historiqueBulletins, setHistoriqueBulletins] = useState([
@@ -126,22 +171,23 @@ const PublierBulletinsView = () => {
   const handleGenerateBulletin = (type) => {
     if (!selectedClasse) return
 
+    const classeCode = selectedClasse.code || selectedClasse.nom || 'Classe inconnue'
     const newBulletin = {
       id: Date.now(),
-      classe: selectedClasse,
+      classe: classeCode,
       filiere: selectedFiliere,
       niveau: selectedNiveau,
       semestre: getSemestre(selectedNiveau),
       type: type,
       dateGeneration: new Date().toISOString().split('T')[0],
-      nombreEtudiants: Math.floor(Math.random() * 20) + 30,
-      generePar: 'Dr. Jean KAMDEM'
+      nombreEtudiants: selectedClasse.effectif || Math.floor(Math.random() * 20) + 30,
+      generePar: user?.nom || 'Chef de département'
     }
 
     setHistoriqueBulletins(prev => [newBulletin, ...prev])
     setShowGenerateModal(false)
     setSelectedClasse(null)
-    showAlert(`Bulletin généré avec succès pour ${selectedClasse} (${type})`, 'success')
+    showAlert(`Bulletin généré avec succès pour ${classeCode} (${type})`, 'success')
   }
 
   const getSemestre = (niveau) => {
@@ -263,24 +309,35 @@ const PublierBulletinsView = () => {
 
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
               <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">Choisissez la filière</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                {filieres.map((filiere) => (
-                  <button
-                    key={filiere}
-                    onClick={() => handleFiliereSelect(filiere)}
-                    className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
-                  >
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">
-                        {filiere}
+              {loadingFilieres ? (
+                <div className="flex items-center justify-center py-12">
+                  <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin" />
+                </div>
+              ) : filieres.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-slate-600 mb-4">Aucune filière disponible pour votre département</p>
+                  <p className="text-sm text-slate-400">Contactez l'administrateur pour ajouter des filières à votre département</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                  {filieres.map((filiere) => (
+                    <button
+                      key={filiere.code}
+                      onClick={() => handleFiliereSelect(filiere.code)}
+                      className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+                    >
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">
+                          {filiere.code}
+                        </div>
+                        <div className="text-sm text-slate-600">
+                          {filiere.nom}
+                        </div>
                       </div>
-                      <div className="text-sm text-slate-600">
-                        {filiere === 'GI' ? 'Génie Informatique' : 'Réseaux et Télécommunications'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </main>
         </div>
@@ -342,7 +399,7 @@ const PublierBulletinsView = () => {
   }
 
   // Étape 3: Liste des classes avec statut
-  const classes = classesByFiliere[selectedFiliere][selectedNiveau] || []
+  // Les classes sont déjà chargées depuis l'API dans le useEffect
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
@@ -367,16 +424,37 @@ const PublierBulletinsView = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {classes.map((classe) => {
-              const status = classesStatus[classe]
-              const isReady = status.notesCompletes
+          {loadingClasses ? (
+            <div className="flex items-center justify-center py-12">
+              <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin" />
+            </div>
+          ) : classes.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-md p-12 text-center border border-slate-200">
+              <FontAwesomeIcon icon={faFilePdf} className="text-6xl text-slate-300 mb-4" />
+              <p className="text-lg font-medium text-slate-500 mb-2">Aucune classe trouvée</p>
+              <p className="text-sm text-slate-400">Aucune classe disponible pour {selectedFiliere} {selectedNiveau}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {classes.map((classe, index) => {
+                // Pour l'instant, on affiche les classes sans statut détaillé
+                // TODO: Charger le statut réel depuis l'API des bulletins
+                const isReady = false // Sera remplacé par le statut réel
+                const status = {
+                  notesCompletes: isReady,
+                  pourcentage: 0,
+                  modules: classe.nombreModules || 0,
+                  modulesRemplis: 0
+                }
 
               return (
-                <div key={classe} className="bg-white rounded-xl shadow-md p-6 border border-slate-200 hover:shadow-lg transition-shadow">
+                <div key={classe.id || classe.code || `classe-${index}`} className="bg-white rounded-xl shadow-md p-6 border border-slate-200 hover:shadow-lg transition-shadow">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-xl font-bold text-slate-800 mb-2">{classe}</h3>
+                      <h3 className="text-xl font-bold text-slate-800 mb-2">{classe.code || classe.nom}</h3>
+                      {classe.nom && classe.code !== classe.nom && (
+                        <p className="text-sm text-slate-500 mb-2">{classe.nom}</p>
+                      )}
                       <div className="flex items-center gap-2 mb-3">
                         <span className={`px-3 py-1 text-sm font-medium rounded-full ${
                           isReady 
@@ -433,7 +511,8 @@ const PublierBulletinsView = () => {
                 </div>
               )
             })}
-          </div>
+            </div>
+          )}
 
           {/* Modal de choix du type de bulletin */}
           {showGenerateModal && selectedClasse && (
@@ -455,7 +534,7 @@ const PublierBulletinsView = () => {
                   </div>
                   <h2 className="text-2xl font-bold text-slate-800 mb-2">Générer le bulletin</h2>
                   <p className="text-slate-600">
-                    Pour la classe <strong>{selectedClasse}</strong>
+                    Pour la classe <strong>{selectedClasse?.code || selectedClasse?.nom || 'Classe inconnue'}</strong>
                   </p>
                 </div>
 

@@ -22,3 +22,6 @@ COMMENT ON COLUMN modules.ue IS 'Unité d''Enseignement (UE1 ou UE2)';
 
 
 
+
+
+

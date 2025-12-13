@@ -1,4 +1,6 @@
 import express from 'express'
+import path from 'path'
+import fs from 'fs'
 import { authenticate } from '../middleware/auth.js'
 import {
   createChefDepartement,
@@ -55,6 +57,11 @@ import {
 import { getBulletinData } from '../../src/services/chefDepartement/relevesService.js'
 import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartementService.js'
 import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
+import { supabaseAdmin } from '../../src/lib/supabase.js'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const router = express.Router()
 
@@ -915,6 +922,315 @@ router.post('/bulletins/generer/:classeId', async (req, res) => {
     res.json(result)
   } catch (error) {
     console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Récupérer les bulletins générés pour une classe et un semestre
+router.get('/bulletins/classe/:classeId', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { classeId } = req.params
+    const { semestre } = req.query
+
+    if (!semestre) {
+      return res.status(400).json({ success: false, error: "Le paramètre semestre est requis" })
+    }
+
+    // Récupérer la promotion active
+    let { data: promotion } = await supabaseAdmin
+      .from('promotions')
+      .select('id')
+      .eq('statut', 'EN_COURS')
+      .single()
+
+    if (!promotion) {
+      // Essayer de récupérer la dernière promotion
+      const { data: dernierePromotion } = await supabaseAdmin
+        .from('promotions')
+        .select('id')
+        .order('annee', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (!dernierePromotion) {
+        return res.status(404).json({ success: false, error: 'Aucune promotion trouvée' })
+      }
+      promotion = dernierePromotion
+    }
+
+    // Récupérer les bulletins
+    const { data: bulletins, error: bulletinsError } = await supabaseAdmin
+      .from('bulletins')
+      .select(`
+        id,
+        etudiant_id,
+        semestre,
+        date_generation,
+        statut_visa,
+        etudiants!inner (
+          id,
+          nom,
+          prenom,
+          matricule
+        )
+      `)
+      .eq('promotion_id', promotion.id)
+      .eq('classe_id', classeId)
+      .eq('semestre', semestre)
+
+    if (bulletinsError) throw bulletinsError
+
+    // Trier les bulletins par nom d'étudiant
+    const bulletinsTries = (bulletins || []).sort((a, b) => {
+      const nomA = `${a.etudiants?.nom || ''} ${a.etudiants?.prenom || ''}`.trim()
+      const nomB = `${b.etudiants?.nom || ''} ${b.etudiants?.prenom || ''}`.trim()
+      return nomA.localeCompare(nomB)
+    })
+
+    res.json({
+      success: true,
+      bulletins: bulletinsTries,
+      nombreBulletins: bulletinsTries.length
+    })
+  } catch (error) {
+    console.error('Erreur:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Récupérer le PDF d'un bulletin individuel
+router.get('/bulletins/:bulletinId/pdf', authenticate, async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    const { bulletinId } = req.params
+
+    // Récupérer le bulletin
+    const { data: bulletin, error: bulletinError } = await supabaseAdmin
+      .from('bulletins')
+      .select(`
+        id,
+        etudiant_id,
+        classe_id,
+        semestre,
+        promotion_id,
+        etudiants!inner (
+          id,
+          nom,
+          prenom,
+          matricule
+        ),
+        classes!inner (
+          id,
+          nom,
+          code,
+          filiere_id,
+          filieres!inner (
+            id,
+            code,
+            nom
+          )
+        )
+      `)
+      .eq('id', bulletinId)
+      .single()
+
+    if (bulletinError || !bulletin) {
+      return res.status(404).json({ success: false, error: 'Bulletin non trouvé' })
+    }
+
+    // Vérifier que le bulletin appartient au département
+    // (on peut vérifier via la classe qui devrait avoir le même département)
+
+    // Récupérer les données du bulletin pour générer le PDF
+    const bulletinDataResult = await getBulletinData(bulletin.classe_id, bulletin.semestre, departementId)
+
+    if (!bulletinDataResult.success) {
+      return res.status(400).json({ success: false, error: bulletinDataResult.error })
+    }
+
+    // Trouver les données de l'étudiant spécifique
+    const etudiantData = bulletinDataResult.data.find(
+      item => item.etudiant?.id === bulletin.etudiant_id
+    )
+
+    if (!etudiantData) {
+      return res.status(404).json({ success: false, error: 'Données de l\'étudiant non trouvées' })
+    }
+
+    // Retourner les données JSON pour génération côté client
+    return res.json({
+      success: true,
+      data: {
+        ...etudiantData,
+        classe: bulletin.classes?.nom || bulletin.classes?.code || 'N/A',
+        filiere: bulletin.classes?.filieres?.nom || bulletin.classes?.filieres?.code || 'N/A'
+      },
+      meta: bulletinDataResult.meta,
+      bulletin: {
+        id: bulletin.id,
+        semestre: bulletin.semestre,
+        date_generation: bulletin.date_generation
+      }
+    })
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération du PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Télécharger le bulletin en PDF (template officiel INPTIC)
+router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params
+    const departementId = req.user.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: "Aucun département associé" })
+    }
+
+    // Récupérer les données du bulletin
+    const { data: bulletin, error: bulletinError } = await supabaseAdmin
+      .from('bulletins')
+      .select(`
+        *,
+        etudiants (id, nom, prenom, matricule, date_naissance, lieu_naissance),
+        classes (id, code, nom, filieres (code, nom), niveaux (code)),
+        promotions (annee)
+      `)
+      .eq('id', id)
+      .single()
+
+    if (bulletinError || !bulletin) {
+      return res.status(404).json({ success: false, error: 'Bulletin non trouvé' })
+    }
+
+    // Récupérer les données complètes du bulletin (notes, moyennes, etc.)
+    const bulletinDataResult = await getBulletinData(
+      bulletin.classe_id,
+      bulletin.semestre,
+      departementId
+    )
+
+    if (!bulletinDataResult.success) {
+      return res.status(400).json({ success: false, error: bulletinDataResult.error })
+    }
+
+    // Trouver les données de l'étudiant
+    const etudiantData = bulletinDataResult.data.find(
+      item => item.etudiant?.id === bulletin.etudiant_id
+    )
+
+    if (!etudiantData) {
+      return res.status(404).json({ success: false, error: 'Données de l\'étudiant non trouvées' })
+    }
+
+    // Préparer les données pour le PDF
+    const etudiant = bulletin.etudiants || {}
+    const classe = bulletin.classes || {}
+    const promotion = bulletin.promotions || {}
+    const modules = etudiantData.modules || []
+
+    const pdfData = {
+      student: {
+        nom: etudiant.nom || '',
+        prenom: etudiant.prenom || '',
+        matricule: etudiant.matricule || '',
+        dateNaissance: etudiant.date_naissance
+          ? new Date(etudiant.date_naissance).toLocaleDateString('fr-FR')
+          : 'N/A',
+        lieuNaissance: etudiant.lieu_naissance || 'N/A'
+      },
+      classe: {
+        code: classe.code || '',
+        nom: classe.nom || '',
+        option: classe.filieres?.nom || ''
+      },
+      semestre: bulletin.semestre || '',
+      anneeUniversitaire: promotion.annee || '',
+      modules: modules.map(mod => ({
+        ue: mod.ue || 'UE',
+        nom: mod.nom || '',
+        credits: mod.credit || 0,
+        coefficient: mod.coefficient || 1,
+        noteEtudiant: mod.moyenne || 0,
+        moyenneClasse: mod.moyenneClasse || 0
+      })),
+      moyenneSemestre: etudiantData.moyenneGenerale || 0,
+      rangEtudiant: etudiantData.rang || null,
+      mention: etudiantData.mention || 'Assez Bien',
+      penalitesAbsences: 0,
+      uesValidees: modules.reduce((acc, mod) => {
+        const ueName = mod.ue || 'UE'
+        if (!acc.find(u => u.ue === ueName)) {
+          acc.push({
+            ue: ueName,
+            credits: mod.credit || 0,
+            valide: mod.valide || false
+          })
+        }
+        return acc
+      }, []),
+      decision: etudiantData.statut === 'VALIDE'
+        ? `${bulletin.semestre} validé`
+        : `${bulletin.semestre} ajourné`,
+      dateGeneration: bulletin.date_generation || new Date().toISOString()
+    }
+
+    // Générer le PDF
+    // Note: Le service de génération PDF doit être créé
+    // Pour l'instant, retourner une erreur indiquant que le service n'est pas encore implémenté
+    try {
+      const pdfGeneratorModule = await import('../services/bulletinPDFGenerator.js')
+      const generateBulletinPDF = pdfGeneratorModule.generateBulletinPDF
+      
+      if (!generateBulletinPDF) {
+        return res.status(501).json({ 
+          success: false, 
+          error: 'Service de génération PDF non disponible. Le service doit être implémenté.' 
+        })
+      }
+
+      const outputPath = path.join(__dirname, '../uploads', `bulletin_${id}_${Date.now()}.pdf`)
+
+      // S'assurer que le dossier uploads existe
+      const uploadsDir = path.join(__dirname, '../uploads')
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true })
+      }
+
+      await generateBulletinPDF(pdfData, outputPath)
+
+      // Envoyer le PDF en téléchargement
+      const nomFichier = `Bulletin_${etudiant.nom || 'etudiant'}_${etudiant.prenom || ''}_${bulletin.semestre || 'S1'}.pdf`
+      res.download(outputPath, nomFichier, (err) => {
+        if (err) {
+          console.error('Erreur lors de l\'envoi du PDF:', err)
+        }
+        // Supprimer le fichier temporaire après l'envoi
+        fs.unlink(outputPath, (unlinkErr) => {
+          if (unlinkErr) console.error('Erreur lors de la suppression du fichier temporaire:', unlinkErr)
+        })
+      })
+    } catch (importError) {
+      console.error('Erreur lors de l\'import ou de la génération du PDF:', importError)
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Erreur lors de la génération du PDF: ' + importError.message 
+      })
+    }
+
+  } catch (error) {
+    console.error('Erreur lors de la génération du PDF:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })

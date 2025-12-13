@@ -179,10 +179,14 @@ export const saveNotesBulk = async (notes, departementId) => {
       }
     }
 
-    // Préparer les notes pour l'insertion
-    const notesToInsert = notes.map(note => {
-      console.log('🔍 Traitement note:', note)
-      return {
+    // Séparer les notes à insérer (avec valeur valide) des notes vides (à supprimer)
+    const notesAvecValeur = notes
+      .filter(note => {
+        const valeur = note.valeur
+        // Garder seulement les notes avec une valeur valide (non null, non vide, non NaN)
+        return valeur !== null && valeur !== undefined && valeur !== '' && !isNaN(parseFloat(valeur))
+      })
+      .map(note => ({
         etudiant_id: note.etudiantId,
         module_id: note.moduleId,
         classe_id: note.classeId,
@@ -190,29 +194,51 @@ export const saveNotesBulk = async (notes, departementId) => {
         evaluation_id: note.evaluationId,
         valeur: parseFloat(note.valeur),
         annee_academique: note.anneeAcademique || '2024-2025'
-      }
+      }))
+
+    console.log('📤 Notes à insérer:', notesAvecValeur.length)
+    console.log('🗑️ Notes à supprimer (vides):', notes.length - notesAvecValeur.length)
+
+    // Supprimer spécifiquement les notes pour les combinaisons étudiant/evaluation envoyées
+    // Cela permet de supprimer les notes vides sans toucher aux autres notes
+    for (const note of notes) {
+      await supabaseAdmin
+        .from('notes')
+        .delete()
+        .eq('module_id', moduleId)
+        .eq('classe_id', classeId)
+        .eq('semestre', semestre)
+        .eq('etudiant_id', note.etudiantId)
+        .eq('evaluation_id', note.evaluationId)
+    }
+
+    // Insérer seulement les notes avec des valeurs valides
+    let data = []
+    if (notesAvecValeur.length > 0) {
+      const { data: insertedData, error } = await supabaseAdmin
+        .from('notes')
+        .insert(notesAvecValeur)
+        .select()
+
+      if (error) throw error
+      data = insertedData
+      console.log('✅ Notes insérées:', data.length)
+    } else {
+      console.log('ℹ️ Aucune note à insérer (toutes les notes ont été supprimées)')
+    }
+
+    // Mettre à jour le statut des notes pour cette classe et ce semestre
+    // On fait cela de manière asynchrone pour ne pas bloquer la réponse
+    // et éviter les problèmes de mémoire si beaucoup de requêtes simultanées
+    import('./statutNotesService.js').then(({ mettreAJourStatutNotes }) => {
+      mettreAJourStatutNotes(classeId, semestre).then(() => {
+        console.log('✅ Statut des notes mis à jour après sauvegarde')
+      }).catch(err => {
+        console.error('❌ Erreur lors de la mise à jour du statut (non bloquant):', err)
+      })
+    }).catch(err => {
+      console.error('❌ Erreur lors de l\'import du service de statut (non bloquant):', err)
     })
-    
-    console.log('📤 Notes à insérer:', notesToInsert)
-
-    // Supprimer les notes existantes pour ces étudiants/évaluations
-    const etudiantIds = [...new Set(notes.map(n => n.etudiantId))]
-
-    await supabaseAdmin
-      .from('notes')
-      .delete()
-      .eq('module_id', moduleId)
-      .eq('classe_id', classeId)
-      .eq('semestre', semestre)
-      .in('etudiant_id', etudiantIds)
-
-    // Insérer les nouvelles notes
-    const { data, error } = await supabaseAdmin
-      .from('notes')
-      .insert(notesToInsert)
-      .select()
-
-    if (error) throw error
 
     return {
       success: true,

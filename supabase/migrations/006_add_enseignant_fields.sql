@@ -22,3 +22,6 @@ COMMENT ON COLUMN enseignants.grade IS 'Grade académique de l''enseignant (Dr, 
 
 
 
+
+
+

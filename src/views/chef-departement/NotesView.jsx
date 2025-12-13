@@ -92,7 +92,8 @@ const NotesView = () => {
         }
 
         const filiereId = classeSelectionnee.filiereId || classeSelectionnee.filiere_id
-        const niveauCode = classeSelectionnee.niveauCode || classeSelectionnee.niveaux?.code
+        // Le service retourne 'niveau' (pas 'niveauCode')
+        const niveauCode = classeSelectionnee.niveauCode || classeSelectionnee.niveau || classeSelectionnee.niveaux?.code
 
         // Vérifier la correspondance niveau-semestre
         const correspondanceNiveauSemestre = {
@@ -290,20 +291,29 @@ const NotesView = () => {
       const notesEtudiant = notes[selectedEtudiant.id] || {}
 
       // Préparer les notes pour l'envoi
-      const notesToSave = Object.entries(notesEtudiant).map(([evaluationId, valeur]) => ({
-        etudiantId: selectedEtudiant.id,
-        moduleId: selectedModule,
-        classeId: selectedClasse,
-        semestre: selectedSemestre,
-        evaluationId,
-        valeur: parseFloat(valeur),
-        anneeAcademique: '2024-2025'
-      })).filter(note => note.valeur && !isNaN(note.valeur))
+      // Inclure toutes les notes, même vides, pour permettre la suppression
+      const notesToSave = Object.entries(notesEtudiant).map(([evaluationId, valeur]) => {
+        // Si la valeur est vide, null ou undefined, on l'envoie comme null pour supprimer
+        const valeurNum = valeur === '' || valeur === null || valeur === undefined 
+          ? null 
+          : parseFloat(valeur)
+        
+        return {
+          etudiantId: selectedEtudiant.id,
+          moduleId: selectedModule,
+          classeId: selectedClasse,
+          semestre: selectedSemestre,
+          evaluationId,
+          valeur: valeurNum,
+          anneeAcademique: '2024-2025'
+        }
+      })
 
       console.log('📤 Envoi des notes:', { notesToSave, selectedEtudiant, selectedModule, selectedClasse, selectedSemestre })
 
+      // Vérifier qu'il y a au moins une note (vide ou non) à traiter
       if (notesToSave.length === 0) {
-        showAlert('Veuillez saisir au moins une note', 'warning')
+        showAlert('Aucune note à traiter', 'warning')
         setSaving(false)
         return
       }
@@ -338,14 +348,20 @@ const NotesView = () => {
 
       Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
         Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
-          if (valeur !== undefined && valeur !== '' && !isNaN(parseFloat(valeur))) {
+          // Inclure toutes les notes, même vides, pour permettre la suppression
+          const valeurNum = valeur === '' || valeur === null || valeur === undefined 
+            ? null 
+            : parseFloat(valeur)
+          
+          // Inclure la note même si elle est null (pour suppression)
+          if (valeur !== undefined) {
             allNotesToSave.push({
               etudiantId,
               moduleId: selectedModule,
               classeId: selectedClasse,
               semestre: selectedSemestre,
               evaluationId,
-              valeur: parseFloat(valeur),
+              valeur: valeurNum,
               anneeAcademique: '2024-2025'
             })
           }
@@ -353,7 +369,7 @@ const NotesView = () => {
       })
 
       if (allNotesToSave.length === 0) {
-        showAlert('Aucune note à enregistrer', 'warning')
+        showAlert('Aucune note à traiter', 'warning')
         setSaving(false)
         return
       }
@@ -408,7 +424,8 @@ const NotesView = () => {
     const classeSelectionnee = classes.find(c => c.id === selectedClasse)
     if (!classeSelectionnee) return []
 
-    const niveauCode = classeSelectionnee.niveauCode || classeSelectionnee.niveaux?.code
+    // Le service retourne 'niveau' (pas 'niveauCode')
+    const niveauCode = classeSelectionnee.niveauCode || classeSelectionnee.niveau || classeSelectionnee.niveaux?.code
 
     const correspondanceNiveauSemestre = {
       'L1': [
@@ -1317,3 +1334,4 @@ const NotesView = () => {
 }
 
 export default NotesView
+image.png

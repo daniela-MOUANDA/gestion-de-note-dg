@@ -20,6 +20,7 @@ import comptesRoutes from './routes/comptes.js'
 import chefsDepartementRoutes from './routes/chefsDepartement.js'
 import departementsRoutes from './routes/departements.js'
 import studentRoutes from './routes/student.js'
+import depRoutes from './routes/depRoutes.js'
 
 
 const app = express()
@@ -71,6 +72,16 @@ app.get('/api/niveaux', (req, res, next) => {
 
 app.get('/api/etudiants', (req, res, next) => {
   req.url = '/api/scolarite/etudiants' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '')
+  scolariteRoutes(req, res, next)
+})
+
+app.post('/api/etudiants', (req, res, next) => {
+  req.url = '/api/scolarite/etudiants'
+  scolariteRoutes(req, res, next)
+})
+
+app.delete('/api/etudiants/:id', (req, res, next) => {
+  req.url = `/api/scolarite/etudiants/${req.params.id}`
   scolariteRoutes(req, res, next)
 })
 
@@ -183,6 +194,7 @@ app.use('/api/comptes', comptesRoutes)
 app.use('/api/chef-departement', chefsDepartementRoutes)
 app.use('/api/departements', departementsRoutes)
 app.use('/api/student', studentRoutes)
+app.use('/api/dep', depRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

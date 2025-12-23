@@ -44,6 +44,10 @@ import {
   deleteNote as deleteNoteService
 } from '../../src/services/chefDepartement/noteService.js'
 import {
+  getEtudiantsParDepartement,
+  getEtudiantDetailsChef
+} from '../../src/services/chefDepartement/etudiantsService.js'
+import {
   createEmploiDuTempsAvecPeriode,
   getEmploiDuTempsByPeriode,
   updateGroupeRecurrence,
@@ -58,6 +62,7 @@ import { getBulletinData } from '../../src/services/chefDepartement/relevesServi
 import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartementService.js'
 import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
 import { supabaseAdmin } from '../../src/lib/supabase.js'
+import { getMention } from '../utils/mentions.js'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -369,13 +374,13 @@ router.get('/stats', async (req, res) => {
 
 router.get('/repartition/count', async (req, res) => {
   try {
-    // Query params: filiereId, niveauId
-    const { filiereId, niveauId } = req.query
+    // Query params: filiereId, niveauId, formation
+    const { filiereId, niveauId, formation } = req.query
     const departementId = req.user.departementId
 
     if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
 
-    const result = await getEtudiantsPourRepartition(departementId, filiereId, niveauId)
+    const result = await getEtudiantsPourRepartition(departementId, filiereId, niveauId, formation)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
   } catch (error) {
@@ -389,6 +394,38 @@ router.post('/repartition/create', async (req, res) => {
     if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
 
     const result = await createClassesFromRepartition(req.body)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/repartition/classes-existantes', async (req, res) => {
+  try {
+    const { filiereId, niveauId, formation } = req.query
+    const departementId = req.user.departementId
+
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const { getClassesExistantes } = await import('../../src/services/chefDepartementService.js')
+    const result = await getClassesExistantes(departementId, filiereId, niveauId, formation)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.post('/repartition/affecter-classe', async (req, res) => {
+  try {
+    const { filiereId, niveauId, classeId, inscriptionIds, formation } = req.body
+    const departementId = req.user.departementId
+
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const { affecterEtudiantsAClasse } = await import('../../src/services/chefDepartementService.js')
+    const result = await affecterEtudiantsAClasse(departementId, filiereId, niveauId, classeId, inscriptionIds, formation)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
   } catch (error) {
@@ -1167,7 +1204,7 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       })),
       moyenneSemestre: etudiantData.moyenneGenerale || 0,
       rangEtudiant: etudiantData.rang || null,
-      mention: etudiantData.mention || 'Assez Bien',
+      mention: etudiantData.mention || getMention(etudiantData.moyenneGenerale || 0),
       penalitesAbsences: 0,
       uesValidees: modules.reduce((acc, mod) => {
         const ueName = mod.ue || 'UE'
@@ -1231,6 +1268,74 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
 
   } catch (error) {
     console.error('Erreur lors de la génération du PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// ============================================
+// ROUTES ÉTUDIANTS CHEF DEPARTEMENT
+// ============================================
+
+// Obtenir tous les étudiants du département avec leurs moyennes (avec pagination)
+router.get('/etudiants', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Aucun département associé à votre compte' 
+      })
+    }
+
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const filiere = req.query.filiere || 'TOUS'
+    const niveau = req.query.niveau || 'TOUS'
+    const semestre = req.query.semestre || 'TOUS'
+    const search = req.query.search || ''
+
+    const result = await getEtudiantsParDepartement(departementId, page, limit, {
+      filiere,
+      niveau,
+      semestre,
+      search
+    })
+
+    if (result.success) {
+      res.json(result)
+    } else {
+      res.status(500).json(result)
+    }
+  } catch (error) {
+    console.error('Erreur lors de la récupération des étudiants:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// Obtenir les détails d'un étudiant du département
+router.get('/etudiants/:id', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Aucun département associé à votre compte' 
+      })
+    }
+
+    const { id } = req.params
+    const semestre = req.query.semestre || null
+    const result = await getEtudiantDetailsChef(id, departementId, semestre)
+
+    if (result.success) {
+      res.json(result)
+    } else {
+      res.status(404).json(result)
+    }
+  } catch (error) {
+    console.error('Erreur lors de la récupération des détails de l\'étudiant:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })

@@ -275,11 +275,12 @@ const GererEtudiantsView = () => {
 
   const getAppreciation = (note) => {
     const n = parseFloat(note)
+    if (n >= 18) return 'Excellent'
     if (n >= 16) return 'Très Bien'
     if (n >= 14) return 'Bien'
     if (n >= 12) return 'Assez Bien'
     if (n >= 10) return 'Passable'
-    return 'Insuffisant'
+    return 'Ajourné'
   }
 
   // Vue principale: Sélection de la filière

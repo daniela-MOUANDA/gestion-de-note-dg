@@ -23,7 +23,8 @@ import {
   uploadPhotoEtudiant,
   upsertParent,
   getParents,
-  getDossierEtudiant
+  getDossierEtudiant,
+  deleteEtudiant
 } from '../../api/scolarite'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -442,6 +443,47 @@ const GererInscriptionsView = () => {
     }
   }
 
+  const handleDeleteEtudiant = async () => {
+    if (!selectedEtudiant) {
+      alertError('Aucun étudiant sélectionné')
+      return
+    }
+
+    // Confirmation avant suppression
+    const confirmMessage = `Êtes-vous sûr de vouloir supprimer l'étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} ?\n\nCette action est irréversible et supprimera également toutes ses inscriptions et données associées.`
+    
+    if (!window.confirm(confirmMessage)) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      await deleteEtudiant(selectedEtudiant.id)
+      success(`L'étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été supprimé avec succès`)
+      
+      // Retourner à la liste et recharger les étudiants
+      setSelectedEtudiant(null)
+      setDossierComplet(null)
+      
+      // Recharger la liste des étudiants
+      if (selectedFiliere && selectedNiveau) {
+        const etudiantsData = await getEtudiantsParFiliereNiveau(
+          selectedFiliere,
+          selectedNiveau,
+          selectedPromotion,
+          selectedFormation,
+          typeInscription
+        )
+        setEtudiants(etudiantsData)
+      }
+    } catch (error) {
+      console.error('Erreur lors de la suppression de l\'étudiant:', error)
+      alertError(error.message || 'Erreur lors de la suppression de l\'étudiant')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleFinaliserInscription = async () => {
     if (!selectedInscription) {
       alertError('Aucune inscription sélectionnée')
@@ -755,28 +797,44 @@ const GererInscriptionsView = () => {
                   </div>
                   <h2 className="text-xl font-bold text-slate-800">{dossier.etudiant.prenom} {dossier.etudiant.nom}</h2>
                   <p className="text-slate-600 text-sm">{dossier.etudiant.matricule}</p>
-                  <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium mt-2">
-                    {dossier.inscription?.filiere?.nom || selectedEtudiant.filiere} - {dossier.inscription?.niveau?.nom || selectedEtudiant.niveau}
-                  </span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+                      {dossier.inscription?.formation?.nom || selectedEtudiant.formation || 'Formation non spécifiée'}
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                      {dossier.inscription?.filiere?.nom || selectedEtudiant.filiere} - {dossier.inscription?.niveau?.nom || selectedEtudiant.niveau}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               <div className="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border border-slate-200">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-bold text-slate-800">Informations personnelles</h3>
-                  <button
-                    onClick={() => {
-                      if (editingInfo) {
-                        handleUpdateEtudiantInfo()
-                      } else {
-                        setEditingInfo(true)
-                      }
-                    }}
-                    className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                    disabled={loading}
-                  >
-                    {editingInfo ? 'Enregistrer' : 'Modifier'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (editingInfo) {
+                          handleUpdateEtudiantInfo()
+                        } else {
+                          setEditingInfo(true)
+                        }
+                      }}
+                      className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                      disabled={loading}
+                    >
+                      {editingInfo ? 'Enregistrer' : 'Modifier'}
+                    </button>
+                    <button
+                      onClick={handleDeleteEtudiant}
+                      className="px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2"
+                      disabled={loading}
+                      title="Supprimer l'étudiant"
+                    >
+                      <FontAwesomeIcon icon={faTrash} />
+                      Supprimer
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>

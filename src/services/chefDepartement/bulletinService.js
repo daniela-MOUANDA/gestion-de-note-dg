@@ -119,7 +119,7 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
     // Ne pas mettre à jour le statut ici pour éviter les problèmes de mémoire
     // Le statut sera mis à jour après chaque sauvegarde de notes
     const { getStatutNotes } = await import('./statutNotesService.js')
-    
+
     // Récupérer le statut existant (sans forcer la mise à jour)
     const statutResult = await getStatutNotes(classeId, semestre)
     const statutNotes = statutResult.statut
@@ -243,222 +243,222 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
     // Sinon, calculer en temps réel (fallback)
     if (!statutNotes || statutNotes.nombre_modules_avec_notes === undefined) {
       console.log(`⚠️ Pas de statut en cache, calcul en temps réel...`)
-      
+
       // 4. Pour chaque module, vérifier si tous les étudiants ont des notes
       modulesAvecNotesCompletes = 0
       modulesAvecNotes = 0
       etudiantsAvecNotesCompletes = 0
 
-    for (const moduleId of moduleIds) {
-      // Récupérer les paramètres de notation pour ce module
-      const { data: parametres } = await supabaseAdmin
-        .from('parametres_notation')
-        .select('evaluations')
-        .eq('module_id', moduleId)
-        .eq('semestre', semestre)
-        .single()
+      for (const moduleId of moduleIds) {
+        // Récupérer les paramètres de notation pour ce module
+        const { data: parametres } = await supabaseAdmin
+          .from('parametres_notation')
+          .select('evaluations')
+          .eq('module_id', moduleId)
+          .eq('semestre', semestre)
+          .single()
 
-      // Récupérer les notes pour ce module
-      const { data: notes, error: notesError } = await supabaseAdmin
-        .from('notes')
-        .select('etudiant_id, etudiantId, evaluation_id, evaluationId')
-        .eq('module_id', moduleId)
-        .eq('classe_id', classeId)
-        .eq('semestre', semestre)
-        .in('etudiant_id', etudiantIds.length > 0 ? etudiantIds : [''])
+        // Récupérer les notes pour ce module
+        const { data: notes, error: notesError } = await supabaseAdmin
+          .from('notes')
+          .select('etudiant_id, etudiantId, evaluation_id, evaluationId')
+          .eq('module_id', moduleId)
+          .eq('classe_id', classeId)
+          .eq('semestre', semestre)
+          .in('etudiant_id', etudiantIds.length > 0 ? etudiantIds : [''])
 
-      if (notesError) {
-        console.error(`❌ Erreur lors de la récupération des notes pour le module ${moduleId}:`, notesError)
-        continue
-      }
-
-      console.log(`📝 Module ${moduleId}: ${notes?.length || 0} notes trouvées`)
-
-      // Normaliser les notes pour gérer les deux formats
-      const notesNormalisees = (notes || []).map(note => ({
-        etudiant_id: note.etudiant_id || note.etudiantId,
-        evaluation_id: note.evaluation_id || note.evaluationId
-      }))
-
-      // Compter ce module comme ayant des notes si au moins une note existe
-      if (notesNormalisees.length > 0) {
-        modulesAvecNotes++
-        console.log(`✅ Module ${moduleId}: Au moins une note saisie (total: ${notesNormalisees.length} notes)`)
-      }
-
-      // Si pas de paramètres de notation configurés
-      if (!parametres || !parametres.evaluations) {
-        console.log(`⚠️ Module ${moduleId}: Pas de paramètres de notation trouvés`)
-
-        // Vérifier si des notes existent quand même
-        if (notesNormalisees.length === 0) {
-          console.log(`   → Aucune note trouvée, module ignoré`)
+        if (notesError) {
+          console.error(`❌ Erreur lors de la récupération des notes pour le module ${moduleId}:`, notesError)
           continue
         }
+
+        console.log(`📝 Module ${moduleId}: ${notes?.length || 0} notes trouvées`)
+
+        // Normaliser les notes pour gérer les deux formats
+        const notesNormalisees = (notes || []).map(note => ({
+          etudiant_id: note.etudiant_id || note.etudiantId,
+          evaluation_id: note.evaluation_id || note.evaluationId
+        }))
+
+        // Compter ce module comme ayant des notes si au moins une note existe
+        if (notesNormalisees.length > 0) {
+          modulesAvecNotes++
+          console.log(`✅ Module ${moduleId}: Au moins une note saisie (total: ${notesNormalisees.length} notes)`)
+        }
+
+        // Si pas de paramètres de notation configurés
+        if (!parametres || !parametres.evaluations) {
+          console.log(`⚠️ Module ${moduleId}: Pas de paramètres de notation trouvés`)
+
+          // Vérifier si des notes existent quand même
+          if (notesNormalisees.length === 0) {
+            console.log(`   → Aucune note trouvée, module ignoré`)
+            continue
+          }
+
+          // Grouper les notes par étudiant
+          const notesParEtudiant = {}
+          notesNormalisees.forEach(note => {
+            const etudiantId = note.etudiant_id
+            if (!etudiantId) return
+
+            if (!notesParEtudiant[etudiantId]) {
+              notesParEtudiant[etudiantId] = new Set()
+            }
+            notesParEtudiant[etudiantId].add(note.evaluation_id)
+          })
+
+          // Compter les étudiants qui ont au moins une note
+          const etudiantsAvecNotes = Object.keys(notesParEtudiant).length
+
+          // Si tous les étudiants ont au moins une note, considérer le module comme complet
+          if (etudiantsAvecNotes === nombreEtudiants && nombreEtudiants > 0) {
+            modulesAvecNotesCompletes++
+            console.log(`✅ Module ${moduleId}: Complet sans paramètres (${etudiantsAvecNotes}/${nombreEtudiants} étudiants avec notes)`)
+          } else {
+            console.log(`⚠️ Module ${moduleId}: Incomplet - ${etudiantsAvecNotes}/${nombreEtudiants} étudiants avec notes`)
+          }
+
+          continue
+        }
+
+        const evaluations = parametres.evaluations
+        const nombreEvaluationsTotal = evaluations.reduce((sum, evaluation) => sum + evaluation.nombreEvaluations, 0)
+
+        // Construire la liste des IDs d'évaluation attendus
+        const evaluationIdsAttendus = []
+        evaluations.forEach(evaluation => {
+          for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+            evaluationIdsAttendus.push(`${evaluation.id}_${i}`)
+          }
+        })
+
+        console.log(`📋 Module ${moduleId}: ${nombreEvaluationsTotal} évaluations attendues (IDs: ${evaluationIdsAttendus.join(', ')})`)
 
         // Grouper les notes par étudiant
         const notesParEtudiant = {}
         notesNormalisees.forEach(note => {
           const etudiantId = note.etudiant_id
-          if (!etudiantId) return
+          const evaluationId = note.evaluation_id
+
+          if (!etudiantId || !evaluationId) {
+            console.warn(`⚠️ Note invalide: etudiant_id=${etudiantId}, evaluation_id=${evaluationId}`)
+            return
+          }
 
           if (!notesParEtudiant[etudiantId]) {
             notesParEtudiant[etudiantId] = new Set()
           }
-          notesParEtudiant[etudiantId].add(note.evaluation_id)
+          notesParEtudiant[etudiantId].add(evaluationId)
         })
 
-        // Compter les étudiants qui ont au moins une note
-        const etudiantsAvecNotes = Object.keys(notesParEtudiant).length
+        console.log(`📊 Module ${moduleId}: Notes groupées pour ${Object.keys(notesParEtudiant).length} étudiants`)
 
-        // Si tous les étudiants ont au moins une note, considérer le module comme complet
-        if (etudiantsAvecNotes === nombreEtudiants && nombreEtudiants > 0) {
+        // Vérifier combien d'étudiants ont toutes les notes pour ce module
+        let etudiantsComplets = 0
+        let etudiantsAvecNotes = 0
+
+        etudiantIds.forEach(etudiantId => {
+          const notesEtudiant = notesParEtudiant[etudiantId] || new Set()
+          const notesEtudiantArray = Array.from(notesEtudiant)
+
+          // Compter les étudiants qui ont au moins une note
+          if (notesEtudiant.size > 0) {
+            etudiantsAvecNotes++
+          }
+
+          // Vérifier que l'étudiant a au moins le nombre requis d'évaluations
+          // On accepte si le nombre de notes est >= au nombre attendu (peut avoir des notes supplémentaires)
+          // Si nombreEvaluationsTotal est 0, on considère que l'étudiant a ses notes (cas où il n'y a pas d'évaluations configurées)
+          const aToutesLesNotes = nombreEvaluationsTotal === 0 || notesEtudiant.size >= nombreEvaluationsTotal
+
+          if (aToutesLesNotes) {
+            etudiantsComplets++
+          }
+        })
+
+        console.log(`📊 Module ${moduleId}: ${etudiantsComplets}/${nombreEtudiants} étudiants avec notes complètes (${etudiantsAvecNotes} avec au moins une note)`)
+
+        // Un module est complet si :
+        // 1. Tous les étudiants ont toutes leurs notes (nombre exact) - CAS IDÉAL
+        // 2. OU si tous les étudiants ont au moins une note ET le nombre total de notes correspond - CAS TOLÉRANT
+        // 3. OU si le nombre d'évaluations attendues est 0 mais des notes existent - CAS SANS PARAMÈTRES
+
+        const tousEtudiantsComplets = etudiantsComplets === nombreEtudiants && nombreEtudiants > 0
+
+        // Calculer le nombre minimum de notes attendues pour tous les étudiants
+        const notesMinAttendues = nombreEtudiants * nombreEvaluationsTotal
+        const ratioNotes = notesMinAttendues > 0 ? (notesNormalisees.length / notesMinAttendues) : 1
+
+        // Si tous les étudiants ont au moins une note ET qu'on a au moins 90% des notes attendues
+        const tousEtudiantsAvecNotes = etudiantsAvecNotes === nombreEtudiants &&
+          nombreEtudiants > 0 &&
+          ratioNotes >= 0.9
+
+        const notesSansParametres = nombreEvaluationsTotal === 0 && notesNormalisees.length > 0 && nombreEtudiants > 0
+
+        const moduleComplet = tousEtudiantsComplets || tousEtudiantsAvecNotes || notesSansParametres
+
+        if (moduleComplet) {
           modulesAvecNotesCompletes++
-          console.log(`✅ Module ${moduleId}: Complet sans paramètres (${etudiantsAvecNotes}/${nombreEtudiants} étudiants avec notes)`)
+          console.log(`✅ Module ${moduleId}: Tous les étudiants ont leurs notes complètes`)
+          if (tousEtudiantsComplets) {
+            console.log(`   → Raison: Tous les étudiants ont toutes leurs notes (${etudiantsComplets}/${nombreEtudiants})`)
+          } else if (tousEtudiantsAvecNotes) {
+            console.log(`   → Raison: Tous les étudiants ont des notes (${etudiantsAvecNotes}/${nombreEtudiants}) avec ${Math.round(ratioNotes * 100)}% des notes attendues`)
+          } else {
+            console.log(`   → Raison: Notes sans paramètres configurés`)
+          }
         } else {
-          console.log(`⚠️ Module ${moduleId}: Incomplet - ${etudiantsAvecNotes}/${nombreEtudiants} étudiants avec notes`)
+          console.log(`⚠️ Module ${moduleId}: Notes incomplètes`)
+          console.log(`   - Étudiants complets: ${etudiantsComplets}/${nombreEtudiants}`)
+          console.log(`   - Étudiants avec notes: ${etudiantsAvecNotes}/${nombreEtudiants}`)
+          console.log(`   - Notes trouvées: ${notesNormalisees.length}, Notes attendues min: ${notesMinAttendues}, Ratio: ${Math.round(ratioNotes * 100)}%`)
         }
-
-        continue
       }
 
-      const evaluations = parametres.evaluations
-      const nombreEvaluationsTotal = evaluations.reduce((sum, evaluation) => sum + evaluation.nombreEvaluations, 0)
+      // 5. Compter les étudiants qui ont toutes leurs notes pour tous les modules
+      // Utiliser une approche plus simple : si tous les modules ont leurs notes complètes,
+      // alors tous les étudiants ont leurs notes complètes
+      // Sinon, vérifier individuellement
 
-      // Construire la liste des IDs d'évaluation attendus
-      const evaluationIdsAttendus = []
-      evaluations.forEach(evaluation => {
-        for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
-          evaluationIdsAttendus.push(`${evaluation.id}_${i}`)
-        }
-      })
-
-      console.log(`📋 Module ${moduleId}: ${nombreEvaluationsTotal} évaluations attendues (IDs: ${evaluationIdsAttendus.join(', ')})`)
-
-      // Grouper les notes par étudiant
-      const notesParEtudiant = {}
-      notesNormalisees.forEach(note => {
-        const etudiantId = note.etudiant_id
-        const evaluationId = note.evaluation_id
-
-        if (!etudiantId || !evaluationId) {
-          console.warn(`⚠️ Note invalide: etudiant_id=${etudiantId}, evaluation_id=${evaluationId}`)
-          return
-        }
-
-        if (!notesParEtudiant[etudiantId]) {
-          notesParEtudiant[etudiantId] = new Set()
-        }
-        notesParEtudiant[etudiantId].add(evaluationId)
-      })
-
-      console.log(`📊 Module ${moduleId}: Notes groupées pour ${Object.keys(notesParEtudiant).length} étudiants`)
-
-      // Vérifier combien d'étudiants ont toutes les notes pour ce module
-      let etudiantsComplets = 0
-      let etudiantsAvecNotes = 0
-
-      etudiantIds.forEach(etudiantId => {
-        const notesEtudiant = notesParEtudiant[etudiantId] || new Set()
-        const notesEtudiantArray = Array.from(notesEtudiant)
-
-        // Compter les étudiants qui ont au moins une note
-        if (notesEtudiant.size > 0) {
-          etudiantsAvecNotes++
-        }
-
-        // Vérifier que l'étudiant a au moins le nombre requis d'évaluations
-        // On accepte si le nombre de notes est >= au nombre attendu (peut avoir des notes supplémentaires)
-        // Si nombreEvaluationsTotal est 0, on considère que l'étudiant a ses notes (cas où il n'y a pas d'évaluations configurées)
-        const aToutesLesNotes = nombreEvaluationsTotal === 0 || notesEtudiant.size >= nombreEvaluationsTotal
-
-        if (aToutesLesNotes) {
-          etudiantsComplets++
-        }
-      })
-
-      console.log(`📊 Module ${moduleId}: ${etudiantsComplets}/${nombreEtudiants} étudiants avec notes complètes (${etudiantsAvecNotes} avec au moins une note)`)
-
-      // Un module est complet si :
-      // 1. Tous les étudiants ont toutes leurs notes (nombre exact) - CAS IDÉAL
-      // 2. OU si tous les étudiants ont au moins une note ET le nombre total de notes correspond - CAS TOLÉRANT
-      // 3. OU si le nombre d'évaluations attendues est 0 mais des notes existent - CAS SANS PARAMÈTRES
-
-      const tousEtudiantsComplets = etudiantsComplets === nombreEtudiants && nombreEtudiants > 0
-
-      // Calculer le nombre minimum de notes attendues pour tous les étudiants
-      const notesMinAttendues = nombreEtudiants * nombreEvaluationsTotal
-      const ratioNotes = notesMinAttendues > 0 ? (notesNormalisees.length / notesMinAttendues) : 1
-
-      // Si tous les étudiants ont au moins une note ET qu'on a au moins 90% des notes attendues
-      const tousEtudiantsAvecNotes = etudiantsAvecNotes === nombreEtudiants &&
-        nombreEtudiants > 0 &&
-        ratioNotes >= 0.9
-
-      const notesSansParametres = nombreEvaluationsTotal === 0 && notesNormalisees.length > 0 && nombreEtudiants > 0
-
-      const moduleComplet = tousEtudiantsComplets || tousEtudiantsAvecNotes || notesSansParametres
-
-      if (moduleComplet) {
-        modulesAvecNotesCompletes++
-        console.log(`✅ Module ${moduleId}: Tous les étudiants ont leurs notes complètes`)
-        if (tousEtudiantsComplets) {
-          console.log(`   → Raison: Tous les étudiants ont toutes leurs notes (${etudiantsComplets}/${nombreEtudiants})`)
-        } else if (tousEtudiantsAvecNotes) {
-          console.log(`   → Raison: Tous les étudiants ont des notes (${etudiantsAvecNotes}/${nombreEtudiants}) avec ${Math.round(ratioNotes * 100)}% des notes attendues`)
-        } else {
-          console.log(`   → Raison: Notes sans paramètres configurés`)
-        }
+      if (modulesAvecNotesCompletes === nombreModulesDisponibles && nombreModulesDisponibles > 0) {
+        // Si tous les modules sont complets, tous les étudiants sont complets
+        etudiantsAvecNotesCompletes = nombreEtudiants
+        console.log(`👥 Tous les modules sont complets → Tous les étudiants sont complets: ${etudiantsAvecNotesCompletes}/${nombreEtudiants}`)
       } else {
-        console.log(`⚠️ Module ${moduleId}: Notes incomplètes`)
-        console.log(`   - Étudiants complets: ${etudiantsComplets}/${nombreEtudiants}`)
-        console.log(`   - Étudiants avec notes: ${etudiantsAvecNotes}/${nombreEtudiants}`)
-        console.log(`   - Notes trouvées: ${notesNormalisees.length}, Notes attendues min: ${notesMinAttendues}, Ratio: ${Math.round(ratioNotes * 100)}%`)
-      }
-    }
+        // Sinon, vérifier individuellement (mais de manière plus tolérante)
+        const etudiantsComplets = new Set()
 
-    // 5. Compter les étudiants qui ont toutes leurs notes pour tous les modules
-    // Utiliser une approche plus simple : si tous les modules ont leurs notes complètes,
-    // alors tous les étudiants ont leurs notes complètes
-    // Sinon, vérifier individuellement
+        // Pour chaque étudiant, vérifier s'il a des notes pour tous les modules
+        for (const etudiantId of etudiantIds) {
+          let tousModulesComplets = true
 
-    if (modulesAvecNotesCompletes === nombreModulesDisponibles && nombreModulesDisponibles > 0) {
-      // Si tous les modules sont complets, tous les étudiants sont complets
-      etudiantsAvecNotesCompletes = nombreEtudiants
-      console.log(`👥 Tous les modules sont complets → Tous les étudiants sont complets: ${etudiantsAvecNotesCompletes}/${nombreEtudiants}`)
-    } else {
-      // Sinon, vérifier individuellement (mais de manière plus tolérante)
-      const etudiantsComplets = new Set()
+          for (const moduleId of moduleIds) {
+            // Vérifier simplement s'il y a au moins une note pour cet étudiant et ce module
+            const { count: notesCount } = await supabaseAdmin
+              .from('notes')
+              .select('*', { count: 'exact', head: true })
+              .eq('module_id', moduleId)
+              .eq('classe_id', classeId)
+              .eq('semestre', semestre)
+              .eq('etudiant_id', etudiantId)
 
-      // Pour chaque étudiant, vérifier s'il a des notes pour tous les modules
-      for (const etudiantId of etudiantIds) {
-        let tousModulesComplets = true
+            // Si l'étudiant n'a aucune note pour ce module, il n'est pas complet
+            if ((notesCount || 0) === 0) {
+              tousModulesComplets = false
+              break
+            }
+          }
 
-        for (const moduleId of moduleIds) {
-          // Vérifier simplement s'il y a au moins une note pour cet étudiant et ce module
-          const { count: notesCount } = await supabaseAdmin
-            .from('notes')
-            .select('*', { count: 'exact', head: true })
-            .eq('module_id', moduleId)
-            .eq('classe_id', classeId)
-            .eq('semestre', semestre)
-            .eq('etudiant_id', etudiantId)
-
-          // Si l'étudiant n'a aucune note pour ce module, il n'est pas complet
-          if ((notesCount || 0) === 0) {
-            tousModulesComplets = false
-            break
+          if (tousModulesComplets) {
+            etudiantsComplets.add(etudiantId)
           }
         }
 
-        if (tousModulesComplets) {
-          etudiantsComplets.add(etudiantId)
-        }
+        etudiantsAvecNotesCompletes = etudiantsComplets.size
+        console.log(`👥 Étudiants avec des notes pour tous les modules: ${etudiantsAvecNotesCompletes}/${nombreEtudiants}`)
       }
-
-      etudiantsAvecNotesCompletes = etudiantsComplets.size
-      console.log(`👥 Étudiants avec des notes pour tous les modules: ${etudiantsAvecNotesCompletes}/${nombreEtudiants}`)
-    }
     } // Fin du if (!statutNotes || ...) - calcul en temps réel
 
     // 6. Calculer le pourcentage de notes saisies
@@ -544,7 +544,7 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
         .eq('promotion_id', promotion.id)
         .eq('classe_id', classeId)
         .eq('semestre', semestre)
-      
+
       bulletinsExistent = (count || 0) > 0
       nombreBulletinsGeneres = count || 0
     }
@@ -585,8 +585,8 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
       message: bulletinsExistent
         ? `${nombreBulletinsGeneres} bulletin(s) déjà généré(s)`
         : pretPourGeneration
-        ? 'Les bulletins sont prêts à être générés'
-        : `${modulesAvecNotesCompletes}/${nombreModulesDisponibles} modules disponibles avec notes complètes (requis: ${nombreModulesRequis}), ${etudiantsAvecNotesCompletes}/${nombreEtudiants} étudiants avec toutes leurs notes`
+          ? 'Les bulletins sont prêts à être générés'
+          : `${modulesAvecNotesCompletes}/${nombreModulesDisponibles} modules disponibles avec notes complètes (requis: ${nombreModulesRequis}), ${etudiantsAvecNotesCompletes}/${nombreEtudiants} étudiants avec toutes leurs notes`
     }
   } catch (error) {
     console.error('Erreur lors de la vérification de l\'état des bulletins:', error)
@@ -717,6 +717,49 @@ export const genererBulletins = async (classeId, semestre, departementId, chefDe
       .select()
 
     if (insertError) throw insertError
+
+    // 6. Enregistrer ou mettre à jour dans la table de suivi des visas (bulletins_generes)
+    // Vérifier si une entrée existe déjà
+    const { data: existingGeneres } = await supabaseAdmin
+      .from('bulletins_generes')
+      .select('id')
+      .eq('classeId', classeId)
+      .eq('semestre', semestre)
+      .eq('departementId', departementId)
+      .single()
+
+    const bulletinGenereData = {
+      classeId,
+      semestre,
+      departementId,
+      chefDepartementId,
+      nombreEtudiants: etudiantIds.length,
+      anneeAcademique: promotion.annee,
+      statut: 'EN_ATTENTE',
+      dateGeneration: new Date().toISOString() // Mettre à jour la date
+    }
+
+    let genereError
+    if (existingGeneres) {
+      // Mise à jour
+      const { error } = await supabaseAdmin
+        .from('bulletins_generes')
+        .update(bulletinGenereData)
+        .eq('id', existingGeneres.id)
+      genereError = error
+    } else {
+      // Création
+      const { error } = await supabaseAdmin
+        .from('bulletins_generes')
+        .insert(bulletinGenereData)
+      genereError = error
+    }
+
+    if (genereError) {
+      console.error('Erreur lors de l\'enregistrement dans bulletins_generes:', genereError)
+      // On ne bloque pas la génération, mais on logue l'erreur
+    }
+
 
     return {
       success: true,

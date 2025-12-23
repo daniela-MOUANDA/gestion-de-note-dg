@@ -29,7 +29,7 @@ import {
   getDiplomesParClasse,
   marquerDiplomeRecupere
 } from '../../src/services/scolarite/diplomeService.js'
-import { parseExcelFile, importEtudiants } from '../../src/services/scolarite/importService.js'
+import { parseExcelFile, importEtudiants, creerEtudiantManuel } from '../../src/services/scolarite/importService.js'
 import {
   saveDocument,
   updateInscriptionDocument,
@@ -577,6 +577,34 @@ router.delete('/inscriptions/:id/documents/:type', authenticate, async (req, res
   }
 })
 
+// Route pour créer un étudiant manuellement
+router.post('/etudiants', authenticate, async (req, res) => {
+  try {
+    const agentId = req.user?.id
+    if (!agentId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Utilisateur non authentifié'
+      })
+    }
+
+    const result = await creerEtudiantManuel(req.body, agentId)
+
+    res.json({
+      success: true,
+      message: result.message,
+      etudiant: result.etudiant,
+      inscription: result.inscription
+    })
+  } catch (error) {
+    console.error('Erreur lors de la création de l\'étudiant:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la création de l\'étudiant'
+    })
+  }
+})
+
 // Route pour mettre à jour les informations de l'étudiant
 router.put('/etudiants/:id', authenticate, async (req, res) => {
   try {
@@ -736,6 +764,27 @@ router.get('/etudiant/mon-profil', authenticate, async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Erreur lors de la récupération du profil'
+    })
+  }
+})
+
+// Route pour supprimer un étudiant
+router.delete('/etudiants/:id', authenticate, async (req, res) => {
+  try {
+    const { deleteEtudiant } = await import('../../src/services/scolarite/etudiantService.js')
+    const { id } = req.params
+
+    const result = await deleteEtudiant(id)
+
+    res.json({
+      success: true,
+      message: result.message
+    })
+  } catch (error) {
+    console.error('Erreur lors de la suppression de l\'étudiant:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la suppression de l\'étudiant'
     })
   }
 })

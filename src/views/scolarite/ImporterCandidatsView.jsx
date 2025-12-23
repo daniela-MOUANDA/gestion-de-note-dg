@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -8,13 +8,18 @@ import {
   faCheckCircle,
   faInfoCircle,
   faExclamationTriangle,
-  faSpinner
+  faSpinner,
+  faUserPlus,
+  faTimes
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAlert } from '../../contexts/AlertContext'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import Modal from '../../components/common/Modal'
+import { getFormations, getFilieres, getPromotions } from '../../api/scolarite'
+import { creerEtudiantManuel } from '../../api/scolarite'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
@@ -30,6 +35,35 @@ const ImporterCandidatsView = () => {
   const [anneeAcademique, setAnneeAcademique] = useState('2025')
   const [isUploading, setIsUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Données pour le formulaire
+  const [formations, setFormations] = useState([])
+  const [filieres, setFilieres] = useState([])
+  const [niveaux, setNiveaux] = useState([])
+  const [promotions, setPromotions] = useState([])
+  
+  // Formulaire étudiant
+  const [formData, setFormData] = useState({
+    // Informations étudiant
+    matricule: '',
+    nom: '',
+    prenom: '',
+    dateNaissance: '',
+    lieuNaissance: '',
+    nationalite: '',
+    sexe: '',
+    email: '',
+    telephone: '',
+    adresse: '',
+    // Informations inscription
+    promotionId: '',
+    formationId: '',
+    filiereId: '',
+    niveauId: '',
+    typeInscription: 'INSCRIPTION'
+  })
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0]
@@ -119,6 +153,125 @@ const ImporterCandidatsView = () => {
     alert('Fonctionnalité de téléchargement du modèle à venir')
   }
 
+  // Charger les données au montage
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const [formationsData, filieresData, promotionsData, niveauxResponse] = await Promise.all([
+          getFormations(),
+          getFilieres(),
+          getPromotions(),
+          fetch(`${API_URL}/scolarite/niveaux`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }).then(res => res.json())
+        ])
+        setFormations(formationsData)
+        setFilieres(filieresData)
+        setPromotions(promotionsData)
+        setNiveaux(niveauxResponse || [])
+        
+        // Sélectionner la promotion en cours par défaut
+        const promoEnCours = promotionsData.find(p => p.statut === 'EN_COURS')
+        if (promoEnCours) {
+          setFormData(prev => ({ ...prev, promotionId: promoEnCours.id }))
+        }
+        
+        // Sélectionner la première formation par défaut
+        if (formationsData.length > 0) {
+          setFormData(prev => ({ ...prev, formationId: formationsData[0].id }))
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error)
+        alertError('Erreur lors du chargement des données')
+      }
+    }
+    loadData()
+  }, [])
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleOpenModal = () => {
+    setShowAddModal(true)
+    // Réinitialiser le formulaire
+    setFormData({
+      matricule: '',
+      nom: '',
+      prenom: '',
+      dateNaissance: '',
+      lieuNaissance: '',
+      nationalite: '',
+      sexe: '',
+      email: '',
+      telephone: '',
+      adresse: '',
+      promotionId: promotions.find(p => p.statut === 'EN_COURS')?.id || '',
+      formationId: formations[0]?.id || '',
+      filiereId: '',
+      niveauId: '',
+      typeInscription: 'INSCRIPTION'
+    })
+  }
+
+  const handleCloseModal = () => {
+    setShowAddModal(false)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    // Validation
+    if (!formData.nom || !formData.prenom) {
+      alertError('Le nom et le prénom sont obligatoires')
+      return
+    }
+    
+    if (!formData.promotionId || !formData.formationId || !formData.filiereId || !formData.niveauId) {
+      alertError('Veuillez remplir tous les champs d\'inscription')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const result = await creerEtudiantManuel({
+        ...formData,
+        anneeAcademique
+      })
+      
+      success(`Étudiant ${formData.nom} ${formData.prenom} créé avec succès !`)
+      handleCloseModal()
+      
+      // Réinitialiser le formulaire
+      setFormData({
+        matricule: '',
+        nom: '',
+        prenom: '',
+        dateNaissance: '',
+        lieuNaissance: '',
+        nationalite: '',
+        sexe: '',
+        email: '',
+        telephone: '',
+        adresse: '',
+        promotionId: promotions.find(p => p.statut === 'EN_COURS')?.id || '',
+        formationId: formations[0]?.id || '',
+        filiereId: '',
+        niveauId: '',
+        typeInscription: 'INSCRIPTION'
+      })
+    } catch (error) {
+      console.error('Erreur lors de la création de l\'étudiant:', error)
+      alertError(error.message || 'Erreur lors de la création de l\'étudiant')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <AdminSidebar />
@@ -156,16 +309,25 @@ const ImporterCandidatsView = () => {
             <h2 className="text-lg font-bold text-slate-800 mb-4">Paramètres d'import</h2>
             <div className="mb-6">
               <label className="block text-sm font-medium text-slate-700 mb-2">Année académique</label>
-              <select
-                value={anneeAcademique}
-                onChange={(e) => setAnneeAcademique(e.target.value)}
-                disabled={isUploading}
-                className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-              >
-                <option value="2025">2025</option>
-                <option value="2024">2024</option>
-                <option value="2023">2023</option>
-              </select>
+              <div className="flex items-center gap-3">
+                <select
+                  value={anneeAcademique}
+                  onChange={(e) => setAnneeAcademique(e.target.value)}
+                  disabled={isUploading}
+                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                  <option value="2023">2023</option>
+                </select>
+                <button
+                  onClick={handleOpenModal}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+                >
+                  <FontAwesomeIcon icon={faUserPlus} />
+                  Ajouter un étudiant
+                </button>
+              </div>
               <p className="text-xs text-slate-500 mt-1">Les filières seront détectées automatiquement depuis les feuilles Excel</p>
             </div>
 
@@ -274,6 +436,237 @@ const ImporterCandidatsView = () => {
               </button>
             </div>
           </div>
+
+          {/* Modal d'ajout d'étudiant */}
+          <Modal
+            isOpen={showAddModal}
+            onClose={handleCloseModal}
+            title="Ajouter un étudiant"
+            size="lg"
+          >
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Informations personnelles */}
+              <div className="border-b border-slate-200 pb-4">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">Informations personnelles</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Matricule (optionnel)</label>
+                    <input
+                      type="text"
+                      name="matricule"
+                      value={formData.matricule}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Laissé vide pour génération automatique"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Sexe</label>
+                    <select
+                      name="sexe"
+                      value={formData.sexe}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sélectionner</option>
+                      <option value="M">Masculin</option>
+                      <option value="F">Féminin</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom *</label>
+                    <input
+                      type="text"
+                      name="nom"
+                      value={formData.nom}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Prénom *</label>
+                    <input
+                      type="text"
+                      name="prenom"
+                      value={formData.prenom}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Date de naissance</label>
+                    <input
+                      type="date"
+                      name="dateNaissance"
+                      value={formData.dateNaissance}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Lieu de naissance</label>
+                    <input
+                      type="text"
+                      name="lieuNaissance"
+                      value={formData.lieuNaissance}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nationalité</label>
+                    <input
+                      type="text"
+                      name="nationalite"
+                      value={formData.nationalite}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
+                    <input
+                      type="tel"
+                      name="telephone"
+                      value={formData.telephone}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Adresse</label>
+                    <textarea
+                      name="adresse"
+                      value={formData.adresse}
+                      onChange={handleInputChange}
+                      rows="2"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations d'inscription */}
+              <div className="border-b border-slate-200 pb-4">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">Informations d'inscription</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Promotion *</label>
+                    <select
+                      name="promotionId"
+                      value={formData.promotionId}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sélectionner</option>
+                      {promotions.map(promo => (
+                        <option key={promo.id} value={promo.id}>{promo.annee}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Formation *</label>
+                    <select
+                      name="formationId"
+                      value={formData.formationId}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sélectionner</option>
+                      {formations.map(formation => (
+                        <option key={formation.id} value={formation.id}>{formation.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Filière *</label>
+                    <select
+                      name="filiereId"
+                      value={formData.filiereId}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sélectionner</option>
+                      {filieres.map(filiere => (
+                        <option key={filiere.id} value={filiere.id}>{filiere.nom} ({filiere.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Niveau *</label>
+                    <select
+                      name="niveauId"
+                      value={formData.niveauId}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sélectionner</option>
+                      {niveaux.map(niveau => (
+                        <option key={niveau.id} value={niveau.id}>{niveau.nom} ({niveau.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Type d'inscription *</label>
+                    <select
+                      name="typeInscription"
+                      value={formData.typeInscription}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="INSCRIPTION">Inscription</option>
+                      <option value="REINSCRIPTION">Réinscription</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Boutons */}
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                      Ajout en cours...
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faUserPlus} />
+                      Ajouter l'étudiant
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </Modal>
         </main>
       </div>
     </div>

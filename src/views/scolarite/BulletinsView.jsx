@@ -483,10 +483,12 @@ const BulletinsView = () => {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                            etudiant.moyenne >= 16 ? 'bg-green-100 text-green-800' :
-                            etudiant.moyenne >= 14 ? 'bg-blue-100 text-blue-800' :
-                            etudiant.moyenne >= 12 ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-orange-100 text-orange-800'
+                            etudiant.moyenne >= 18 ? 'bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-900 border border-yellow-300' :
+                            etudiant.moyenne >= 16 ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                            etudiant.moyenne >= 14 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                            etudiant.moyenne >= 12 ? 'bg-green-100 text-green-800 border border-green-200' :
+                            etudiant.moyenne >= 10 ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                            'bg-red-100 text-red-800 border border-red-200'
                           }`}>
                             {etudiant.mention}
                           </span>

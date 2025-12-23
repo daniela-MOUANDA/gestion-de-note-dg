@@ -1,43 +1,107 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faStamp, faCheckCircle, faClock, faFileAlt, faSearch, faFilter, faDownload, faEye } from '@fortawesome/free-solid-svg-icons'
+import { faStamp, faCheckCircle, faClock, faFileAlt, faSearch, faFilter, faDownload, faEye, faSync } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
+import { getBulletinsEnAttente, getBulletinsVises, viserBulletin } from '../../api/dep'
+import { toast } from 'react-hot-toast'
 
 const VisasView = () => {
-  const [documents, setDocuments] = useState([
-    { id: 1, type: 'Bulletin', titre: 'Bulletin Semestre 1 - L3 GI', classe: 'L3 GI - Groupe A', dateCreation: '2025-01-10', statut: 'EN_ATTENTE', nombrePages: 1 },
-    { id: 2, type: 'Note de Service', titre: 'Note de Service N°001/2025', departement: 'Génie Informatique', dateCreation: '2025-01-12', statut: 'EN_ATTENTE', nombrePages: 2 },
-    { id: 3, type: 'PV', titre: 'PV Conseil de Classe - L2 RT', classe: 'L2 RT - Groupe B', dateCreation: '2025-01-14', statut: 'VISE', dateVisa: '2025-01-15', nombrePages: 3 },
-    { id: 4, type: 'Bulletin', titre: 'Bulletin Semestre 1 - L1 ELEC', classe: 'L1 ELEC - Groupe A', dateCreation: '2025-01-11', statut: 'EN_ATTENTE', nombrePages: 1 },
-  ])
+  const [documents, setDocuments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState('TOUS')
   const [filterStatut, setFilterStatut] = useState('TOUS')
 
+  const fetchDocuments = async () => {
+    try {
+      setRefreshing(true)
+      const [pendingRes, visedRes] = await Promise.all([
+        getBulletinsEnAttente(),
+        getBulletinsVises()
+      ])
+
+      let allDocs = []
+
+      if (pendingRes.success) {
+        const pendingDocs = pendingRes.bulletins.map(b => ({
+          id: b.id,
+          type: 'Bulletin',
+          titre: `Bulletin ${b.semestre} - ${b.classes?.nom || 'Classe inconnue'}`,
+          classe: b.classes?.nom,
+          departement: b.departements?.nom,
+          dateCreation: b.dateGeneration,
+          statut: 'EN_ATTENTE',
+          nombrePages: b.nombreEtudiants, // Utiliser nb étudiants comme proxy
+          data: b // Garder l'objet original
+        }))
+        allDocs = [...allDocs, ...pendingDocs]
+      }
+
+      if (visedRes.success) {
+        const visedDocs = visedRes.bulletins.map(b => ({
+          id: b.id,
+          type: 'Bulletin',
+          titre: `Bulletin ${b.semestre} - ${b.classes?.nom || 'Classe inconnue'}`,
+          classe: b.classes?.nom,
+          departement: b.departements?.nom,
+          dateCreation: b.dateGeneration,
+          statut: 'VISE',
+          dateVisa: b.dateVisa,
+          visePar: b.dep?.nom ? `${b.dep.nom} ${b.dep.prenom}` : 'N/A',
+          nombrePages: b.nombreEtudiants,
+          data: b
+        }))
+        allDocs = [...allDocs, ...visedDocs]
+      }
+
+      setDocuments(allDocs.sort((a, b) => new Date(b.dateCreation) - new Date(a.dateCreation)))
+    } catch (error) {
+      console.error('Erreur chargement documents:', error)
+      toast.error('Erreur lors du chargement des documents')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [])
+
   const handleViser = (document) => {
     setSelectedDocument(document)
     setShowModal(true)
   }
 
-  const handleConfirmerVisa = () => {
-    setDocuments(documents.map(d => d.id === selectedDocument.id ? { ...d, statut: 'VISE', dateVisa: new Date().toISOString().split('T')[0] } : d))
-    setShowModal(false)
-    alert('Document visé avec succès !')
+  const handleConfirmerVisa = async () => {
+    try {
+      const result = await viserBulletin(selectedDocument.id)
+      if (result.success) {
+        toast.success('Document visé avec succès !')
+        setShowModal(false)
+        fetchDocuments() // Rafraîchir la liste
+      } else {
+        toast.error('Erreur lors du visa : ' + result.error)
+      }
+    } catch (error) {
+      toast.error('Erreur technique lors du visa')
+    }
   }
 
   const filteredDocuments = documents.filter(doc => {
-    const matchesSearch = `${doc.titre} ${doc.type}`.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = `${doc.titre} ${doc.type} ${doc.classe || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesType = filterType === 'TOUS' || doc.type === filterType
     const matchesStatut = filterStatut === 'TOUS' || doc.statut === filterStatut
     return matchesSearch && matchesType && matchesStatut
   })
 
   const getStatutColor = (statut) => {
-    switch(statut) {
+    switch (statut) {
       case 'VISE': return 'bg-green-100 text-green-800'
       case 'EN_ATTENTE': return 'bg-amber-100 text-amber-800'
       default: return 'bg-slate-100 text-slate-800'
@@ -45,7 +109,7 @@ const VisasView = () => {
   }
 
   const getStatutLabel = (statut) => {
-    switch(statut) {
+    switch (statut) {
       case 'VISE': return 'Visé'
       case 'EN_ATTENTE': return 'En attente'
       default: return statut
@@ -53,11 +117,46 @@ const VisasView = () => {
   }
 
   const getTypeColor = (type) => {
-    switch(type) {
+    switch (type) {
       case 'Bulletin': return 'bg-blue-100 text-blue-800'
       case 'Note de Service': return 'bg-purple-100 text-purple-800'
       case 'PV': return 'bg-emerald-100 text-emerald-800'
       default: return 'bg-slate-100 text-slate-800'
+    }
+  }
+
+  const handleVoir = (doc) => {
+    // Construire l'URL avec le token d'authentification si nécessaire ou passer par une méthode sécurisée
+    // Ici on ouvre dans un nouvel onglet, l'auth sera gérée par le cookie ou le header si on passait par fetch
+    // Comme c'est un lien direct, on peut passer le token en query param (moins sécurisé) ou utiliser une route qui valide le cookie
+    // Pour l'instant, faisons simple : window.open avec le token en query param (à sécuriser plus tard)
+    const token = localStorage.getItem('token')
+    const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/dep/bulletins/${doc.id}/preview?token=${token}`
+
+    // Alternative plus propre : fetch blob et open URL
+    // Mais pour "Voir", un nouvel onglet est mieux. 
+    // Modifions le backend pour accepter le token en query param temporairement ou utilisons une fonction fetch.
+
+    viewDocument(doc.id)
+  }
+
+  const viewDocument = async (id) => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/dep/bulletins/${id}/preview`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) throw new Error('Erreur téléchargement')
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch (e) {
+      toast.error("Erreur lors de l'ouverture du document")
+      console.error(e)
     }
   }
 
@@ -67,9 +166,18 @@ const VisasView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Visas & Documents</h1>
-            <p className="text-sm text-slate-600">Imposez des visas sur les documents (bulletins, notes de service, PV, etc.)</p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Visas & Documents</h1>
+              <p className="text-sm text-slate-600">Imposez des visas sur les documents (bulletins, notes de service, PV, etc.)</p>
+            </div>
+            <button
+              onClick={fetchDocuments}
+              className="p-2 bg-white rounded-full shadow hover:bg-slate-50 transition-colors text-blue-600"
+              title="Rafraîchir"
+            >
+              <FontAwesomeIcon icon={faSync} spin={refreshing} />
+            </button>
           </div>
 
           {/* Filtres */}
@@ -112,78 +220,89 @@ const VisasView = () => {
           </div>
 
           {/* Liste des documents */}
-          <div className="space-y-4">
-            {filteredDocuments.map((doc) => (
-              <div key={doc.id} className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <FontAwesomeIcon icon={faFileAlt} className="text-blue-600" />
-                      <h3 className="text-lg font-bold text-slate-800">{doc.titre}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getTypeColor(doc.type)}`}>
-                        {doc.type}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatutColor(doc.statut)}`}>
-                        {getStatutLabel(doc.statut)}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600">
-                      <div>
-                        <span className="font-medium">Date de création:</span> {new Date(doc.dateCreation).toLocaleDateString('fr-FR')}
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <FontAwesomeIcon icon={faSync} spin className="text-4xl text-blue-500" />
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-md p-8 text-center">
+              <p className="text-slate-500">Aucun document trouvé.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredDocuments.map((doc) => (
+                <div key={doc.id} className={`bg-white rounded-xl shadow-md p-6 border-l-4 ${doc.statut === 'VISE' ? 'border-green-500' : 'border-amber-500'}`}>
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <FontAwesomeIcon icon={faFileAlt} className="text-blue-600" />
+                        <h3 className="text-lg font-bold text-slate-800">{doc.titre}</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getTypeColor(doc.type)}`}>
+                          {doc.type}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatutColor(doc.statut)}`}>
+                          {getStatutLabel(doc.statut)}
+                        </span>
                       </div>
-                      {doc.classe && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600">
                         <div>
-                          <span className="font-medium">Classe:</span> {doc.classe}
+                          <span className="font-medium">Date de création:</span> {new Date(doc.dateCreation).toLocaleDateString('fr-FR')}
                         </div>
-                      )}
-                      {doc.departement && (
+                        {doc.classe && (
+                          <div>
+                            <span className="font-medium">Classe:</span> {doc.classe}
+                          </div>
+                        )}
+                        {doc.departement && (
+                          <div>
+                            <span className="font-medium">Département:</span> {doc.departement}
+                          </div>
+                        )}
+                        {doc.dateVisa && (
+                          <div>
+                            <span className="font-medium">Date de visa:</span> {new Date(doc.dateVisa).toLocaleDateString('fr-FR')}
+                          </div>
+                        )}
                         <div>
-                          <span className="font-medium">Département:</span> {doc.departement}
+                          <span className="font-medium">Effectif:</span> {doc.nombrePages} étudiants
                         </div>
-                      )}
-                      {doc.dateVisa && (
-                        <div>
-                          <span className="font-medium">Date de visa:</span> {new Date(doc.dateVisa).toLocaleDateString('fr-FR')}
-                        </div>
-                      )}
-                      <div>
-                        <span className="font-medium">Pages:</span> {doc.nombrePages}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
-                      title="Voir"
-                    >
-                      <FontAwesomeIcon icon={faEye} />
-                    </button>
-                    <button
-                      className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-                      title="Télécharger"
-                    >
-                      <FontAwesomeIcon icon={faDownload} />
-                    </button>
-                    {doc.statut === 'EN_ATTENTE' && (
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => handleViser(doc)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                        onClick={() => viewDocument(doc.id)}
+                        className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                        title="Voir"
                       >
-                        <FontAwesomeIcon icon={faStamp} />
-                        Viser
+                        <FontAwesomeIcon icon={faEye} />
                       </button>
-                    )}
-                    {doc.statut === 'VISE' && (
-                      <div className="flex items-center gap-2 text-green-600 px-4 py-2">
-                        <FontAwesomeIcon icon={faCheckCircle} />
-                        <span className="text-sm font-medium">Visé</span>
-                      </div>
-                    )}
+                      <button
+                        className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                        title="Télécharger"
+                      >
+                        <FontAwesomeIcon icon={faDownload} />
+                      </button>
+                      {doc.statut === 'EN_ATTENTE' && (
+                        <button
+                          onClick={() => handleViser(doc)}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                        >
+                          <FontAwesomeIcon icon={faStamp} />
+                          Viser
+                        </button>
+                      )}
+                      {doc.statut === 'VISE' && (
+                        <div className="flex items-center gap-2 text-green-600 px-4 py-2">
+                          <FontAwesomeIcon icon={faCheckCircle} />
+                          <span className="text-sm font-medium">Visé</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Modal de confirmation de visa */}
           <Modal
@@ -204,6 +323,9 @@ const VisasView = () => {
                 {selectedDocument?.departement && (
                   <p className="text-sm text-slate-600"><strong>Département:</strong> {selectedDocument.departement}</p>
                 )}
+                <div className="mt-4 p-3 bg-yellow-50 text-yellow-800 text-sm rounded border border-yellow-200">
+                  <p>⚠️ Cette action est irréversible. Le cachet officiel sera apposé sur tous les bulletins de ce lot.</p>
+                </div>
               </div>
               <div className="flex justify-end gap-3">
                 <button
@@ -223,8 +345,8 @@ const VisasView = () => {
             </div>
           </Modal>
         </main>
-      </div>
-    </div>
+      </div >
+    </div >
   )
 }
 

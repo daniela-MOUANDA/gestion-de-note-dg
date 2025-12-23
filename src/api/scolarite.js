@@ -435,6 +435,45 @@ export const deleteDocumentInscription = async (inscriptionId, documentType) => 
   return response.json()
 }
 
+export const deleteEtudiant = async (etudiantId) => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    redirectToLogin('Session expirée')
+    return
+  }
+
+  const response = await fetch(`${API_URL}/etudiants/${etudiantId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  })
+
+  if (response.status === 401) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    redirectToLogin('Session expirée')
+    return
+  }
+
+  if (!response.ok) {
+    let errorMessage = 'Erreur lors de la suppression de l\'étudiant'
+    try {
+      const error = await response.json()
+      errorMessage = error.error || errorMessage
+    } catch (e) {
+      // Si la réponse n'est pas du JSON, utiliser le message d'erreur par défaut
+      errorMessage = `Erreur ${response.status}: ${response.statusText}`
+    }
+    throw new Error(errorMessage)
+  }
+
+  return response.json()
+}
+
 export const updateEtudiantInfo = async (etudiantId, data) => {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -538,5 +577,35 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
     throw new Error(errorData.error || `Erreur ${response.status}: ${response.statusText}`)
   }
   
+  return response.json()
+}
+
+// ============================================
+// CRÉATION MANUELLE D'ÉTUDIANT
+// ============================================
+
+export const creerEtudiantManuel = async (data) => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    throw new Error('Token manquant. Veuillez vous reconnecter.')
+  }
+
+  const response = await fetch(`${API_URL}/etudiants`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(data)
+  })
+
+  if (!response.ok) {
+    if (handleAuthError(response)) {
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    const error = await response.json().catch(() => ({ error: 'Erreur lors de la création de l\'étudiant' }))
+    throw new Error(error.error || 'Erreur lors de la création de l\'étudiant')
+  }
+
   return response.json()
 }

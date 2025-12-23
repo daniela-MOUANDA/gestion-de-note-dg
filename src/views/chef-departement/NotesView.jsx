@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGraduationCap, faSave, faEdit, faTrash, faSpinner, faFileExcel,
-  faUpload, faPlus, faCog, faCheckCircle, faTimes, faChartLine, faDownload
+  faUpload, faPlus, faCog, faCheckCircle, faTimes, faChartLine, faDownload, faSearch
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
@@ -38,6 +38,7 @@ const NotesView = () => {
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const [formParametres, setFormParametres] = useState({
     evaluations: [
@@ -284,6 +285,32 @@ const NotesView = () => {
   }
 
   const handleSaveNotes = async () => {
+    // Validation : Vérifier qu'aucune note ne dépasse la pondération
+    if (!parametres || !selectedEtudiant) return
+    
+    let hasInvalidNote = false
+    const invalidNotes = []
+    
+    parametres.evaluations.forEach(evaluation => {
+      for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+        const evalId = `${evaluation.id}_${i}`
+        const note = notes[selectedEtudiant.id]?.[evalId]
+        
+        if (note !== undefined && note !== null && note !== '') {
+          const numValue = parseFloat(note)
+          if (!isNaN(numValue) && numValue > evaluation.noteMax) {
+            hasInvalidNote = true
+            const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
+            invalidNotes.push(`${typeLabel} ${i}: ${numValue} > ${evaluation.noteMax}`)
+          }
+        }
+      }
+    })
+    
+    if (hasInvalidNote) {
+      showAlert(`Certaines notes dépassent la pondération maximale:\n${invalidNotes.join('\n')}`, 'error')
+      return
+    }
     if (!selectedEtudiant) return
 
     try {
@@ -346,6 +373,52 @@ const NotesView = () => {
       setSaving(true)
       const allNotesToSave = []
 
+      // Validation : Vérifier qu'aucune note ne dépasse la pondération
+      if (!parametres) {
+        showAlert('Paramètres de notation non configurés', 'error')
+        setSaving(false)
+        return
+      }
+      
+      let hasInvalidNote = false
+      const invalidNotes = []
+      
+      Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
+        const etudiant = etudiants.find(e => e.id === etudiantId)
+        const nomEtudiant = etudiant ? `${etudiant.prenom} ${etudiant.nom}` : etudiantId
+        
+        Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
+          if (valeur !== undefined && valeur !== null && valeur !== '') {
+            // Trouver l'évaluation correspondante
+            let evaluation = null
+            for (const evalItem of parametres.evaluations) {
+              for (let i = 1; i <= evalItem.nombreEvaluations; i++) {
+                if (`${evalItem.id}_${i}` === evaluationId) {
+                  evaluation = evalItem
+                  break
+                }
+              }
+              if (evaluation) break
+            }
+            
+            if (evaluation) {
+              const valeurNum = parseFloat(valeur)
+              if (!isNaN(valeurNum) && valeurNum > evaluation.noteMax) {
+                hasInvalidNote = true
+                const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
+                invalidNotes.push(`${nomEtudiant} - ${typeLabel}: ${valeurNum} > ${evaluation.noteMax}`)
+              }
+            }
+          }
+        })
+      })
+      
+      if (hasInvalidNote) {
+        showAlert(`Certaines notes dépassent la pondération maximale:\n${invalidNotes.slice(0, 5).join('\n')}${invalidNotes.length > 5 ? `\n... et ${invalidNotes.length - 5} autres` : ''}`, 'error')
+        setSaving(false)
+        return
+      }
+      
       Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
         Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
           // Inclure toutes les notes, même vides, pour permettre la suppression
@@ -666,11 +739,9 @@ const NotesView = () => {
           } else if (numVal < 0) {
             errors.push(`Ligne ${index + 2}: Note négative pour ${expectedEval.headerName} (${etudiant.nom}): ${numVal}`)
           } else if (numVal > expectedEval.max) {
-            // Note hors limites : on l'importe quand même mais on ajuste à la limite max
-            console.log(`⚠️ Note hors limites pour ${etudiant.nom} - ${expectedEval.headerName}: ${numVal} > ${expectedEval.max}, ajustée à ${expectedEval.max}`)
-            newNotes[etudiant.id][expectedEval.id] = expectedEval.max
-            count++
-            errors.push(`Ligne ${index + 2}: Note ${numVal} ajustée à ${expectedEval.max} (max) pour ${expectedEval.headerName} (${etudiant.nom})`)
+            // Note hors limites : refuser l'import
+            errors.push(`Ligne ${index + 2}: Note ${numVal} dépasse la pondération maximale ${expectedEval.max} pour ${expectedEval.headerName} (${etudiant.nom}). Note non importée.`)
+            console.log(`⚠️ Note hors limites pour ${etudiant.nom} - ${expectedEval.headerName}: ${numVal} > ${expectedEval.max}, note refusée`)
           } else {
             console.log(`✅ Import: ${etudiant.nom} - ${expectedEval.headerName} (${expectedEval.id}) = ${numVal}`)
             newNotes[etudiant.id][expectedEval.id] = numVal
@@ -894,6 +965,23 @@ const NotesView = () => {
                   </div>
                 </div>
 
+                {/* Barre de recherche */}
+                <div className="bg-white rounded-xl shadow-md p-4">
+                  <div className="relative">
+                    <FontAwesomeIcon 
+                      icon={faSearch} 
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" 
+                    />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Rechercher un étudiant par nom, prénom ou matricule..."
+                      className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
                 {/* Tableau des notes */}
                 <div className="bg-white rounded-xl shadow-md overflow-hidden">
                   <div className="overflow-x-auto">
@@ -923,15 +1011,40 @@ const NotesView = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {etudiants.length === 0 ? (
-                          <tr>
-                            <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3}
-                              className="px-6 py-12 text-center text-slate-500">
-                              Aucun étudiant trouvé dans cette classe.
-                            </td>
-                          </tr>
-                        ) : (
-                          etudiants.map((etudiant) => {
+                        {(() => {
+                          const etudiantsFiltres = etudiants.filter(etudiant => {
+                            if (!searchQuery.trim()) return true
+                            const query = searchQuery.toLowerCase().trim()
+                            const nom = (etudiant.nom || '').toLowerCase()
+                            const prenom = (etudiant.prenom || '').toLowerCase()
+                            const matricule = (etudiant.matricule || '').toLowerCase()
+                            const fullName = `${prenom} ${nom}`.toLowerCase()
+                            return nom.includes(query) || prenom.includes(query) || matricule.includes(query) || fullName.includes(query)
+                          })
+
+                          if (etudiants.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3}
+                                  className="px-6 py-12 text-center text-slate-500">
+                                  Aucun étudiant trouvé dans cette classe.
+                                </td>
+                              </tr>
+                            )
+                          }
+
+                          if (etudiantsFiltres.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3}
+                                  className="px-6 py-12 text-center text-slate-500">
+                                  Aucun étudiant ne correspond à la recherche "{searchQuery}".
+                                </td>
+                              </tr>
+                            )
+                          }
+
+                          return etudiantsFiltres.map((etudiant) => {
                             const moyenne = calculerMoyenne(etudiant.id)
                             return (
                               <tr key={etudiant.id} className="hover:bg-slate-50">
@@ -986,7 +1099,7 @@ const NotesView = () => {
                               </tr>
                             )
                           })
-                        )}
+                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -1222,7 +1335,41 @@ const NotesView = () => {
                                     type="number"
                                     value={notes[selectedEtudiant.id]?.[evalId] || ''}
                                     onChange={(e) => {
-                                      const value = e.target.value
+                                      let value = e.target.value
+                                      
+                                      // Si la valeur est vide, permettre la suppression
+                                      if (value === '') {
+                                        setNotes({
+                                          ...notes,
+                                          [selectedEtudiant.id]: {
+                                            ...notes[selectedEtudiant.id],
+                                            [evalId]: value
+                                          }
+                                        })
+                                        return
+                                      }
+                                      
+                                      // Convertir en nombre
+                                      const numValue = parseFloat(value)
+                                      
+                                      // Vérifier que c'est un nombre valide
+                                      if (isNaN(numValue)) {
+                                        return // Ne rien faire si ce n'est pas un nombre
+                                      }
+                                      
+                                      // Empêcher les valeurs négatives
+                                      if (numValue < 0) {
+                                        showAlert(`La note ne peut pas être négative.`, 'error')
+                                        return
+                                      }
+                                      
+                                      // Empêcher les valeurs supérieures à la pondération
+                                      if (numValue > evaluation.noteMax) {
+                                        showAlert(`La note ne peut pas dépasser ${evaluation.noteMax} (pondération maximale).`, 'error')
+                                        // Limiter automatiquement à la valeur maximale
+                                        value = evaluation.noteMax.toString()
+                                      }
+                                      
                                       setNotes({
                                         ...notes,
                                         [selectedEtudiant.id]: {
@@ -1230,6 +1377,20 @@ const NotesView = () => {
                                           [evalId]: value
                                         }
                                       })
+                                    }}
+                                    onBlur={(e) => {
+                                      // Validation finale au blur pour s'assurer que la valeur est correcte
+                                      const value = parseFloat(e.target.value)
+                                      if (!isNaN(value) && value > evaluation.noteMax) {
+                                        setNotes({
+                                          ...notes,
+                                          [selectedEtudiant.id]: {
+                                            ...notes[selectedEtudiant.id],
+                                            [evalId]: evaluation.noteMax.toString()
+                                          }
+                                        })
+                                        showAlert(`La note a été limitée à ${evaluation.noteMax} (pondération maximale).`, 'warning')
+                                      }
                                     }}
                                     min="0"
                                     max={evaluation.noteMax}
@@ -1334,4 +1495,3 @@ const NotesView = () => {
 }
 
 export default NotesView
-image.png

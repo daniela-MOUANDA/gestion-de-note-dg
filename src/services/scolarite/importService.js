@@ -98,6 +98,192 @@ export const generateMatricule = async (anneeAcademique) => {
   return matricule
 }
 
+// Créer un étudiant manuellement avec son inscription
+export const creerEtudiantManuel = async (data, agentId) => {
+  try {
+    const {
+      matricule: matriculeFourni,
+      nom,
+      prenom,
+      dateNaissance,
+      lieuNaissance,
+      nationalite,
+      sexe,
+      email,
+      telephone,
+      adresse,
+      promotionId,
+      formationId,
+      filiereId,
+      niveauId,
+      classeId,
+      typeInscription,
+      anneeAcademique
+    } = data
+
+    // Validation des champs obligatoires
+    if (!nom || !prenom) {
+      throw new Error('Le nom et le prénom sont obligatoires')
+    }
+
+    if (!promotionId || !formationId || !filiereId || !niveauId) {
+      throw new Error('Tous les champs d\'inscription sont obligatoires')
+    }
+
+    // Récupérer la filière et le niveau pour créer/trouver la classe
+    const { data: filiere } = await supabaseAdmin
+      .from('filieres')
+      .select('*')
+      .eq('id', filiereId)
+      .single()
+    
+    if (!filiere) {
+      throw new Error('Filière introuvable')
+    }
+
+    const { data: niveau } = await supabaseAdmin
+      .from('niveaux')
+      .select('*')
+      .eq('id', niveauId)
+      .single()
+    
+    if (!niveau) {
+      throw new Error('Niveau introuvable')
+    }
+
+    // Pour la création manuelle, on ne crée pas de classe automatiquement
+    // L'étudiant sera affecté à une classe via la répartition des classes
+    // On laisse donc classe_id à null
+
+    // Générer ou utiliser le matricule fourni
+    let matricule = matriculeFourni
+    if (!matricule || matricule.trim() === '') {
+      // Formater l'année académique
+      let anneeFormatee = anneeAcademique
+      if (!anneeFormatee) {
+        // Récupérer l'année de la promotion
+        const { data: promotion } = await supabaseAdmin
+          .from('promotions')
+          .select('annee')
+          .eq('id', promotionId)
+          .single()
+        if (promotion) {
+          anneeFormatee = promotion.annee
+        } else {
+          anneeFormatee = new Date().getFullYear().toString()
+        }
+      }
+      matricule = await generateMatricule(anneeFormatee)
+    } else {
+      // Vérifier que le matricule n'existe pas déjà
+      const { data: existing } = await supabaseAdmin
+        .from('etudiants')
+        .select('id')
+        .eq('matricule', matricule)
+        .single()
+      
+      if (existing) {
+        throw new Error(`Le matricule ${matricule} existe déjà`)
+      }
+    }
+
+    // Vérifier si l'étudiant existe déjà (par nom et prénom)
+    const { data: etudiantExistant } = await supabaseAdmin
+      .from('etudiants')
+      .select('id')
+      .eq('nom', nom.trim())
+      .eq('prenom', prenom.trim())
+      .single()
+    
+    if (etudiantExistant) {
+      throw new Error(`Un étudiant avec le nom ${nom} ${prenom} existe déjà`)
+    }
+
+    // Vérifier l'email unique si fourni
+    if (email && email.trim() !== '') {
+      const { data: emailExistant } = await supabaseAdmin
+        .from('etudiants')
+        .select('id')
+        .eq('email', email.trim())
+        .single()
+      
+      if (emailExistant) {
+        throw new Error(`L'email ${email} est déjà utilisé`)
+      }
+    }
+
+    // Convertir la date de naissance
+    let dateNaissanceFormatee = null
+    if (dateNaissance) {
+      dateNaissanceFormatee = new Date(dateNaissance).toISOString()
+    }
+
+    // Créer l'étudiant
+    const { data: etudiant, error: etudError } = await supabaseAdmin
+      .from('etudiants')
+      .insert({
+        matricule,
+        nom: nom.trim(),
+        prenom: prenom.trim(),
+        date_naissance: dateNaissanceFormatee,
+        lieu_naissance: lieuNaissance?.trim() || null,
+        nationalite: nationalite?.trim() || null,
+        sexe: sexe || null,
+        email: email?.trim() || null,
+        telephone: telephone?.trim() || null,
+        adresse: adresse?.trim() || null,
+        photo: null
+      })
+      .select()
+      .single()
+    
+    if (etudError) {
+      throw new Error(`Erreur lors de la création de l'étudiant: ${etudError.message}`)
+    }
+
+    // Créer l'inscription sans classe assignée (classe_id = null)
+    // L'étudiant pourra être affecté à une classe via la répartition des classes
+    // Le statut est EN_ATTENTE car l'étudiant n'est pas encore finalement inscrit
+    const { data: inscription, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .insert({
+        etudiant_id: etudiant.id,
+        promotion_id: promotionId,
+        formation_id: formationId,
+        filiere_id: filiereId,
+        niveau_id: niveauId,
+        classe_id: null, // Pas de classe assignée automatiquement
+        type_inscription: typeInscription || 'INSCRIPTION',
+        statut: 'EN_ATTENTE', // Statut EN_ATTENTE car l'inscription n'est pas encore finalisée
+        agent_valideur_id: agentId || null
+      })
+      .select()
+      .single()
+    
+    if (inscError) {
+      // Supprimer l'étudiant créé en cas d'erreur
+      await supabaseAdmin
+        .from('etudiants')
+        .delete()
+        .eq('id', etudiant.id)
+      
+      throw new Error(`Erreur lors de la création de l'inscription: ${inscError.message}`)
+    }
+
+    // Pas besoin de mettre à jour l'effectif de la classe car classe_id est null
+
+    return {
+      success: true,
+      etudiant,
+      inscription,
+      message: `Étudiant ${nom} ${prenom} créé avec succès`
+    }
+  } catch (error) {
+    console.error('Erreur lors de la création manuelle de l\'étudiant:', error)
+    throw error
+  }
+}
+
 // Parser un fichier Excel et extraire les données par feuille
 export const parseExcelFile = async (fileBuffer) => {
   try {

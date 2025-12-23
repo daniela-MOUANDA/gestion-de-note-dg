@@ -17,7 +17,7 @@ export const getClassesByDepartement = async (departementId) => {
 
     const { data: classes, error } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres (*), niveaux (*)')
+      .select('*, filieres (*), niveaux (*), formations (*)')
       .in('filiere_id', filiereIds)
       .order('code', { ascending: true })
 
@@ -44,7 +44,13 @@ export const getClassesByDepartement = async (departementId) => {
         effectif: classe.effectif,
         nombreModules: classe.nombre_modules || 0,
         filiereId: classe.filiere_id,
-        niveauId: classe.niveau_id
+        niveauId: classe.niveau_id,
+        formationId: classe.formation_id,
+        formation: classe.formations ? {
+          id: classe.formations.id,
+          code: classe.formations.code,
+          nom: classe.formations.nom
+        } : null
       }
     }))
 
@@ -64,7 +70,7 @@ export const getClassesByDepartement = async (departementId) => {
 // Créer une nouvelle classe
 export const createClasse = async (data, departementId) => {
   try {
-    const { code, nom, filiereId, niveauId } = data
+    const { code, nom, filiereId, niveauId, formationId } = data
 
     if (!code || !nom || !filiereId || !niveauId) {
       return {
@@ -87,19 +93,26 @@ export const createClasse = async (data, departementId) => {
       }
     }
 
-    // Vérifier l'unicité du code
-    const { data: existingClasse } = await supabaseAdmin
+    // Vérifier l'unicité du code (incluant la formation maintenant)
+    let query = supabaseAdmin
       .from('classes')
       .select('id')
       .eq('code', code)
       .eq('filiere_id', filiereId)
       .eq('niveau_id', niveauId)
-      .single()
+    
+    if (formationId) {
+      query = query.eq('formation_id', formationId)
+    } else {
+      query = query.is('formation_id', null)
+    }
+    
+    const { data: existingClasse } = await query.single()
 
     if (existingClasse) {
       return {
         success: false,
-        error: 'Une classe avec ce code existe déjà pour cette filière et ce niveau'
+        error: 'Une classe avec ce code existe déjà pour cette filière, ce niveau et cette formation'
       }
     }
 
@@ -110,6 +123,7 @@ export const createClasse = async (data, departementId) => {
         nom,
         filiere_id: filiereId,
         niveau_id: niveauId,
+        formation_id: formationId || null, // Inclure la formation si fournie
         effectif: 0,
         nombre_modules: data.nombreModules || 0
       })

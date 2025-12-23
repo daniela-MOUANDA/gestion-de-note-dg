@@ -5,15 +5,18 @@ import {
   faUsers, faUserTie, faBuilding, faGraduationCap, faChartLine, 
   faFileAlt, faClipboardList, faEnvelope, faTrophy, faCheckCircle
 } from '@fortawesome/free-solid-svg-icons'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { getDashboardStats } from '../../api/dep'
 
 const DashboardDEPView = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
+  const { showAlert } = useAlert()
   const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Directeur des Études Pédagogiques'
   
   // Vérifier que l'utilisateur a le bon rôle
@@ -45,49 +48,54 @@ const DashboardDEPView = () => {
     }
   }, [user, isAuthenticated, navigate])
   
-  // Données de démonstration (sera remplacé par des vraies données)
+  // Données dynamiques
   const [stats, setStats] = useState({
     totalChefsDepartement: 0,
     totalDepartements: 0,
     totalEtudiants: 0,
     totalClasses: 0,
-    conseilsEnAttente: 0,
-    documentsAViser: 0,
-    pvGeneres: 0,
-    tauxReussite: 0
+    tauxReussite: 0,
+    repartitionEtudiants: [],
+    inscriptionsParMois: [],
+    tauxReussiteParNiveau: []
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Simuler le chargement des données
-    setTimeout(() => {
-      setStats({
-        totalChefsDepartement: 4,
-        totalDepartements: 4,
-        totalEtudiants: 1250,
-        totalClasses: 24,
-        conseilsEnAttente: 3,
-        documentsAViser: 12,
-        pvGeneres: 45,
-        tauxReussite: 87.5
-      })
-      setLoading(false)
-    }, 1000)
-  }, [])
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true)
+        const result = await getDashboardStats()
+        
+        if (result.success && result.stats) {
+          setStats({
+            totalChefsDepartement: result.stats.totalChefsDepartement || 0,
+            totalDepartements: result.stats.totalDepartements || 0,
+            totalEtudiants: result.stats.totalEtudiants || 0,
+            totalClasses: result.stats.totalClasses || 0,
+            tauxReussite: result.stats.tauxReussite || 0,
+            repartitionEtudiants: result.stats.repartitionEtudiants || [],
+            inscriptionsParMois: result.stats.inscriptionsParMois || [],
+            tauxReussiteParNiveau: result.stats.tauxReussiteParNiveau || []
+          })
+        } else {
+          showAlert(result.error || 'Erreur lors du chargement des données', 'error')
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement du dashboard:', error)
+        showAlert('Erreur lors du chargement des données du dashboard', 'error')
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  const inscriptionsParMois = [
-    { mois: 'Jan', inscriptions: 45 },
-    { mois: 'Fév', inscriptions: 78 },
-    { mois: 'Mar', inscriptions: 92 },
-    { mois: 'Avr', inscriptions: 120 },
-    { mois: 'Mai', inscriptions: 115 }
-  ]
+    if (isAuthenticated && user?.role === 'DEP') {
+      loadDashboardData()
+    }
+  }, [isAuthenticated, user, showAlert])
 
-  const tauxReussiteParNiveau = [
-    { niveau: 'L1', taux: 82.5 },
-    { niveau: 'L2', taux: 88.3 },
-    { niveau: 'L3', taux: 91.7 }
-  ]
+  // Couleurs pour le graphique en camembert
+  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4']
 
   if (loading) {
     return (
@@ -123,79 +131,63 @@ const DashboardDEPView = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
               <div className="flex items-center justify-between mb-2">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.totalChefsDepartement}</h3>
                 <FontAwesomeIcon icon={faUserTie} className="text-blue-500 text-3xl" />
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.totalChefsDepartement}</h3>
               <p className="text-sm text-slate-600">Chefs de Département</p>
               <p className="text-xs text-slate-500 mt-1">Tous départements</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500">
               <div className="flex items-center justify-between mb-2">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.totalDepartements}</h3>
                 <FontAwesomeIcon icon={faBuilding} className="text-purple-500 text-3xl" />
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.totalDepartements}</h3>
               <p className="text-sm text-slate-600">Départements</p>
               <p className="text-xs text-slate-500 mt-1">{stats.totalClasses} classes</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
               <div className="flex items-center justify-between mb-2">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.totalEtudiants}</h3>
                 <FontAwesomeIcon icon={faGraduationCap} className="text-emerald-500 text-3xl" />
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.totalEtudiants}</h3>
               <p className="text-sm text-slate-600">Étudiants</p>
               <p className="text-xs text-green-600 mt-1">Tous niveaux confondus</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-amber-500">
               <div className="flex items-center justify-between mb-2">
+                <h3 className="text-3xl font-bold text-slate-800">{stats.tauxReussite}%</h3>
                 <FontAwesomeIcon icon={faChartLine} className="text-amber-500 text-3xl" />
               </div>
-              <h3 className="text-3xl font-bold text-slate-800">{stats.tauxReussite}%</h3>
               <p className="text-sm text-slate-600">Taux de réussite</p>
               <p className="text-xs text-green-600 mt-1">Moyenne générale</p>
             </div>
           </div>
 
-          {/* Cartes d'actions rapides */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-md p-6 border border-blue-200">
-              <div className="flex items-center justify-between mb-3">
-                <FontAwesomeIcon icon={faClipboardList} className="text-blue-600 text-2xl" />
-                <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                  {stats.conseilsEnAttente}
-                </span>
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">Conseils en attente</h3>
-              <p className="text-sm text-slate-600">Résultats à valider</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-md p-6 border border-purple-200">
-              <div className="flex items-center justify-between mb-3">
-                <FontAwesomeIcon icon={faFileAlt} className="text-purple-600 text-2xl" />
-                <span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                  {stats.documentsAViser}
-                </span>
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">Documents à viser</h3>
-              <p className="text-sm text-slate-600">En attente de visa</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl shadow-md p-6 border border-emerald-200">
-              <div className="flex items-center justify-between mb-3">
-                <FontAwesomeIcon icon={faFileAlt} className="text-emerald-600 text-2xl" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">PV générés</h3>
-              <p className="text-sm text-slate-600">{stats.pvGeneres} ce mois</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl shadow-md p-6 border border-amber-200">
+          {/* Carte d'action rapide */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
+            <div 
+              className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl shadow-md p-6 border border-amber-200 cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => navigate('/dep/meilleurs-etudiants')}
+            >
               <div className="flex items-center justify-between mb-3">
                 <FontAwesomeIcon icon={faTrophy} className="text-amber-600 text-2xl" />
               </div>
               <h3 className="text-lg font-bold text-slate-800 mb-1">Meilleurs étudiants</h3>
               <p className="text-sm text-slate-600">Classement disponible</p>
+            </div>
+
+            <div 
+              className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl shadow-md p-6 border border-emerald-200 cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => navigate('/dep/etudiants')}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <FontAwesomeIcon icon={faGraduationCap} className="text-emerald-600 text-2xl" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-1">Voir tous les étudiants</h3>
+              <p className="text-sm text-slate-600">Consulter la liste complète</p>
             </div>
           </div>
 
@@ -207,16 +199,22 @@ const DashboardDEPView = () => {
                 <FontAwesomeIcon icon={faChartLine} className="text-blue-600" />
                 Inscriptions par mois
               </h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={inscriptionsParMois}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mois" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="inscriptions" fill="#3b82f6" name="Inscriptions" />
-                </BarChart>
-              </ResponsiveContainer>
+              {stats.inscriptionsParMois.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={stats.inscriptionsParMois}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="mois" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="inscriptions" fill="#3b82f6" name="Inscriptions" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-slate-400">
+                  Aucune donnée disponible
+                </div>
+              )}
             </div>
 
             {/* Taux de réussite par niveau */}
@@ -225,18 +223,103 @@ const DashboardDEPView = () => {
                 <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-600" />
                 Taux de réussite par niveau
               </h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={tauxReussiteParNiveau}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="niveau" />
-                  <YAxis domain={[0, 100]} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="taux" fill="#10b981" name="Taux de réussite (%)" />
-                </BarChart>
-              </ResponsiveContainer>
+              {stats.tauxReussiteParNiveau.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={stats.tauxReussiteParNiveau}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="niveau" />
+                    <YAxis domain={[0, 100]} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="taux" fill="#10b981" name="Taux de réussite (%)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-slate-400">
+                  Aucune donnée disponible
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Répartition des étudiants par département */}
+          {stats.repartitionEtudiants.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <FontAwesomeIcon icon={faUsers} className="text-purple-600" />
+                  Répartition des étudiants par département
+                </h2>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={stats.repartitionEtudiants}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="departementCode" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis />
+                    <Tooltip 
+                      formatter={(value) => [`${value} étudiants`, 'Nombre d\'étudiants']}
+                      labelFormatter={(label) => {
+                        const dept = stats.repartitionEtudiants.find(d => d.departementCode === label)
+                        return dept ? dept.departementNom : label
+                      }}
+                    />
+                    <Legend />
+                    <Bar dataKey="nombreEtudiants" fill="#8b5cf6" name="Nombre d'étudiants" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <FontAwesomeIcon icon={faBuilding} className="text-indigo-600" />
+                  Répartition par département (Camembert)
+                </h2>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={stats.repartitionEtudiants}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ departementCode, nombreEtudiants, percent }) => 
+                        `${departementCode}: ${(percent * 100).toFixed(0)}%`
+                      }
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="nombreEtudiants"
+                    >
+                      {stats.repartitionEtudiants.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value, name, props) => {
+                        return [`${value} étudiants`, 'Nombre d\'étudiants']
+                      }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload
+                          return (
+                            <div className="bg-white p-3 border border-slate-200 rounded-lg shadow-lg">
+                              <p className="font-semibold text-slate-800">{data.departementNom}</p>
+                              <p className="text-sm text-slate-600">
+                                {data.nombreEtudiants} étudiants
+                              </p>
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

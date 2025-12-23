@@ -188,7 +188,7 @@ const DashboardScolariteView = () => {
               <h2 className="text-lg font-bold text-slate-800 mb-4">Répartition par filière</h2>
               {dataParFiliere.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={400}>
+                  <ResponsiveContainer width="100%" height={350}>
                     <PieChart>
                       <Pie
                         data={dataParFiliere}
@@ -196,7 +196,7 @@ const DashboardScolariteView = () => {
                         cy="50%"
                         labelLine={false}
                         label={renderCustomizedLabel}
-                        outerRadius={140}
+                        outerRadius={120}
                         fill="#8884d8"
                         dataKey="value"
                       >
@@ -205,11 +205,6 @@ const DashboardScolariteView = () => {
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
-                      />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
@@ -236,7 +231,7 @@ const DashboardScolariteView = () => {
               <h2 className="text-lg font-bold text-slate-800 mb-4">Statut des candidats</h2>
               {dataStatut.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={400}>
+                  <ResponsiveContainer width="100%" height={350}>
                     <PieChart>
                       <Pie
                         data={dataStatut}
@@ -244,7 +239,7 @@ const DashboardScolariteView = () => {
                         cy="50%"
                         labelLine={false}
                         label={renderCustomizedLabel}
-                        outerRadius={140}
+                        outerRadius={120}
                         fill="#8884d8"
                         dataKey="value"
                       >
@@ -253,11 +248,6 @@ const DashboardScolariteView = () => {
                         ))}
                       </Pie>
                       <Tooltip />
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        formatter={(value, entry) => `${entry.payload.name}: ${entry.payload.value}`}
-                      />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
@@ -293,7 +283,7 @@ const DashboardScolariteView = () => {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={inscriptionsParSemaine}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="semaine" stroke="#64748b" />
+                  <XAxis dataKey="mois" stroke="#64748b" />
                   <YAxis stroke="#64748b" />
                   <Tooltip
                     contentStyle={{
@@ -311,136 +301,6 @@ const DashboardScolariteView = () => {
                 <p>Aucune donnée disponible</p>
               </div>
             )}
-          </div>
-
-          {/* Actions rapides et informations */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Actions rapides</h2>
-              <div className="space-y-3">
-                <a
-                  href="/scolarite/importer-candidats"
-                  className="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faFileExcel} className="text-blue-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Importer candidats admis</p>
-                    <p className="text-xs text-slate-600">Importez un fichier Excel avec les candidats admis</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/inscriptions"
-                  className="flex items-center p-4 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faUserCheck} className="text-emerald-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Gérer les inscriptions</p>
-                    <p className="text-xs text-slate-600">Vérifiez les documents et inscrivez les étudiants</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/attestations"
-                  className="flex items-center p-4 bg-cyan-50 hover:bg-cyan-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faFileAlt} className="text-cyan-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Attestations de scolarité</p>
-                    <p className="text-xs text-slate-600">Gérez la distribution des attestations</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/archives-attestations"
-                  className="flex items-center p-4 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faArchive} className="text-teal-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Archives des attestations</p>
-                    <p className="text-xs text-slate-600">Consultez et téléchargez les duplicatas</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/messagerie"
-                  className="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faEnvelope} className="text-purple-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Messagerie</p>
-                    <p className="text-xs text-slate-600">Envoyez des messages aux étudiants</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/bulletins"
-                  className="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faFileAlt} className="text-blue-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Bulletins</p>
-                    <p className="text-xs text-slate-600">Gérez la remise des bulletins semestriels</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/diplomes"
-                  className="flex items-center p-4 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faAward} className="text-amber-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Diplômes</p>
-                    <p className="text-xs text-slate-600">Gérez la remise des diplômes DTS et Licence</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/proces-verbaux"
-                  className="flex items-center p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faFileAlt} className="text-indigo-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Procès-Verbaux</p>
-                    <p className="text-xs text-slate-600">Consultez les PV des résultats semestriels et annuels</p>
-                  </div>
-                </a>
-                <a
-                  href="/scolarite/archivage"
-                  className="flex items-center p-4 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <FontAwesomeIcon icon={faArchive} className="text-slate-600 mr-3 text-xl" />
-                  <div>
-                    <p className="font-medium text-slate-800">Archivage</p>
-                    <p className="text-xs text-slate-600">Consultez les promotions passées, diplômés et abandons</p>
-                  </div>
-                </a>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Informations</h2>
-              <div className="space-y-3 text-sm text-slate-600">
-                <div className="flex justify-between">
-                  <span>Année académique:</span>
-                  <span className="font-semibold text-slate-800">2025</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Taux d'inscription:</span>
-                  <span className="font-semibold text-slate-800">{stats.tauxInscription}%</span>
-                </div>
-                <div className="pt-3 border-t border-slate-200">
-                  <p className="font-medium text-slate-700 mb-2">Filières disponibles:</p>
-                  <ul className="space-y-1">
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-                      Génie Informatique
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-600"></div>
-                      Réseau et Télécom
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-amber-600"></div>
-                      Management et Multimédias
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
           </div>
         </main>
       </div>

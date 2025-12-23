@@ -605,40 +605,50 @@ export const getDepartementStatsGlobales = async (departementId) => {
 
     const filiereIds = filieres.map(f => f.id)
 
-    // 2. Compter les classes du département
-    const { count: classesCount } = await supabaseAdmin
-      .from('classes')
-      .select('*', { count: 'exact', head: true })
-      .in('filiere_id', filiereIds)
-
-    // 3. Compter les enseignants du département
-    const { count: enseignantsCount } = await supabaseAdmin
-      .from('enseignants')
-      .select('*', { count: 'exact', head: true })
-      .eq('departement_id', departementId)
-      .eq('actif', true)
-
-    // 4. Récupérer les inscriptions actives avec informations étudiants
-    const { data: inscriptions, error } = await supabaseAdmin
-      .from('inscriptions')
-      .select(`
-        id,
-        filiere_id,
-        niveau_id,
-        statut,
-        etudiants (
+    // 2. Paralléliser les requêtes initiales
+    const [
+      classesCountResult,
+      enseignantsCountResult,
+      inscriptionsResult
+    ] = await Promise.all([
+      // Compter les classes
+      supabaseAdmin
+        .from('classes')
+        .select('*', { count: 'exact', head: true })
+        .in('filiere_id', filiereIds),
+      // Compter les enseignants
+      supabaseAdmin
+        .from('enseignants')
+        .select('*', { count: 'exact', head: true })
+        .eq('departement_id', departementId)
+        .eq('actif', true),
+      // Récupérer les inscriptions actives
+      supabaseAdmin
+        .from('inscriptions')
+        .select(`
           id,
-          sexe
-        ),
-        niveaux (
-          code,
-          nom
-        )
-      `)
-      .in('filiere_id', filiereIds)
-      .eq('statut', 'INSCRIT')
+          filiere_id,
+          niveau_id,
+          statut,
+          classe_id,
+          etudiants (
+            id,
+            sexe
+          ),
+          niveaux (
+            code,
+            nom
+          )
+        `)
+        .in('filiere_id', filiereIds)
+        .eq('statut', 'INSCRIT')
+    ])
 
-    if (error) throw error
+    const classesCount = classesCountResult.count || 0
+    const enseignantsCount = enseignantsCountResult.count || 0
+    
+    if (inscriptionsResult.error) throw inscriptionsResult.error
+    const inscriptions = inscriptionsResult.data || []
 
     const totalEtudiants = inscriptions?.length || 0
 
@@ -696,182 +706,175 @@ export const getDepartementStatsGlobales = async (departementId) => {
       }
     ] : []
 
-    // 8. Taux de réussite par filière (calcul dynamique basé sur les notes réelles)
-    // Utiliser une requête SQL plus efficace pour calculer les moyennes
-    const tauxReussiteData = await Promise.all(
-      filieres
-        .filter(f => studentsData.find(s => s.name === f.code))
-        .map(async (f) => {
-          try {
-            // Récupérer les classes de cette filière
-            const { data: classes } = await supabaseAdmin
-              .from('classes')
-              .select('id')
-              .eq('filiere_id', f.id)
+    // 8. Taux de réussite par filière (optimisé - récupérer toutes les données en une fois)
+    const tauxReussiteData = []
+    
+    // Récupérer toutes les classes en une seule requête
+    const { data: toutesClasses } = await supabaseAdmin
+      .from('classes')
+      .select('id, filiere_id')
+      .in('filiere_id', filiereIds)
 
-            if (!classes || classes.length === 0) {
-              return {
-                filiere: f.code,
-                tauxReussite: 0,
-                etudiantsAvecNotes: 0,
-                totalEtudiants: 0
-              }
-            }
+    if (toutesClasses && toutesClasses.length > 0) {
+      const toutesClasseIds = toutesClasses.map(c => c.id)
+      
+      // Récupérer tous les modules en une seule requête
+      const { data: tousModules } = await supabaseAdmin
+        .from('modules')
+        .select('id, code, credit, semestre, filiere_id')
+        .in('filiere_id', filiereIds)
+        .eq('departement_id', departementId)
 
-            const classeIds = classes.map(c => c.id)
-            
-            // Récupérer les étudiants de cette filière
-            const { data: inscriptionsFiliere } = await supabaseAdmin
-              .from('inscriptions')
-              .select('etudiants(id)')
-              .in('classe_id', classeIds)
-              .eq('statut', 'INSCRIT')
+      // Récupérer tous les paramètres de notation en une seule requête
+      const moduleIds = tousModules ? tousModules.map(m => m.id) : []
+      const { data: tousParametres } = moduleIds.length > 0
+        ? await supabaseAdmin
+            .from('parametres_notation')
+            .select('module_id, evaluations, semestre')
+            .in('module_id', moduleIds)
+        : { data: [] }
 
-            const totalEtudiantsFiliere = inscriptionsFiliere?.length || 0
+      // Récupérer toutes les notes en une seule requête (limité pour performance)
+      const { data: toutesNotes } = toutesClasseIds.length > 0 && moduleIds.length > 0
+        ? await supabaseAdmin
+            .from('notes')
+            .select('etudiant_id, module_id, valeur, evaluation_id, classe_id, semestre')
+            .in('classe_id', toutesClasseIds)
+            .in('module_id', moduleIds)
+            .limit(10000) // Limiter pour performance
+        : { data: [] }
 
-            if (totalEtudiantsFiliere === 0) {
-              return {
-                filiere: f.code,
-                tauxReussite: 0,
-                etudiantsAvecNotes: 0,
-                totalEtudiants: 0
-              }
-            }
+      // Calculer le taux de réussite par filière
+      for (const filiere of filieres) {
+        const classesFiliere = toutesClasses.filter(c => c.filiere_id === filiere.id)
+        const classeIdsFiliere = classesFiliere.map(c => c.id)
+        const totalEtudiantsFiliere = inscriptions.filter(i => classeIdsFiliere.includes(i.classe_id)).length
 
-            const etudiantIds = inscriptionsFiliere.map(i => i.etudiants?.id).filter(Boolean)
-            
-            if (etudiantIds.length === 0) {
-              return {
-                filiere: f.code,
-                tauxReussite: 0,
-                etudiantsAvecNotes: 0,
-                totalEtudiants: totalEtudiantsFiliere
-              }
-            }
+        if (totalEtudiantsFiliere === 0 || !tousModules) {
+          tauxReussiteData.push({
+            filiere: filiere.code,
+            tauxReussite: 0,
+            etudiantsAvecNotes: 0,
+            totalEtudiants: totalEtudiantsFiliere,
+            etudiantsReussis: 0
+          })
+          continue
+        }
 
-            // Pour chaque étudiant, calculer sa moyenne générale en utilisant la logique du relevé
-            // On va utiliser une approche simplifiée : récupérer les notes et calculer les moyennes
-            let etudiantsReussis = 0
-            let etudiantsAvecNotes = 0
+        const modulesFiliere = tousModules.filter(m => m.filiere_id === filiere.id)
+        const moduleIdsFiliere = modulesFiliere.map(m => m.id)
+        const parametresMap = {}
+        
+        if (tousParametres) {
+          tousParametres
+            .filter(p => moduleIdsFiliere.includes(p.module_id))
+            .forEach(p => {
+              parametresMap[p.module_id] = p.evaluations || []
+            })
+        }
 
-            // Pour chaque classe, calculer les moyennes des étudiants
-            for (const classe of classes) {
-              // Récupérer les modules de cette filière et semestre
-              const { data: modules } = await supabaseAdmin
-                .from('modules')
-                .select('id, code, credit, semestre')
-                .eq('filiere_id', f.id)
-                .eq('departement_id', departementId)
+        // Filtrer les notes pour cette filière
+        const notesFiliere = toutesNotes
+          ? toutesNotes.filter(n => 
+              classeIdsFiliere.includes(n.classe_id) && 
+              moduleIdsFiliere.includes(n.module_id)
+            )
+          : []
 
-              if (!modules || modules.length === 0) continue
+        if (notesFiliere.length === 0) {
+          tauxReussiteData.push({
+            filiere: filiere.code,
+            tauxReussite: 0,
+            etudiantsAvecNotes: 0,
+            totalEtudiants: totalEtudiantsFiliere,
+            etudiantsReussis: 0
+          })
+          continue
+        }
 
-              // Pour chaque semestre, calculer les moyennes
-              const semestres = [...new Set(modules.map(m => m.semestre))]
-              
-              for (const semestre of semestres) {
-                const modulesSemestre = modules.filter(m => m.semestre === semestre)
-                const moduleIds = modulesSemestre.map(m => m.id)
+        // Grouper par étudiant et semestre
+        const notesParEtudiantSemestre = {}
+        notesFiliere.forEach(note => {
+          const key = `${note.etudiant_id}_${note.semestre}`
+          if (!notesParEtudiantSemestre[key]) {
+            notesParEtudiantSemestre[key] = []
+          }
+          notesParEtudiantSemestre[key].push(note)
+        })
 
-                // Récupérer les paramètres de notation
-                const { data: parametresList } = await supabaseAdmin
-                  .from('parametres_notation')
-                  .select('module_id, evaluations')
-                  .in('module_id', moduleIds)
-                  .eq('semestre', semestre)
+        let etudiantsReussis = 0
+        let etudiantsAvecNotes = 0
+        const semestres = [...new Set(modulesFiliere.map(m => m.semestre))]
 
-                const parametresMap = {}
-                if (parametresList) {
-                  parametresList.forEach(p => {
-                    parametresMap[p.module_id] = p.evaluations || []
-                  })
+        Object.keys(notesParEtudiantSemestre).forEach(key => {
+          const [etudiantId, semestre] = key.split('_')
+          const notesEtudiant = notesParEtudiantSemestre[key]
+          const modulesSemestre = modulesFiliere.filter(m => m.semestre === semestre)
+
+          let totalPointsSemestre = 0
+          let totalCreditsSemestre = 0
+
+          modulesSemestre.forEach(module => {
+            const evaluationsConfig = parametresMap[module.id] || []
+            let totalPointsModule = 0
+            let totalCoeffModule = 0
+
+            evaluationsConfig.forEach(evaluation => {
+              for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
+                const evalId = `${evaluation.id}_${i}`
+                const noteEntry = notesEtudiant.find(n =>
+                  n.module_id === module.id &&
+                  n.evaluation_id === evalId
+                )
+
+                if (noteEntry) {
+                  const noteSur20 = (noteEntry.valeur / evaluation.noteMax) * 20
+                  totalPointsModule += noteSur20 * evaluation.coefficient
+                  totalCoeffModule += evaluation.coefficient
                 }
-
-                // Récupérer les notes pour cette classe et ce semestre
-                const { data: notes } = await supabaseAdmin
-                  .from('notes')
-                  .select('etudiant_id, module_id, valeur, evaluation_id')
-                  .eq('classe_id', classe.id)
-                  .eq('semestre', semestre)
-                  .in('module_id', moduleIds)
-
-                if (!notes || notes.length === 0) continue
-
-                // Grouper par étudiant
-                const notesParEtudiant = {}
-                notes.forEach(note => {
-                  if (!notesParEtudiant[note.etudiant_id]) {
-                    notesParEtudiant[note.etudiant_id] = []
-                  }
-                  notesParEtudiant[note.etudiant_id].push(note)
-                })
-
-                // Calculer les moyennes pour chaque étudiant
-                Object.keys(notesParEtudiant).forEach(etudiantId => {
-                  const notesEtudiant = notesParEtudiant[etudiantId]
-                  let totalPointsSemestre = 0
-                  let totalCreditsSemestre = 0
-
-                  modulesSemestre.forEach(module => {
-                    const evaluationsConfig = parametresMap[module.id] || []
-                    let totalPointsModule = 0
-                    let totalCoeffModule = 0
-
-                    evaluationsConfig.forEach(evaluation => {
-                      for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
-                        const evalId = `${evaluation.id}_${i}`
-                        const noteEntry = notesEtudiant.find(n =>
-                          n.module_id === module.id &&
-                          n.evaluation_id === evalId
-                        )
-
-                        if (noteEntry) {
-                          const noteSur20 = (noteEntry.valeur / evaluation.noteMax) * 20
-                          totalPointsModule += noteSur20 * evaluation.coefficient
-                          totalCoeffModule += evaluation.coefficient
-                        }
-                      }
-                    })
-
-                    if (totalCoeffModule > 0) {
-                      const moyenneModule = totalPointsModule / totalCoeffModule
-                      totalPointsSemestre += moyenneModule * module.credit
-                      totalCreditsSemestre += module.credit
-                    }
-                  })
-
-                  if (totalCreditsSemestre > 0) {
-                    const moyenneGenerale = totalPointsSemestre / totalCreditsSemestre
-                    if (moyenneGenerale >= 10) {
-                      etudiantsReussis++
-                    }
-                    etudiantsAvecNotes++
-                  }
-                })
               }
-            }
+            })
 
-            const tauxReussite = etudiantsAvecNotes > 0 
-              ? Math.round((etudiantsReussis / etudiantsAvecNotes) * 100)
-              : 0
+            if (totalCoeffModule > 0) {
+              const moyenneModule = totalPointsModule / totalCoeffModule
+              totalPointsSemestre += moyenneModule * module.credit
+              totalCreditsSemestre += module.credit
+            }
+          })
 
-            return {
-              filiere: f.code,
-              tauxReussite,
-              etudiantsAvecNotes,
-              totalEtudiants: totalEtudiantsFiliere,
-              etudiantsReussis
+          if (totalCreditsSemestre > 0) {
+            const moyenneGenerale = totalPointsSemestre / totalCreditsSemestre
+            if (moyenneGenerale >= 10) {
+              etudiantsReussis++
             }
-          } catch (error) {
-            console.error(`Erreur calcul taux réussite pour ${f.code}:`, error)
-            return {
-              filiere: f.code,
-              tauxReussite: 0,
-              etudiantsAvecNotes: 0,
-              totalEtudiants: 0
-            }
+            etudiantsAvecNotes++
           }
         })
-    )
+
+        const tauxReussite = etudiantsAvecNotes > 0 
+          ? Math.round((etudiantsReussis / etudiantsAvecNotes) * 100)
+          : 0
+
+        tauxReussiteData.push({
+          filiere: filiere.code,
+          tauxReussite,
+          etudiantsAvecNotes,
+          totalEtudiants: totalEtudiantsFiliere,
+          etudiantsReussis
+        })
+      }
+    } else {
+      // Aucune classe, retourner des valeurs par défaut
+      filieres.forEach(f => {
+        tauxReussiteData.push({
+          filiere: f.code,
+          tauxReussite: 0,
+          etudiantsAvecNotes: 0,
+          totalEtudiants: 0,
+          etudiantsReussis: 0
+        })
+      })
+    }
 
     return {
       success: true,
@@ -1093,14 +1096,66 @@ export const getMeilleursEtudiantsParFiliere = async (departementId) => {
 }
 
 // Récupérer les étudiants pour la répartition (non encore assignés à une classe)
-export const getEtudiantsPourRepartition = async (departementId, filiereId, niveauId) => {
+export const getEtudiantsPourRepartition = async (departementId, filiereId, niveauId, formation = null) => {
   try {
+    // Vérifier que la filière appartient au département
+    const { data: filiere, error: filiereError } = await supabaseAdmin
+      .from('filieres')
+      .select('id, departement_id')
+      .eq('id', filiereId)
+      .single()
+
+    if (filiereError || !filiere) {
+      return { success: false, error: 'Filière introuvable' }
+    }
+
+    if (filiere.departement_id !== departementId) {
+      return { success: false, error: 'Cette filière n\'appartient pas à votre département' }
+    }
+
+    let formationIds = []
+    
+    // Si une formation spécifique est sélectionnée, récupérer seulement cette formation
+    if (formation) {
+      const codeFormation = formation === 'Initiale1' ? 'INITIAL_1' : formation === 'Initiale2' ? 'INITIAL_2' : null
+      if (codeFormation) {
+        const { data: formationData, error: formationError } = await supabaseAdmin
+          .from('formations')
+          .select('id')
+          .eq('code', codeFormation)
+          .single()
+        
+        if (formationError) {
+          console.error('Erreur récupération formation:', formationError)
+          return { success: false, error: 'Formation introuvable' }
+        }
+        
+        if (formationData) {
+          formationIds = [formationData.id]
+        } else {
+          console.log(`Aucune formation trouvée pour le code: ${codeFormation}`)
+          return { success: true, count: 0, etudiants: [] }
+        }
+      }
+    } else {
+      // Si aucune formation spécifiée, récupérer Initiale 1 et Initiale 2
+      const { data: formations } = await supabaseAdmin
+        .from('formations')
+        .select('id')
+        .in('code', ['INITIAL_1', 'INITIAL_2'])
+      
+      formationIds = formations ? formations.map(f => f.id) : []
+    }
+    
     // Récupérer les inscriptions sans classe assignée
-    const { data: inscriptions, error } = await supabaseAdmin
+    // Accepter les statuts INSCRIT et VALIDEE
+    let query = supabaseAdmin
       .from('inscriptions')
       .select(`
         id,
         date_inscription,
+        statut,
+        formation_id,
         etudiants (
           id,
           matricule,
@@ -1112,11 +1167,36 @@ export const getEtudiantsPourRepartition = async (departementId, filiereId, nive
       `)
       .eq('filiere_id', filiereId)
       .eq('niveau_id', niveauId)
-      .eq('statut', 'INSCRIT')
+      .in('statut', ['INSCRIT', 'VALIDEE', 'EN_ATTENTE']) // Ajouter EN_ATTENTE pour les étudiants récemment créés
       .is('classe_id', null)
-      .order('date_inscription', { ascending: true })
+    
+    // Filtrer par formation(s) si spécifiée(s)
+    if (formationIds.length > 0) {
+      query = query.in('formation_id', formationIds)
+    }
+    // Si aucune formation spécifiée, on ne filtre pas par formation (on prend toutes les formations)
+    
+    const { data: inscriptions, error } = await query.order('date_inscription', { ascending: true })
 
-    if (error) throw error
+    if (error) {
+      console.error('Erreur lors de la récupération des inscriptions:', error)
+      throw error
+    }
+
+    console.log(`[DEBUG] getEtudiantsPourRepartition - Filtres:`, {
+      departementId,
+      filiereId,
+      niveauId,
+      formation,
+      formationIds,
+      inscriptionsCount: inscriptions?.length || 0,
+      inscriptions: inscriptions?.map(i => ({
+        id: i.id,
+        statut: i.statut,
+        formation_id: i.formation_id,
+        etudiant: `${i.etudiants?.nom} ${i.etudiants?.prenom}`
+      }))
+    })
 
     // Formater les données
     const etudiants = (inscriptions || []).map(i => ({
@@ -1138,18 +1218,65 @@ export const getEtudiantsPourRepartition = async (departementId, filiereId, nive
 // Créer les classes et répartir les étudiants
 export const createClassesFromRepartition = async (data) => {
   try {
-    const { filiereId, niveauId, nombreClasses, namingPattern, typeRepartition } = data
+    const { filiereId, niveauId, nombreClasses, namingPattern, typeRepartition, formation = null } = data
     // namingPattern ex: "GI-L1" -> classes seront "GI-L1-A", "GI-L1-B"
+    
+    // Récupérer l'ID de la formation si spécifiée
+    let formationId = null
+    if (formation) {
+      const codeFormation = formation === 'Initiale1' ? 'INITIAL_1' : formation === 'Initiale2' ? 'INITIAL_2' : null
+      if (codeFormation) {
+        const { data: formationData } = await supabaseAdmin
+          .from('formations')
+          .select('id')
+          .eq('code', codeFormation)
+          .single()
+        
+        if (formationData) {
+          formationId = formationData.id
+        }
+      }
+    }
 
-    // 1. Récupérer les étudiants non assignés
-    const { data: inscriptions, error: inscError } = await supabaseAdmin
+    // 1. Récupérer les étudiants non assignés pour la formation spécifiée
+    let formationIds = []
+    if (formation) {
+      const codeFormation = formation === 'Initiale1' ? 'INITIAL_1' : formation === 'Initiale2' ? 'INITIAL_2' : null
+      if (codeFormation) {
+        const { data: formationData } = await supabaseAdmin
+          .from('formations')
+          .select('id')
+          .eq('code', codeFormation)
+          .single()
+        
+        if (formationData) {
+          formationIds = [formationData.id]
+        }
+      }
+    } else {
+      // Si aucune formation spécifiée, récupérer Initiale 1 et Initiale 2
+      const { data: formations } = await supabaseAdmin
+        .from('formations')
+        .select('id')
+        .in('code', ['INITIAL_1', 'INITIAL_2'])
+      
+      formationIds = formations ? formations.map(f => f.id) : []
+    }
+    
+    let query = supabaseAdmin
       .from('inscriptions')
       .select('id')
       .eq('filiere_id', filiereId)
       .eq('niveau_id', niveauId)
-      .eq('statut', 'INSCRIT')
+      .in('statut', ['INSCRIT', 'VALIDEE', 'EN_ATTENTE'])
       .is('classe_id', null)
-      .order('date_inscription', { ascending: true })
+    
+    // Filtrer par formation(s) si spécifiée(s)
+    if (formationIds.length > 0) {
+      query = query.in('formation_id', formationIds)
+    }
+    
+    const { data: inscriptions, error: inscError } = await query.order('date_inscription', { ascending: true })
 
     if (inscError) throw inscError
 
@@ -1171,6 +1298,7 @@ export const createClassesFromRepartition = async (data) => {
           nom: nomClasse,
           filiere_id: filiereId,
           niveau_id: niveauId,
+          formation_id: formationId, // Lier la classe à la formation
           effectif: 0
         })
         .select()
@@ -1212,6 +1340,187 @@ export const createClassesFromRepartition = async (data) => {
 
   } catch (error) {
     console.error('Erreur createClassesFromRepartition:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Récupérer les classes existantes pour une filière, un niveau et une formation
+export const getClassesExistantes = async (departementId, filiereId, niveauId, formation = null) => {
+  try {
+    // Vérifier que la filière appartient au département
+    const { data: filiere, error: filiereError } = await supabaseAdmin
+      .from('filieres')
+      .select('id, departement_id')
+      .eq('id', filiereId)
+      .single()
+
+    if (filiereError || !filiere) {
+      return { success: false, error: 'Filière introuvable' }
+    }
+
+    if (filiere.departement_id !== departementId) {
+      return { success: false, error: 'Cette filière n\'appartient pas à votre département' }
+    }
+
+    // Récupérer l'ID de la formation si spécifiée
+    let formationId = null
+    if (formation) {
+      const codeFormation = formation === 'Initiale1' ? 'INITIAL_1' : formation === 'Initiale2' ? 'INITIAL_2' : null
+      if (codeFormation) {
+        const { data: formationData, error: formationError } = await supabaseAdmin
+          .from('formations')
+          .select('id')
+          .eq('code', codeFormation)
+          .single()
+        
+        if (formationError) {
+          console.error('Erreur récupération formation:', formationError)
+          return { success: false, error: 'Formation introuvable' }
+        }
+        
+        if (formationData) {
+          formationId = formationData.id
+        }
+      }
+    }
+
+    // Récupérer les classes existantes pour cette filière, ce niveau et cette formation
+    let query = supabaseAdmin
+      .from('classes')
+      .select('id, code, nom, effectif, formation_id')
+      .eq('filiere_id', filiereId)
+      .eq('niveau_id', niveauId)
+    
+    // Filtrer par formation si spécifiée
+    if (formationId) {
+      query = query.eq('formation_id', formationId)
+    } else {
+      // Si aucune formation spécifiée, inclure les classes sans formation_id (pour compatibilité avec les anciennes classes)
+      query = query.or('formation_id.is.null')
+    }
+    
+    const { data: classes, error: classesError } = await query.order('code', { ascending: true })
+
+    if (classesError) {
+      console.error('Erreur lors de la récupération des classes:', classesError)
+      throw classesError
+    }
+
+    console.log(`[DEBUG] getClassesExistantes - Résultat final:`, {
+      departementId,
+      filiereId,
+      niveauId,
+      formation,
+      formationId,
+      classesTrouvees: classes?.length || 0,
+      classes: classes?.map(c => ({ id: c.id, code: c.code, nom: c.nom, effectif: c.effectif, formation_id: c.formation_id }))
+    })
+
+    return {
+      success: true,
+      classes: classes || []
+    }
+  } catch (error) {
+    console.error('Erreur getClassesExistantes:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Affecter plusieurs étudiants à une classe existante
+export const affecterEtudiantsAClasse = async (departementId, filiereId, niveauId, classeId, inscriptionIds, formation = null) => {
+  try {
+    // Vérifier que la classe appartient au département et correspond à la filière/niveau/formation
+    const { data: classe, error: classeError } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres (id, departement_id)')
+      .eq('id', classeId)
+      .single()
+
+    if (classeError || !classe) {
+      return { success: false, error: 'Classe introuvable' }
+    }
+
+    if (classe.filieres?.departement_id !== departementId) {
+      return { success: false, error: 'Cette classe n\'appartient pas à votre département' }
+    }
+
+    if (classe.filiere_id !== filiereId || classe.niveau_id !== niveauId) {
+      return { success: false, error: 'La classe ne correspond pas à la filière et au niveau sélectionnés' }
+    }
+
+    // Vérifier la formation si spécifiée
+    if (formation) {
+      const codeFormation = formation === 'Initiale1' ? 'INITIAL_1' : formation === 'Initiale2' ? 'INITIAL_2' : null
+      if (codeFormation) {
+        const { data: formationData } = await supabaseAdmin
+          .from('formations')
+          .select('id')
+          .eq('code', codeFormation)
+          .single()
+        
+        if (formationData && classe.formation_id !== formationData.id) {
+          return { success: false, error: 'La classe ne correspond pas à la formation sélectionnée' }
+        }
+      }
+    }
+
+    // Vérifier la formation si spécifiée
+    if (formation) {
+      const codeFormation = formation === 'Initiale1' ? 'INITIAL_1' : formation === 'Initiale2' ? 'INITIAL_2' : null
+      if (codeFormation) {
+        const { data: formationData } = await supabaseAdmin
+          .from('formations')
+          .select('id')
+          .eq('code', codeFormation)
+          .single()
+        
+        if (formationData && classe.formation_id !== formationData.id) {
+          return { success: false, error: 'La classe ne correspond pas à la formation sélectionnée' }
+        }
+      }
+    }
+
+    // Vérifier que les inscriptions existent et correspondent aux critères
+    const { data: inscriptions, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('id')
+      .in('id', inscriptionIds)
+      .eq('filiere_id', filiereId)
+      .eq('niveau_id', niveauId)
+      .is('classe_id', null)
+
+    if (inscError) throw inscError
+
+    if (!inscriptions || inscriptions.length === 0) {
+      return { success: false, error: 'Aucune inscription valide trouvée' }
+    }
+
+    const validInscriptionIds = inscriptions.map(i => i.id)
+
+    // Affecter les étudiants à la classe
+    const { error: updateError } = await supabaseAdmin
+      .from('inscriptions')
+      .update({ classe_id: classeId })
+      .in('id', validInscriptionIds)
+
+    if (updateError) throw updateError
+
+    // Mettre à jour l'effectif de la classe
+    const nouveauEffectif = (classe.effectif || 0) + validInscriptionIds.length
+    const { error: effectifError } = await supabaseAdmin
+      .from('classes')
+      .update({ effectif: nouveauEffectif })
+      .eq('id', classeId)
+
+    if (effectifError) throw effectifError
+
+    return {
+      success: true,
+      message: `${validInscriptionIds.length} étudiant(s) affecté(s) à la classe ${classe.code}`,
+      etudiantsAffectes: validInscriptionIds.length
+    }
+  } catch (error) {
+    console.error('Erreur affecterEtudiantsAClasse:', error)
     return { success: false, error: error.message }
   }
 }

@@ -97,12 +97,37 @@ export const getNiveaux = async () => {
 // RÉPARTITION CLASSES
 // ============================================
 
-export const getRepartitionCount = async (filiereId, niveauId) => {
-  return request(`/repartition/count?filiereId=${filiereId}&niveauId=${niveauId}`)
+export const getRepartitionCount = async (filiereId, niveauId, formation = null) => {
+  const params = new URLSearchParams({
+    filiereId,
+    niveauId
+  })
+  if (formation) {
+    params.append('formation', formation)
+  }
+  return request(`/repartition/count?${params.toString()}`)
 }
 
 export const createClassesRepartition = async (data) => {
   return request('/repartition/create', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
+export const getClassesExistantes = async (filiereId, niveauId, formation = null) => {
+  const params = new URLSearchParams({
+    filiereId,
+    niveauId
+  })
+  if (formation) {
+    params.append('formation', formation)
+  }
+  return request(`/repartition/classes-existantes?${params.toString()}`)
+}
+
+export const affecterEtudiantsAClasse = async (data) => {
+  return request('/repartition/affecter-classe', {
     method: 'POST',
     body: JSON.stringify(data)
   })
@@ -217,6 +242,42 @@ export const repartirEtudiant = async (inscriptionId, classeId) => {
 
 export const getEtudiantsByClasse = async (classeId) => {
   return request(`/repartition/classes/${classeId}/etudiants`)
+}
+
+// ============================================
+// ÉTUDIANTS AVEC MOYENNES
+// ============================================
+
+// Obtenir tous les étudiants du département avec leurs moyennes (avec pagination)
+export const getEtudiants = async (page = 1, limit = 10, filters = {}) => {
+  try {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      filiere: filters.filiere || 'TOUS',
+      niveau: filters.niveau || 'TOUS',
+      semestre: filters.semestre || 'TOUS',
+      search: filters.search || ''
+    })
+
+    return request(`/etudiants?${params}`)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des étudiants:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Obtenir les détails d'un étudiant du département
+export const getEtudiantDetails = async (etudiantId, semestre = null) => {
+  try {
+    const url = semestre && semestre !== 'TOUS'
+      ? `/etudiants/${etudiantId}?semestre=${semestre}`
+      : `/etudiants/${etudiantId}`
+    return request(url)
+  } catch (error) {
+    console.error('Erreur lors de la récupération des détails de l\'étudiant:', error)
+    return { success: false, error: error.message }
+  }
 }
 
 // ============================================

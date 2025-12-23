@@ -123,6 +123,12 @@ export const getClasses = async (filiereId, niveauId) => {
 // Récupérer les étudiants par filière et niveau (sans classe)
 export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotionId, formationId, typeInscription) => {
   try {
+    // IMPORTANT : Filtrer UNIQUEMENT par la formation sélectionnée
+    // Ne pas inclure toutes les formations Initiale 1 et Initiale 2
+    if (!formationId) {
+      throw new Error('Formation ID est requis')
+    }
+    
     const { data: inscriptions, error } = await supabaseAdmin
       .from('inscriptions')
       .select(`
@@ -135,7 +141,7 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
       .eq('filiere_id', filiereId)
       .eq('niveau_id', niveauId)
       .eq('promotion_id', promotionId)
-      .eq('formation_id', formationId)
+      .eq('formation_id', formationId) // Filtrer UNIQUEMENT par la formation sélectionnée
       .eq('type_inscription', typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION')
       .order('etudiants(nom)', { ascending: true })
     

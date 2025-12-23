@@ -88,3 +88,102 @@ export const getEtudiantByUserId = async (userId) => {
     throw error
   }
 }
+
+// Supprimer un étudiant et toutes ses données associées
+export const deleteEtudiant = async (etudiantId) => {
+  try {
+    // Vérifier que l'étudiant existe
+    const { data: etudiant, error: fetchError } = await supabaseAdmin
+      .from('etudiants')
+      .select('id, matricule, nom, prenom, email')
+      .eq('id', etudiantId)
+      .single()
+
+    if (fetchError || !etudiant) {
+      throw new Error('Étudiant introuvable')
+    }
+
+    // Récupérer toutes les inscriptions de l'étudiant pour mettre à jour les effectifs des classes
+    const { data: inscriptions, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('id, classe_id')
+      .eq('etudiant_id', etudiantId)
+
+    if (inscError) {
+      console.error('Erreur lors de la récupération des inscriptions:', inscError)
+    }
+
+    // Décrémenter l'effectif des classes concernées
+    if (inscriptions && inscriptions.length > 0) {
+      const classesIds = [...new Set(inscriptions
+        .map(ins => ins.classe_id)
+        .filter(id => id !== null))]
+      
+      for (const classeId of classesIds) {
+        const { data: classe, error: classeError } = await supabaseAdmin
+          .from('classes')
+          .select('effectif')
+          .eq('id', classeId)
+          .single()
+
+        if (!classeError && classe) {
+          const nouveauEffectif = Math.max(0, (classe.effectif || 0) - 1)
+          await supabaseAdmin
+            .from('classes')
+            .update({ effectif: nouveauEffectif })
+            .eq('id', classeId)
+        }
+      }
+    }
+
+    // Supprimer les parents (cascade devrait le faire automatiquement, mais on le fait explicitement)
+    await supabaseAdmin
+      .from('parents')
+      .delete()
+      .eq('etudiant_id', etudiantId)
+
+    // Supprimer les inscriptions (cascade devrait supprimer les notes, bulletins, etc.)
+    await supabaseAdmin
+      .from('inscriptions')
+      .delete()
+      .eq('etudiant_id', etudiantId)
+
+    // Supprimer le compte utilisateur associé si il existe (par email ou username = matricule)
+    if (etudiant.email || etudiant.matricule) {
+      const { data: utilisateur } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('id')
+        .or(etudiant.email && etudiant.matricule 
+          ? `email.eq.${etudiant.email},username.eq.${etudiant.matricule}`
+          : etudiant.email 
+            ? `email.eq.${etudiant.email}`
+            : `username.eq.${etudiant.matricule}`)
+        .maybeSingle()
+
+      if (utilisateur) {
+        await supabaseAdmin
+          .from('utilisateurs')
+          .delete()
+          .eq('id', utilisateur.id)
+      }
+    }
+
+    // Supprimer l'étudiant (cascade supprimera automatiquement les inscriptions, parents, etc.)
+    const { error: deleteError } = await supabaseAdmin
+      .from('etudiants')
+      .delete()
+      .eq('id', etudiantId)
+
+    if (deleteError) {
+      throw new Error(`Erreur lors de la suppression de l'étudiant: ${deleteError.message}`)
+    }
+
+    return {
+      success: true,
+      message: `L'étudiant ${etudiant.prenom} ${etudiant.nom} a été supprimé avec succès`
+    }
+  } catch (error) {
+    console.error('Erreur lors de la suppression de l\'étudiant:', error)
+    throw error
+  }
+}

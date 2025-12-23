@@ -4,7 +4,7 @@ import { faUsers, faChalkboardTeacher } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
-import { getFilieres, getRepartitionCount, createClassesRepartition, getNiveaux } from '../../api/chefDepartement'
+import { getFilieres, getRepartitionCount, createClassesRepartition, getNiveaux, getClassesExistantes, affecterEtudiantsAClasse } from '../../api/chefDepartement'
 
 const RepartitionClassesView = () => {
     const { user } = useAuth()
@@ -13,7 +13,7 @@ const RepartitionClassesView = () => {
     const [filieres, setFilieres] = useState([])
     const [niveaux, setNiveaux] = useState([])
     const [repartition, setRepartition] = useState({
-        formation: 'Initiale',
+        formation: 'Initiale1',
         filiereId: '',
         niveauId: ''
     })
@@ -31,6 +31,9 @@ const RepartitionClassesView = () => {
         preview: []
     })
     const [creatingClasses, setCreatingClasses] = useState(false)
+    const [classesExistantes, setClassesExistantes] = useState([])
+    const [selectedClasseExistante, setSelectedClasseExistante] = useState('')
+    const [loadingClasses, setLoadingClasses] = useState(false)
 
     // Charger les données initiales
     useEffect(() => {
@@ -64,7 +67,7 @@ const RepartitionClassesView = () => {
 
         setRepartitionResult({ ...repartitionResult, loading: true, error: null, count: null })
         try {
-            const res = await getRepartitionCount(repartition.filiereId, repartition.niveauId)
+            const res = await getRepartitionCount(repartition.filiereId, repartition.niveauId, repartition.formation)
             if (res.success) {
                 setRepartitionResult({
                     loading: false,
@@ -122,13 +125,49 @@ const RepartitionClassesView = () => {
                 niveauId: repartition.niveauId,
                 nombreClasses: classConfig.value,
                 namingPattern: classConfig.namingPattern,
-                typeRepartition: classConfig.value === 1 ? 'unique' : 'multiple'
+                typeRepartition: classConfig.value === 1 ? 'unique' : 'multiple',
+                formation: repartition.formation
             })
 
             if (res.success) {
                 const message = `${res.classes.length} classe(s) créée(s) avec succès!\n${res.etudiantsRepartis || 0} étudiant(s) réparti(s).`
                 alert(message)
                 setShowClassModal(false)
+                setRepartitionResult({ count: null, loading: false, error: null, etudiants: [] })
+            } else {
+                alert("Erreur: " + res.error)
+            }
+        } catch (err) {
+            console.error(err)
+            alert("Erreur technique")
+        } finally {
+            setCreatingClasses(false)
+        }
+    }
+
+    const handleAffecterAClasseExistante = async () => {
+        if (!selectedClasseExistante) {
+            alert("Veuillez sélectionner une classe")
+            return
+        }
+
+        setCreatingClasses(true)
+        try {
+            const inscriptionIds = repartitionResult.etudiants.map(e => e.inscriptionId).filter(Boolean)
+            
+            const res = await affecterEtudiantsAClasse({
+                filiereId: repartition.filiereId,
+                niveauId: repartition.niveauId,
+                classeId: selectedClasseExistante,
+                inscriptionIds: inscriptionIds,
+                formation: repartition.formation
+            })
+
+            if (res.success) {
+                alert(res.message || `${res.etudiantsAffectes || 0} étudiant(s) affecté(s) avec succès!`)
+                setShowClassModal(false)
+                setSelectedClasseExistante('')
+                setClassesExistantes([])
                 setRepartitionResult({ count: null, loading: false, error: null, etudiants: [] })
             } else {
                 alert("Erreur: " + res.error)
@@ -169,10 +208,14 @@ const RepartitionClassesView = () => {
                                 <select
                                     className="w-full p-2 border border-slate-300 rounded-md"
                                     value={repartition.formation}
-                                    onChange={(e) => setRepartition({ ...repartition, formation: e.target.value })}
+                                    onChange={(e) => {
+                                        setRepartition({ ...repartition, formation: e.target.value })
+                                        // Réinitialiser les résultats quand on change la formation
+                                        setRepartitionResult({ count: null, loading: false, error: null, etudiants: [] })
+                                    }}
                                 >
-                                    <option value="Initiale">Formation Initiale</option>
-                                    <option value="Continue">Formation Continue</option>
+                                    <option value="Initiale1">Initial 1</option>
+                                    <option value="Initiale2">Initial 2</option>
                                 </select>
                             </div>
 
@@ -228,17 +271,46 @@ const RepartitionClassesView = () => {
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-slate-600">Total Étudiants Inscrits (Non répartis)</p>
-                                            <p className="text-xs text-slate-500">Pour {repartition.formation} - {filieres.find(f => f.id === repartition.filiereId)?.code} - {niveaux.find(n => n.id === repartition.niveauId)?.code}</p>
+                                            <p className="text-xs text-slate-500">Pour {repartition.formation === 'Initiale1' ? 'Initial 1' : 'Initial 2'} - {filieres.find(f => f.id === repartition.filiereId)?.code} - {niveaux.find(n => n.id === repartition.niveauId)?.code}</p>
                                         </div>
                                     </div>
 
                                     <button
-                                        onClick={() => setShowClassModal(true)}
-                                        disabled={repartitionResult.count === 0}
+                                        onClick={async () => {
+                                            // Si moins de 20 étudiants, charger les classes existantes
+                                            if (repartitionResult.count < 20) {
+                                                setLoadingClasses(true)
+                                                try {
+                                                    console.log('Chargement des classes pour:', {
+                                                        filiereId: repartition.filiereId,
+                                                        niveauId: repartition.niveauId,
+                                                        formation: repartition.formation
+                                                    })
+                                                    const res = await getClassesExistantes(repartition.filiereId, repartition.niveauId, repartition.formation)
+                                                    console.log('Résultat getClassesExistantes:', res)
+                                                    if (res.success) {
+                                                        setClassesExistantes(res.classes || [])
+                                                        setShowClassModal(true)
+                                                    } else {
+                                                        console.error('Erreur getClassesExistantes:', res.error)
+                                                        alert("Erreur: " + res.error)
+                                                    }
+                                                } catch (err) {
+                                                    console.error('Exception lors du chargement des classes:', err)
+                                                    alert("Erreur lors du chargement des classes: " + err.message)
+                                                } finally {
+                                                    setLoadingClasses(false)
+                                                }
+                                            } else {
+                                                // Si >= 20, afficher le modal de création de classes
+                                                setShowClassModal(true)
+                                            }
+                                        }}
+                                        disabled={repartitionResult.count === 0 || loadingClasses}
                                         className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <FontAwesomeIcon icon={faChalkboardTeacher} />
-                                        Répartir en Classes
+                                        {loadingClasses ? 'Chargement...' : 'Répartir en Classes'}
                                     </button>
                                 </div>
 
@@ -292,70 +364,141 @@ const RepartitionClassesView = () => {
                 </main>
             </div>
 
-            {/* MODAL CRÉATION CLASSES */}
+            {/* MODAL RÉPARTITION */}
             {showClassModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden animate-scaleIn">
                         <div className="p-6 border-b border-slate-100">
-                            <h3 className="text-xl font-bold text-slate-800">Configuration des Classes</h3>
-                            <p className="text-sm text-slate-500 mt-1">Définissez comment répartir les {repartitionResult.count} étudiants</p>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {repartitionResult.count < 20 ? 'Affecter à une classe existante' : 'Configuration des Classes'}
+                            </h3>
+                            <p className="text-sm text-slate-500 mt-1">
+                                {repartitionResult.count < 20 
+                                    ? `Affecter les ${repartitionResult.count} étudiant(s) à une classe existante`
+                                    : `Définissez comment répartir les ${repartitionResult.count} étudiants`}
+                            </p>
                         </div>
 
                         <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Méthode de répartition</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        className={`p-3 border rounded-lg text-sm font-medium transition-all ${classConfig.method === 'number' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                                        onClick={() => handleUpdateConfig('method', 'number')}
-                                    >
-                                        Par Nombre de Classes
-                                    </button>
-                                </div>
-                            </div>
+                            {repartitionResult.count < 20 ? (
+                                // Modal pour affecter à une classe existante
+                                <>
+                                    {classesExistantes.length === 0 ? (
+                                        <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm text-center">
+                                            Aucune classe existante trouvée pour cette filière et ce niveau. 
+                                            Vous pouvez créer une nouvelle classe via le menu "Classes".
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                    Sélectionner une classe existante
+                                                </label>
+                                                <select
+                                                    className="w-full p-2 border border-slate-300 rounded-md"
+                                                    value={selectedClasseExistante}
+                                                    onChange={(e) => setSelectedClasseExistante(e.target.value)}
+                                                >
+                                                    <option value="">Choisir une classe...</option>
+                                                    {classesExistantes.map(classe => (
+                                                        <option key={classe.id} value={classe.id}>
+                                                            {classe.code} - {classe.nom} (Effectif actuel: {classe.effectif || 0})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {selectedClasseExistante && (
+                                                <div className="p-4 bg-blue-50 rounded-lg">
+                                                    <p className="text-sm text-slate-700">
+                                                        <strong>{repartitionResult.count}</strong> étudiant(s) seront affecté(s) à la classe sélectionnée.
+                                                    </p>
+                                                    {(() => {
+                                                        const classe = classesExistantes.find(c => c.id === selectedClasseExistante)
+                                                        const nouvelEffectif = (classe?.effectif || 0) + repartitionResult.count
+                                                        return (
+                                                            <p className="text-xs text-slate-600 mt-1">
+                                                                Nouvel effectif: {nouvelEffectif} étudiant(s)
+                                                            </p>
+                                                        )
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                // Modal pour créer de nouvelles classes (comportement existant)
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Méthode de répartition</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                className={`p-3 border rounded-lg text-sm font-medium transition-all ${classConfig.method === 'number' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                                onClick={() => handleUpdateConfig('method', 'number')}
+                                            >
+                                                Par Nombre de Classes
+                                            </button>
+                                        </div>
+                                    </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    {classConfig.method === 'number' ? 'Nombre de classes à créer' : 'Nombre max d\'étudiants par classe'}
-                                </label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    className="w-full p-2 border border-slate-300 rounded-md"
-                                    value={classConfig.value}
-                                    onChange={(e) => handleUpdateConfig('value', parseInt(e.target.value) || 1)}
-                                />
-                            </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            {classConfig.method === 'number' ? 'Nombre de classes à créer' : 'Nombre max d\'étudiants par classe'}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            className="w-full p-2 border border-slate-300 rounded-md"
+                                            value={classConfig.value}
+                                            onChange={(e) => handleUpdateConfig('value', parseInt(e.target.value) || 1)}
+                                        />
+                                    </div>
 
-                            <div className="p-4 bg-slate-50 rounded-lg">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Aperçu</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {classConfig.preview.map((name, idx) => (
-                                        <span key={idx} className="px-3 py-1 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-700 shadow-sm">
-                                            {name}
-                                        </span>
-                                    ))}
-                                </div>
-                                <p className="text-xs text-slate-500 mt-2">
-                                    Soit environ ~{Math.ceil(repartitionResult.count / classConfig.value)} étudiants par classe
-                                </p>
-                            </div>
+                                    <div className="p-4 bg-slate-50 rounded-lg">
+                                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Aperçu</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {classConfig.preview.map((name, idx) => (
+                                                <span key={idx} className="px-3 py-1 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-700 shadow-sm">
+                                                    {name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            Soit environ ~{Math.ceil(repartitionResult.count / classConfig.value)} étudiants par classe
+                                        </p>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
                             <button
-                                onClick={() => setShowClassModal(false)}
+                                onClick={() => {
+                                    setShowClassModal(false)
+                                    setSelectedClasseExistante('')
+                                    setClassesExistantes([])
+                                }}
                                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
                             >
                                 Annuler
                             </button>
-                            <button
-                                onClick={handleCreateClasses}
-                                disabled={creatingClasses}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
-                            >
-                                {creatingClasses ? 'Création...' : 'Confirmer la création'}
-                            </button>
+                            {repartitionResult.count < 20 ? (
+                                <button
+                                    onClick={handleAffecterAClasseExistante}
+                                    disabled={creatingClasses || !selectedClasseExistante || classesExistantes.length === 0}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                                >
+                                    {creatingClasses ? 'Affectation...' : 'Confirmer l\'affectation'}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleCreateClasses}
+                                    disabled={creatingClasses}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                                >
+                                    {creatingClasses ? 'Création...' : 'Confirmer la création'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

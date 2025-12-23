@@ -487,26 +487,27 @@ export const getAgentDashboardStats = async () => {
       { name: 'En attente', value: enAttente || 0, color: '#F59E0B' }
     ]
 
-    // Inscriptions par semaine
-    const inscriptionsParSemaine = []
-    for (let i = 6; i >= 0; i--) {
-      const weekStart = new Date(now)
-      weekStart.setDate(now.getDate() - (i * 7))
-      weekStart.setHours(0, 0, 0, 0)
+    // Inscriptions par mois (6 derniers mois)
+    const inscriptionsParMois = []
+    const moisNoms = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const moisDebut = new Date(date.getFullYear(), date.getMonth(), 1)
+      moisDebut.setHours(0, 0, 0, 0)
       
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      weekEnd.setHours(23, 59, 59, 999)
+      const moisFin = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+      moisFin.setHours(23, 59, 59, 999)
 
       const { count } = await supabaseAdmin
         .from('inscriptions')
         .select('*', { count: 'exact', head: true })
         .eq('statut', 'INSCRIT')
-        .gte('date_inscription', weekStart.toISOString())
-        .lte('date_inscription', weekEnd.toISOString())
+        .gte('date_inscription', moisDebut.toISOString())
+        .lte('date_inscription', moisFin.toISOString())
 
-      inscriptionsParSemaine.push({
-        semaine: `Sem ${7 - i}`,
+      inscriptionsParMois.push({
+        mois: moisNoms[date.getMonth()],
         inscrits: count || 0
       })
     }
@@ -521,7 +522,7 @@ export const getAgentDashboardStats = async () => {
       },
       dataParFiliere,
       dataStatut,
-      inscriptionsParSemaine
+      inscriptionsParSemaine: inscriptionsParMois
     }
   } catch (error) {
     console.error('Erreur lors de la récupération des statistiques du dashboard agent:', error)

@@ -347,6 +347,40 @@ enum TypeDiplome {
 }
 
 // ============================================
+// MODÈLES BULLETINS GÉNÉRÉS (Workflow Visa DEP)
+// ============================================
+
+model BulletinGenere {
+  id                String   @id @default(uuid())
+  classeId          String
+  semestre          Semestre
+  departementId     String
+  chefDepartementId String
+  dateGeneration    DateTime @default(now())
+  statut            StatutVisa @default(EN_ATTENTE)
+  dateVisa          DateTime?
+  depId             String?  // ID du DEP qui a visé
+  pdfPath           String?  // Chemin du PDF sans cachet
+  pdfPathVise       String?  // Chemin du PDF avec cachet
+  nombreEtudiants   Int
+  anneeAcademique   String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  classe            Classe @relation(fields: [classeId], references: [id], onDelete: Cascade)
+  departement       Departement @relation(fields: [departementId], references: [id], onDelete: Cascade)
+  
+  @@map("bulletins_generes")
+}
+
+enum StatutVisa {
+  EN_ATTENTE  // Bulletin généré, en attente de visa DEP
+  VISE        // Bulletin visé par le DEP avec cachet
+}
+
+
+// ============================================
 // MODÈLES PROCÈS-VERBAUX
 // ============================================
 

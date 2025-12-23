@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -18,6 +18,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { getDashboardStats } from '../../api/chefDepartement'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 
 const DashboardChefView = () => {
@@ -43,6 +44,7 @@ const DashboardChefView = () => {
       }
     }
   }, [isAuthenticated, user, navigate])
+  const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalClasses: 0,
     totalEnseignants: 0,
@@ -72,13 +74,9 @@ const DashboardChefView = () => {
     { id: 5, action: 'Nouveau message du Directeur des Études', date: 'Il y a 1 heure', type: 'message' }
   ]
 
-  // Charger les données
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
+      setLoading(true)
       // 1. Charger stats globales
       const statsRes = await getDashboardStats()
       if (statsRes.success && statsRes.stats) {
@@ -99,8 +97,17 @@ const DashboardChefView = () => {
       }
     } catch (error) {
       console.error("Erreur chargement dashboard:", error)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [])
+
+  // Charger les données
+  useEffect(() => {
+    if (isAuthenticated && user?.role === 'CHEF_DEPARTEMENT') {
+      loadDashboardData()
+    }
+  }, [isAuthenticated, user, loadDashboardData])
 
 
 
@@ -136,6 +143,20 @@ const DashboardChefView = () => {
   }
 
   const departementChef = user?.departement?.nom || 'Département'
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <AdminSidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
+            <LoadingSpinner size="lg" text="Chargement du tableau de bord..." />
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">

@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faGraduationCap, faSearch, faUsers, faBook, faSpinner, faEye, faTimes } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faGraduationCap, faSearch, faUsers, faBook, faSpinner, faEye, faTimes, faFilter } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
-import { getClasses, createClasse, updateClasse, deleteClasse, getEtudiantsByClasse } from '../../api/chefDepartement.js'
-import { getFilieres } from '../../api/scolarite.js'
+import { getClasses, createClasse, updateClasse, deleteClasse, getEtudiantsByClasse, getFilieres } from '../../api/chefDepartement.js'
+import { getFormations } from '../../api/scolarite.js'
 
 // Fonction pour obtenir tous les niveaux
 const getAllNiveaux = async () => {
@@ -32,8 +32,20 @@ const getAllNiveaux = async () => {
 }
 
 // Modal pour la liste des étudiants
-const StudentListModal = ({ isOpen, onClose, classe, etudiants, loading }) => {
+const StudentListModal = ({ isOpen, onClose, classe, etudiants, loading, selectedEtudiantId = null }) => {
   if (!isOpen) return null
+
+  // Scroll vers l'étudiant sélectionné quand la liste est chargée
+  useEffect(() => {
+    if (selectedEtudiantId && etudiants.length > 0 && !loading) {
+      const element = document.getElementById(`etudiant-${selectedEtudiantId}`)
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+      }
+    }
+  }, [selectedEtudiantId, etudiants, loading])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -80,7 +92,13 @@ const StudentListModal = ({ isOpen, onClose, classe, etudiants, loading }) => {
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {etudiants.map((etudiant) => (
-                    <tr key={etudiant.id} className="hover:bg-slate-50 transition-colors">
+                    <tr 
+                      key={etudiant.id} 
+                      id={`etudiant-${etudiant.id}`}
+                      className={`hover:bg-slate-50 transition-colors ${
+                        selectedEtudiantId === etudiant.id ? 'bg-blue-100 border-l-4 border-blue-500' : ''
+                      }`}
+                    >
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900">
                         {etudiant.matricule}
                       </td>
@@ -117,11 +135,18 @@ const ClassesView = () => {
   const [classes, setClasses] = useState([])
   const [filieres, setFilieres] = useState([])
   const [niveaux, setNiveaux] = useState([])
+  const [formations, setFormations] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editingClass, setEditingClass] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterFormation, setFilterFormation] = useState('TOUS') // 'TOUS', formationId
+  const [filterNiveau, setFilterNiveau] = useState('TOUS') // 'TOUS', niveauId
+  const [filterFiliere, setFilterFiliere] = useState('TOUS') // 'TOUS', filiereId
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [searchingStudent, setSearchingStudent] = useState(false)
+  const [foundStudent, setFoundStudent] = useState(null) // { etudiant, classe }
+  const searchTimeoutRef = useRef(null)
 
   // States pour la liste des étudiants
   const [showStudentModal, setShowStudentModal] = useState(false)
@@ -132,6 +157,7 @@ const ClassesView = () => {
     nom: '',
     filiereId: '',
     niveauId: '',
+    formationId: '',
     nombreModules: 0
   })
 
@@ -152,16 +178,31 @@ const ClassesView = () => {
         showAlert(classesResult.error || 'Erreur lors du chargement des classes', 'error')
       }
 
-      // Charger les filières du département
+      // Charger les filières du département (déjà filtrées par l'API)
       const filieresResult = await getFilieres()
-      if (Array.isArray(filieresResult)) {
-        // Filtrer les filières du département de l'utilisateur
-        const userFilieres = filieresResult.filter(f =>
-          f.departement?.id === user?.departementId || f.departementId === user?.departementId
+      if (filieresResult.success && Array.isArray(filieresResult.filieres)) {
+        setFilieres(filieresResult.filieres)
+        if (filieresResult.filieres.length > 0 && !formData.filiereId) {
+          setFormData(prev => ({ ...prev, filiereId: filieresResult.filieres[0].id }))
+        }
+      } else if (Array.isArray(filieresResult)) {
+        // Fallback si la structure est différente
+        setFilieres(filieresResult)
+        if (filieresResult.length > 0 && !formData.filiereId) {
+          setFormData(prev => ({ ...prev, filiereId: filieresResult[0].id }))
+        }
+      }
+
+      // Charger les formations
+      const formationsResult = await getFormations()
+      if (Array.isArray(formationsResult)) {
+        // Filtrer uniquement Initiale 1 et Initiale 2
+        const initialFormations = formationsResult.filter(f => 
+          f.code === 'INITIAL_1' || f.code === 'INITIAL_2'
         )
-        setFilieres(userFilieres)
-        if (userFilieres.length > 0 && !formData.filiereId) {
-          setFormData(prev => ({ ...prev, filiereId: userFilieres[0].id }))
+        setFormations(initialFormations)
+        if (initialFormations.length > 0 && !formData.formationId) {
+          setFormData(prev => ({ ...prev, formationId: initialFormations[0].id }))
         }
       }
 
@@ -194,6 +235,7 @@ const ClassesView = () => {
       nom: '',
       filiereId: filieres[0]?.id || '',
       niveauId: niveaux[0]?.id || '',
+      formationId: formations[0]?.id || '',
       nombreModules: 0
     })
     setShowModal(true)
@@ -206,6 +248,7 @@ const ClassesView = () => {
       nom: classe.nom,
       filiereId: classe.filiereId,
       niveauId: classe.niveauId,
+      formationId: classe.formationId || '',
       nombreModules: classe.nombreModules || 0
     })
     setShowModal(true)
@@ -231,7 +274,7 @@ const ClassesView = () => {
   }
 
   const handleSave = async () => {
-    if (!formData.code || !formData.nom || !formData.filiereId || !formData.niveauId) {
+    if (!formData.code || !formData.nom || !formData.filiereId || !formData.niveauId || !formData.formationId) {
       showAlert('Veuillez remplir tous les champs obligatoires', 'error')
       return
     }
@@ -261,14 +304,14 @@ const ClassesView = () => {
     }
   }
 
-  const handleViewStudents = async (classe) => {
-    setSelectedClassStudents({ classe, etudiants: [], loading: true })
+  const handleViewStudents = async (classe, selectedEtudiantId = null) => {
+    setSelectedClassStudents({ classe, etudiants: [], loading: true, selectedEtudiantId })
     setShowStudentModal(true)
 
     try {
       const result = await getEtudiantsByClasse(classe.id)
       if (result.success) {
-        setSelectedClassStudents(prev => ({ ...prev, etudiants: result.etudiants, loading: false }))
+        setSelectedClassStudents(prev => ({ ...prev, etudiants: result.etudiants, loading: false, selectedEtudiantId }))
       } else {
         showAlert(result.error || 'Erreur lors du chargement des étudiants', 'error')
         setSelectedClassStudents(prev => ({ ...prev, loading: false }))
@@ -280,9 +323,77 @@ const ClassesView = () => {
     }
   }
 
-  const filteredClasses = classes.filter(classe =>
-    `${classe.code} ${classe.nom || ''} ${classe.niveau || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Rechercher un étudiant par nom dans toutes les classes
+  const handleSearchStudent = async (query) => {
+    if (!query || query.trim().length < 2) {
+      setFoundStudent(null)
+      return
+    }
+
+    const searchTerm = query.trim().toLowerCase()
+    setSearchingStudent(true)
+
+    try {
+      // Rechercher dans toutes les classes
+      for (const classe of classes) {
+        const result = await getEtudiantsByClasse(classe.id)
+        if (result.success && result.etudiants) {
+          const found = result.etudiants.find(etudiant => {
+            const fullName = `${etudiant.prenom} ${etudiant.nom}`.toLowerCase()
+            const matricule = etudiant.matricule?.toLowerCase() || ''
+            return fullName.includes(searchTerm) || matricule.includes(searchTerm)
+          })
+
+          if (found) {
+            setFoundStudent({ etudiant: found, classe })
+            // Ouvrir automatiquement la modal avec l'étudiant sélectionné
+            setTimeout(() => {
+              handleViewStudents(classe, found.id)
+            }, 100)
+            showAlert(`Étudiant trouvé : ${found.prenom} ${found.nom} dans la classe ${classe.code}`, 'success')
+            setSearchingStudent(false)
+            return
+          }
+        }
+      }
+
+      // Aucun étudiant trouvé
+      setFoundStudent(null)
+      showAlert(`Aucun étudiant trouvé avec "${query}"`, 'warning')
+    } catch (error) {
+      console.error('Erreur lors de la recherche:', error)
+      showAlert('Erreur lors de la recherche de l\'étudiant', 'error')
+    } finally {
+      setSearchingStudent(false)
+    }
+  }
+
+
+  const filteredClasses = classes.filter(classe => {
+    // Si un étudiant a été trouvé, ne montrer que sa classe
+    if (foundStudent && foundStudent.classe.id !== classe.id) {
+      return false
+    }
+    
+    // Filtre par recherche (code de classe uniquement si pas de recherche d'étudiant)
+    const matchesSearch = !foundStudent && `${classe.code} ${classe.nom || ''} ${classe.niveau || ''} ${classe.formation?.nom || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    // Si recherche d'étudiant active, on a déjà filtré par foundStudent
+    if (foundStudent) {
+      return true
+    }
+    
+    // Filtre par formation
+    const matchesFormation = filterFormation === 'TOUS' || classe.formationId === filterFormation || classe.formation?.id === filterFormation
+    
+    // Filtre par niveau
+    const matchesNiveau = filterNiveau === 'TOUS' || classe.niveauId === filterNiveau
+    
+    // Filtre par filière
+    const matchesFiliere = filterFiliere === 'TOUS' || classe.filiereId === filterFiliere
+    
+    return matchesSearch && matchesFormation && matchesNiveau && matchesFiliere
+  })
 
   if (loading) {
     return (
@@ -321,17 +432,131 @@ const ClassesView = () => {
             </button>
           </div>
 
-          {/* Barre de recherche */}
-          <div className="mb-6">
+          {/* Barre de recherche et filtres */}
+          <div className="mb-6 space-y-4">
+            {/* Barre de recherche */}
             <div className="relative">
               <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Rechercher une classe..."
+                placeholder="Rechercher une classe ou un étudiant (nom, prénom, matricule)..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setSearchQuery(value)
+                  
+                  // Nettoyer le timeout précédent
+                  if (searchTimeoutRef.current) {
+                    clearTimeout(searchTimeoutRef.current)
+                  }
+                  
+                  // Si la recherche semble être un nom d'étudiant (plus de 2 caractères, pas un code de classe)
+                  if (value.trim().length >= 2 && !value.match(/^[A-Z]{2,4}-L[1-3]-[A-Z]$/i)) {
+                    // Utiliser un debounce pour éviter trop de requêtes
+                    searchTimeoutRef.current = setTimeout(() => {
+                      handleSearchStudent(value)
+                    }, 800)
+                  } else {
+                    setFoundStudent(null)
+                    setSearchingStudent(false)
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim().length >= 2) {
+                    handleSearchStudent(searchQuery)
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {searchingStudent && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <FontAwesomeIcon icon={faSpinner} className="text-blue-600 animate-spin" />
+                </div>
+              )}
+              {foundStudent && (
+                <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
+                  <button
+                    onClick={() => {
+                      setFoundStudent(null)
+                      setSearchQuery('')
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                    title="Effacer la recherche d'étudiant"
+                  >
+                    <FontAwesomeIcon icon={faTimes} />
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {/* Filtres */}
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <FontAwesomeIcon icon={faFilter} className="text-slate-500" />
+                <h3 className="text-sm font-semibold text-slate-700">Filtres</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Filtre par filière */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Filière</label>
+                  <select
+                    value={filterFiliere}
+                    onChange={(e) => setFilterFiliere(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="TOUS">Toutes les filières</option>
+                    {filieres.map((filiere) => (
+                      <option key={filiere.id} value={filiere.id}>{filiere.code} - {filiere.nom}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Filtre par niveau */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Niveau</label>
+                  <select
+                    value={filterNiveau}
+                    onChange={(e) => setFilterNiveau(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="TOUS">Tous les niveaux</option>
+                    {niveaux.map((niveau) => (
+                      <option key={niveau.id} value={niveau.id}>{niveau.code} - {niveau.nom}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Filtre par formation */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Formation</label>
+                  <select
+                    value={filterFormation}
+                    onChange={(e) => setFilterFormation(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="TOUS">Toutes les formations</option>
+                    {formations.map((formation) => (
+                      <option key={formation.id} value={formation.id}>{formation.nom}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              {/* Bouton réinitialiser les filtres */}
+              {(filterFormation !== 'TOUS' || filterNiveau !== 'TOUS' || filterFiliere !== 'TOUS') && (
+                <div className="mt-3 pt-3 border-t border-slate-200">
+                  <button
+                    onClick={() => {
+                      setFilterFormation('TOUS')
+                      setFilterNiveau('TOUS')
+                      setFilterFiliere('TOUS')
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Réinitialiser les filtres
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -354,9 +579,18 @@ const ClassesView = () => {
                       <div>
                         <h3 className="font-bold text-lg text-slate-800">{classe.code}</h3>
                         <p className="text-sm text-slate-500">Niveau: {classe.niveau}</p>
-                        {classe.nom && <p className="text-xs text-slate-400">{classe.nom}</p>}
                       </div>
                     </div>
+                    {/* Badge de formation en haut à droite */}
+                    {classe.formation?.nom && (
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                        classe.formation.code === 'INITIAL_1' 
+                          ? 'bg-purple-100 text-purple-700' 
+                          : 'bg-indigo-100 text-indigo-700'
+                      }`}>
+                        {classe.formation.nom}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 text-slate-600">
@@ -438,6 +672,19 @@ const ClassesView = () => {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Formation *</label>
+                <select
+                  value={formData.formationId}
+                  onChange={(e) => setFormData({ ...formData, formationId: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sélectionner une formation</option>
+                  {formations.map((formation) => (
+                    <option key={formation.id} value={formation.id}>{formation.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Niveau *</label>
                 <select
                   value={formData.niveauId}
@@ -485,10 +732,15 @@ const ClassesView = () => {
           {/* Modal liste étudiants */}
           <StudentListModal
             isOpen={showStudentModal}
-            onClose={() => setShowStudentModal(false)}
+            onClose={() => {
+              setShowStudentModal(false)
+              setFoundStudent(null)
+              setSearchQuery('')
+            }}
             classe={selectedClassStudents.classe}
             etudiants={selectedClassStudents.etudiants}
             loading={selectedClassStudents.loading}
+            selectedEtudiantId={selectedClassStudents.selectedEtudiantId}
           />
         </main>
       </div>

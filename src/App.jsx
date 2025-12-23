@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { initNavigation } from './utils/navigation'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import ErrorBoundary from './components/common/ErrorBoundary'
@@ -112,6 +113,7 @@ function App() {
     <Router future={{ v7_relativeSplatPath: true }}>
       <ErrorBoundary>
         <NavigationInit />
+        <Toaster position="top-right" />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Pages de connexion - Accessibles sans authentification */}

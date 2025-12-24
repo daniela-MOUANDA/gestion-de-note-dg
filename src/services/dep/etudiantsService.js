@@ -526,3 +526,4 @@ export const getEtudiantDetails = async (etudiantId, semestre = null) => {
     }
   }
 }
+

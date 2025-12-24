@@ -85,7 +85,8 @@ export const viserBulletin = async (id, depId) => {
 
         if (updateError) throw updateError
 
-        // 2. Mettre à jour les bulletins individuels correspondant à ce lot
+        // 2. Mettre à jour TOUS les bulletins individuels de la classe pour ce semestre
+        // Cela inclut tous les bulletins, même ceux régénérés après le premier visa
         const { error: bulletinsError } = await supabaseAdmin
             .from('bulletins')
             .update({
@@ -95,7 +96,8 @@ export const viserBulletin = async (id, depId) => {
             })
             .eq('classe_id', lot.classeId)
             .eq('semestre', lot.semestre)
-            .eq('annee_academique', lot.anneeAcademique)
+            // Ne pas filtrer par annee_academique pour inclure tous les bulletins,
+            // même ceux régénérés avec une année académique différente
 
         if (bulletinsError) throw bulletinsError
 

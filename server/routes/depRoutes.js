@@ -183,14 +183,15 @@ router.get('/bulletins/:id/preview', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Lot introuvable' })
         }
 
-        // 2. Trouver un bulletin représentatif (le premier étudiant)
+        // 2. Trouver un bulletin représentatif (le premier étudiant) avec les infos du DEP
         const { data: bulletin, error: bulletinError } = await supabaseAdmin
             .from('bulletins')
             .select(`
                 *,
                 etudiants (id, nom, prenom, matricule, date_naissance, lieu_naissance),
                 classes (id, code, nom, filieres (code, nom), niveaux (code)),
-                promotions (annee)
+                promotions (annee),
+                dep:utilisateurs!bulletins_dep_id_fkey (id, nom, prenom)
             `)
             .eq('classe_id', lot.classeId)
             .eq('semestre', lot.semestre)
@@ -253,25 +254,16 @@ router.get('/bulletins/:id/preview', async (req, res) => {
                 ue: mod.ue || 'UE',
                 nom: mod.nom || '',
                 credits: mod.credit || 0,
-                coefficient: mod.coefficient || 1,
+                coefficient: mod.credit || 1, // Fix: Coefficient = Credit
                 noteEtudiant: mod.moyenne || 0,
-                moyenneClasse: mod.moyenneClasse || 0
+                moyenneClasse: mod.moyenneClasse || 0,
+                status: mod.status || (mod.valide ? 'ACQUIS' : 'NON_ACQUIS')
             })),
             moyenneSemestre: etudiantData.moyenneGenerale || 0,
             rangEtudiant: etudiantData.rang || null,
             mention: etudiantData.mention || getMention(etudiantData.moyenneGenerale || 0),
             penalitesAbsences: 0,
-            uesValidees: modules.reduce((acc, mod) => {
-                const ueName = mod.ue || 'UE'
-                if (!acc.find(u => u.ue === ueName)) {
-                    acc.push({
-                        ue: ueName,
-                        credits: mod.credit || 0,
-                        valide: mod.valide || false
-                    })
-                }
-                return acc
-            }, []),
+            uesValidees: etudiantData.uesValidees || [],
             decision: etudiantData.statut === 'VALIDE'
                 ? `Semestre ${bulletin.semestre === 'S1' ? '1' : '2'} validé`
                 : `Semestre ${bulletin.semestre === 'S1' ? '1' : '2'} ajourné`,
@@ -284,9 +276,31 @@ router.get('/bulletins/:id/preview', async (req, res) => {
 
         const timestamp = Date.now()
         const outputPath = path.join(uploadsDir, `preview_${id}_${timestamp}.pdf`)
-        const includeStamp = lot.statut === 'VISE' // Cachet si déjà visé
+        // DEP : toujours inclure le cachet car c'est le DEP qui l'appose
+        const includeStamp = true
 
-        await generateBulletinPDF(pdfData, outputPath, includeStamp)
+        // Préparer les informations du DEP pour le cachet
+        // Utiliser le DEP connecté ou celui qui a visé le bulletin
+        let depInfo = null
+        if (req.user && req.user.role === 'DEP') {
+            // Utiliser les informations du DEP connecté
+            depInfo = {
+                dateVisa: lot.dateVisa || bulletin?.date_visa || new Date().toISOString(),
+                nom: req.user.nom || '',
+                prenom: req.user.prenom || '',
+                titre: 'Directeur des Études et de la Pédagogie' // Titre du DEP
+            }
+        } else if (bulletin && bulletin.dep) {
+            // Utiliser les informations du DEP qui a visé le bulletin
+            depInfo = {
+                dateVisa: bulletin.date_visa || lot.dateVisa || new Date().toISOString(),
+                nom: bulletin.dep.nom || '',
+                prenom: bulletin.dep.prenom || '',
+                titre: 'Directeur des Études et de la Pédagogie' // Titre du DEP
+            }
+        }
+
+        await generateBulletinPDF(pdfData, outputPath, includeStamp, depInfo)
 
         // 7. Envoyer et supprimer
         res.download(outputPath, `Apercu_${lot.semestre}_${classe.code}.pdf`, (err) => {

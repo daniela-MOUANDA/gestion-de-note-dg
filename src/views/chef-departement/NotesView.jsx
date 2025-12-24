@@ -287,15 +287,15 @@ const NotesView = () => {
   const handleSaveNotes = async () => {
     // Validation : Vérifier qu'aucune note ne dépasse la pondération
     if (!parametres || !selectedEtudiant) return
-    
+
     let hasInvalidNote = false
     const invalidNotes = []
-    
+
     parametres.evaluations.forEach(evaluation => {
       for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
         const evalId = `${evaluation.id}_${i}`
         const note = notes[selectedEtudiant.id]?.[evalId]
-        
+
         if (note !== undefined && note !== null && note !== '') {
           const numValue = parseFloat(note)
           if (!isNaN(numValue) && numValue > evaluation.noteMax) {
@@ -306,7 +306,7 @@ const NotesView = () => {
         }
       }
     })
-    
+
     if (hasInvalidNote) {
       showAlert(`Certaines notes dépassent la pondération maximale:\n${invalidNotes.join('\n')}`, 'error')
       return
@@ -321,10 +321,10 @@ const NotesView = () => {
       // Inclure toutes les notes, même vides, pour permettre la suppression
       const notesToSave = Object.entries(notesEtudiant).map(([evaluationId, valeur]) => {
         // Si la valeur est vide, null ou undefined, on l'envoie comme null pour supprimer
-        const valeurNum = valeur === '' || valeur === null || valeur === undefined 
-          ? null 
+        const valeurNum = valeur === '' || valeur === null || valeur === undefined
+          ? null
           : parseFloat(valeur)
-        
+
         return {
           etudiantId: selectedEtudiant.id,
           moduleId: selectedModule,
@@ -379,14 +379,14 @@ const NotesView = () => {
         setSaving(false)
         return
       }
-      
+
       let hasInvalidNote = false
       const invalidNotes = []
-      
+
       Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
         const etudiant = etudiants.find(e => e.id === etudiantId)
         const nomEtudiant = etudiant ? `${etudiant.prenom} ${etudiant.nom}` : etudiantId
-        
+
         Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
           if (valeur !== undefined && valeur !== null && valeur !== '') {
             // Trouver l'évaluation correspondante
@@ -400,7 +400,7 @@ const NotesView = () => {
               }
               if (evaluation) break
             }
-            
+
             if (evaluation) {
               const valeurNum = parseFloat(valeur)
               if (!isNaN(valeurNum) && valeurNum > evaluation.noteMax) {
@@ -412,20 +412,20 @@ const NotesView = () => {
           }
         })
       })
-      
+
       if (hasInvalidNote) {
         showAlert(`Certaines notes dépassent la pondération maximale:\n${invalidNotes.slice(0, 5).join('\n')}${invalidNotes.length > 5 ? `\n... et ${invalidNotes.length - 5} autres` : ''}`, 'error')
         setSaving(false)
         return
       }
-      
+
       Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
         Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
           // Inclure toutes les notes, même vides, pour permettre la suppression
-          const valeurNum = valeur === '' || valeur === null || valeur === undefined 
-            ? null 
+          const valeurNum = valeur === '' || valeur === null || valeur === undefined
+            ? null
             : parseFloat(valeur)
-          
+
           // Inclure la note même si elle est null (pour suppression)
           if (valeur !== undefined) {
             allNotesToSave.push({
@@ -639,10 +639,10 @@ const NotesView = () => {
     const allColumns = Object.keys(firstRow)
     const noteColumns = allColumns.filter(col => {
       const colLower = col.toLowerCase().trim()
-      return colLower !== 'matricule' && colLower !== 'nom' && colLower !== 'prenom' && 
-             colLower !== 'prénom' && colLower !== 'matricule ' && colLower !== 'nom ' && colLower !== 'prenom '
+      return colLower !== 'matricule' && colLower !== 'nom' && colLower !== 'prenom' &&
+        colLower !== 'prénom' && colLower !== 'matricule ' && colLower !== 'nom ' && colLower !== 'prenom '
     })
-    
+
     console.log('📊 Colonnes de notes trouvées dans Excel:', noteColumns)
     console.log('📊 Nombre de colonnes de notes:', noteColumns.length)
 
@@ -650,8 +650,8 @@ const NotesView = () => {
       // Set pour suivre les colonnes déjà utilisées pour cette ligne
       const usedColumns = new Set()
       // Recherche flexible du matricule (parfois "Matricule " avec espace)
-      const matriculeKey = Object.keys(row).find(k => 
-        k.trim().toLowerCase() === 'matricule' || 
+      const matriculeKey = Object.keys(row).find(k =>
+        k.trim().toLowerCase() === 'matricule' ||
         k.trim().toLowerCase().includes('matricule')
       )
       const matricule = matriculeKey ? String(row[matriculeKey]).trim() : null
@@ -693,22 +693,22 @@ const NotesView = () => {
           const matchingColumns = noteColumns
             .map((col, colIndex) => {
               if (usedColumns.has(colIndex)) return null // Ignorer les colonnes déjà utilisées
-              
+
               const colNormalized = col.toLowerCase().replace(/\s+/g, ' ').trim()
               // Correspondance exacte
               if (colNormalized === expectedEval.normalized || col.trim() === expectedEval.headerName.trim()) {
                 return { col, colIndex, score: 100 }
               }
               // Correspondance avec variantes
-              const variantMatch = expectedEval.variants.findIndex(v => 
+              const variantMatch = expectedEval.variants.findIndex(v =>
                 colNormalized.includes(v) || v.includes(colNormalized)
               )
               if (variantMatch >= 0) {
                 return { col, colIndex, score: 80 - variantMatch * 10 }
               }
               // Correspondance partielle par type et numéro
-              if (colNormalized.includes(expectedEval.typeLabel.toLowerCase()) && 
-                  colNormalized.includes(String(expectedEval.numero))) {
+              if (colNormalized.includes(expectedEval.typeLabel.toLowerCase()) &&
+                colNormalized.includes(String(expectedEval.numero))) {
                 return { col, colIndex, score: 50 }
               }
               return null
@@ -749,11 +749,11 @@ const NotesView = () => {
           }
         } else {
           // Colonne non trouvée - message d'erreur clair
-          const colonnesDisponibles = noteColumns.filter(col => 
+          const colonnesDisponibles = noteColumns.filter(col =>
             col.toLowerCase().includes(expectedEval.typeLabel.toLowerCase()) ||
             col.toLowerCase().includes(expectedEval.type.toLowerCase())
           )
-          
+
           if (colonnesDisponibles.length > 0) {
             errors.push(`Ligne ${index + 2}: Colonne "${expectedEval.headerName}" non trouvée pour ${etudiant.nom}. Colonnes similaires trouvées: ${colonnesDisponibles.slice(0, 3).join(', ')}`)
           } else {
@@ -771,9 +771,9 @@ const NotesView = () => {
       // Grouper les erreurs par type pour un message plus clair
       const erreursColonnes = errors.filter(e => e.includes('ne correspond pas') || e.includes('non trouvée'))
       const autresErreurs = errors.filter(e => !e.includes('ne correspond pas') && !e.includes('non trouvée'))
-      
+
       let errorMessage = ''
-      
+
       if (erreursColonnes.length > 0) {
         errorMessage += `⚠️ PROBLÈME DE CORRESPONDANCE DES COLONNES\n\n`
         errorMessage += `Les noms des colonnes dans votre fichier Excel ne correspondent pas exactement aux noms attendus par le système.\n\n`
@@ -788,7 +788,7 @@ const NotesView = () => {
         errorMessage += `\n💡 SOLUTION :\n`
         errorMessage += `Téléchargez le template Excel depuis le système (bouton "Télécharger Template") et utilisez-le comme base. Ne modifiez pas les noms des colonnes.\n\n`
       }
-      
+
       if (autresErreurs.length > 0) {
         errorMessage += `⚠️ AUTRES ERREURS :\n`
         autresErreurs.slice(0, 5).forEach(err => {
@@ -798,7 +798,7 @@ const NotesView = () => {
           errorMessage += `... et ${autresErreurs.length - 5} autre(s) erreur(s)\n`
         }
       }
-      
+
       showAlert(
         `Import effectué : ${count} notes importées avec ${errors.length} problème(s)\n\n${errorMessage}`,
         'warning'
@@ -854,12 +854,21 @@ const NotesView = () => {
             </div>
             <div className="flex gap-2">
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
                 onClick={handleSaveAll}
                 disabled={saving || !selectedClasse}
               >
-                <FontAwesomeIcon icon={faSave} />
-                Tout Enregistrer
+                {saving ? (
+                  <>
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                    <span>Enregistrement...</span>
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faSave} />
+                    <span>Tout Enregistrer</span>
+                  </>
+                )}
               </button>
               <button
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -968,9 +977,9 @@ const NotesView = () => {
                 {/* Barre de recherche */}
                 <div className="bg-white rounded-xl shadow-md p-4">
                   <div className="relative">
-                    <FontAwesomeIcon 
-                      icon={faSearch} 
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" 
+                    <FontAwesomeIcon
+                      icon={faSearch}
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
                     />
                     <input
                       type="text"
@@ -1336,7 +1345,7 @@ const NotesView = () => {
                                     value={notes[selectedEtudiant.id]?.[evalId] || ''}
                                     onChange={(e) => {
                                       let value = e.target.value
-                                      
+
                                       // Si la valeur est vide, permettre la suppression
                                       if (value === '') {
                                         setNotes({
@@ -1348,28 +1357,28 @@ const NotesView = () => {
                                         })
                                         return
                                       }
-                                      
+
                                       // Convertir en nombre
                                       const numValue = parseFloat(value)
-                                      
+
                                       // Vérifier que c'est un nombre valide
                                       if (isNaN(numValue)) {
                                         return // Ne rien faire si ce n'est pas un nombre
                                       }
-                                      
+
                                       // Empêcher les valeurs négatives
                                       if (numValue < 0) {
                                         showAlert(`La note ne peut pas être négative.`, 'error')
                                         return
                                       }
-                                      
+
                                       // Empêcher les valeurs supérieures à la pondération
                                       if (numValue > evaluation.noteMax) {
                                         showAlert(`La note ne peut pas dépasser ${evaluation.noteMax} (pondération maximale).`, 'error')
                                         // Limiter automatiquement à la valeur maximale
                                         value = evaluation.noteMax.toString()
                                       }
-                                      
+
                                       setNotes({
                                         ...notes,
                                         [selectedEtudiant.id]: {

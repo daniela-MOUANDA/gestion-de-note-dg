@@ -71,3 +71,4 @@ export const getMention = (moyenne) => {
 export const getMentionText = (moyenne) => {
   return getMention(moyenne).text
 }
+

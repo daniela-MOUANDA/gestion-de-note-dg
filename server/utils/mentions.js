@@ -32,3 +32,4 @@ export const getMention = (moyenne) => {
   }
   return 'Ajourné'
 }
+

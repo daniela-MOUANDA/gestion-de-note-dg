@@ -84,3 +84,4 @@ COMMIT;
 -- JOIN niveaux n ON i.niveau_id = n.id
 -- WHERE i.classe_id IS NULL
 -- ORDER BY e.nom, e.prenom;
+

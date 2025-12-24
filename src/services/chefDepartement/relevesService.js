@@ -69,7 +69,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             .filter(e => e !== null && e !== undefined) // Filtrer seulement les null/undefined
             .filter(e => e.actif !== false) // Garder ceux qui sont actifs ou sans champ actif
             .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
-        
+
         console.log('DEBUG: Étudiants actifs trouvés', etudiants.length)
         if (etudiants.length > 0) {
             console.log('DEBUG: Exemples étudiants:', etudiants.slice(0, 3).map(e => `${e.nom} ${e.prenom} (${e.matricule})`))
@@ -117,7 +117,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 .select('id, code, nom, filiere_id')
                 .eq('semestre', semestre)
                 .eq('departement_id', departementId)
-            
+
             console.log(`DEBUG: Modules trouvés pour semestre ${semestre} et département ${departementId}:`, modulesAutreFiliere?.length || 0)
             if (modulesAutreFiliere && modulesAutreFiliere.length > 0) {
                 console.log('DEBUG: Modules disponibles (autres filières):', modulesAutreFiliere.map(m => `${m.code} (filiere: ${m.filiere_id})`))
@@ -130,8 +130,8 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             return {
                 success: true,
                 data: [],
-                meta: { 
-                    semestre, 
+                meta: {
+                    semestre,
                     evaluationsConfig: [],
                     modulesCount: modules?.length || 0,
                     etudiantsCount: 0,
@@ -152,16 +152,16 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 .select('module_id, modules(id, code, nom, credit, filiere_id)')
                 .eq('classe_id', classeId)
                 .eq('semestre', semestre)
-            
+
             if (!notesError && notesCheck && notesCheck.length > 0) {
                 // Récupérer les modules uniques utilisés dans les notes
                 const moduleIdsUtilises = [...new Set(notesCheck.map(n => n.module_id).filter(Boolean))]
                 const modulesUtilises = notesCheck
                     .map(n => n.modules)
                     .filter((m, index, self) => m && index === self.findIndex(mm => mm?.id === m.id))
-                
+
                 console.log('DEBUG: Notes trouvées mais modules non trouvés pour la filière. Modules utilisés dans les notes:', modulesUtilises.map(m => `${m.code} (filiere: ${m.filiere_id})`))
-                
+
                 // Utiliser les modules trouvés dans les notes
                 if (modulesUtilises.length > 0) {
                     console.log('DEBUG: Utilisation des modules trouvés dans les notes au lieu des modules de la filière')
@@ -170,7 +170,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                         .from('modules')
                         .select('id, code, nom, credit, ue')
                         .in('id', moduleIdsUtilises)
-                    
+
                     modules = modulesUtilises.map(m => {
                         const moduleAvecUE = modulesAvecUE?.find(mm => mm.id === m.id)
                         return {
@@ -184,7 +184,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                             ue: moduleAvecUE?.ue || 'UE1'
                         }
                     })
-                    
+
                     // Trier par UE
                     modules.sort((a, b) => {
                         const ueA = (a.ue || 'UE1').toUpperCase()
@@ -198,8 +198,8 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                     return {
                         success: true,
                         data: [],
-                        meta: { 
-                            semestre, 
+                        meta: {
+                            semestre,
                             evaluationsConfig: [],
                             modulesCount: 0,
                             etudiantsCount: etudiants.length,
@@ -215,8 +215,8 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 return {
                     success: true,
                     data: [],
-                    meta: { 
-                        semestre, 
+                    meta: {
+                        semestre,
                         evaluationsConfig: [],
                         modulesCount: 0,
                         etudiantsCount: etudiants.length,
@@ -254,11 +254,11 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         } else {
             console.log('⚠️ Aucun paramètre de notation trouvé pour les modules')
         }
-        
+
         // Vérifier quels modules ont des paramètres
         const modulesAvecParametres = modules.filter(m => parametresMap[m.id] && parametresMap[m.id].length > 0)
         const modulesSansParametres = modules.filter(m => !parametresMap[m.id] || parametresMap[m.id].length === 0)
-        
+
         console.log(`📊 Modules avec paramètres: ${modulesAvecParametres.length}/${modules.length}`)
         if (modulesSansParametres.length > 0) {
             console.log(`⚠️ Modules sans paramètres:`, modulesSansParametres.map(m => m.code).join(', '))
@@ -285,7 +285,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             // Afficher les différents evaluation_id trouvés
             const evalIds = [...new Set(notes.map(n => n.evaluation_id).filter(Boolean))]
             console.log('DEBUG: Evaluation IDs trouvés dans les notes:', evalIds.slice(0, 10))
-            
+
             // Grouper les notes par module
             const notesByModule = {}
             notes.forEach(n => {
@@ -307,66 +307,40 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         // 6. Calcul des moyennes et rangs
         console.log('DEBUG: Calcul des moyennes pour', etudiants.length, 'étudiants')
         const bulletin = etudiants.map(etudiant => {
-            let totalPointsSemestre = 0
+            // Groupe les modules par UE pour calculer les moyennes d'UE
+            const modulesByUE = {}
+            modules.forEach(m => {
+                const ueName = m.ue || 'UE Générale'
+                if (!modulesByUE[ueName]) modulesByUE[ueName] = []
+                modulesByUE[ueName].push(m)
+            })
+
+            const uesResult = []
             let totalCreditsSemestre = 0
-            let totalCreditsValides = 0
-            const modulesResult = []
+            let totalPointsSemestre = 0
 
+            // Calculer la moyenne générale d'abord pour savoir si on compense
+            // On fait un premier passage
             modules.forEach(module => {
-                // Récupérer les paramètres pour ce module
                 const evaluationsConfig = parametresMap[module.id] || []
-                
-                if (evaluationsConfig.length === 0) {
-                    console.log(`⚠️ Aucun paramètre de notation pour le module ${module.code} (ID: ${module.id})`)
-                    // Même sans paramètres, on ajoute le module au résultat avec moyenne null
-                    modulesResult.push({
-                        ...module,
-                        moyenne: null,
-                        valide: false
-                    })
-                    return // Passer au module suivant
-                }
+                if (evaluationsConfig.length === 0) return
 
-                // Pour ce module, calculer la moyenne de l'étudiant
                 let totalPointsModule = 0
                 let totalCoeffModule = 0
 
                 evaluationsConfig.forEach(evaluation => {
-                    // Pour chaque évaluation (TP1, TP2...), récupérer la note
                     for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
                         const evalId = `${evaluation.id}_${i}`
-                        
-                        // Rechercher la note correspondante (correspondance exacte)
-                        let noteEntry = notes.find(n => {
-                            return n.etudiant_id === etudiant.id &&
-                                n.module_id === module.id &&
-                                n.evaluation_id === evalId
-                        })
+                        const noteEntry = notes.find(n =>
+                            n.etudiant_id === etudiant.id &&
+                            n.module_id === module.id &&
+                            n.evaluation_id === evalId
+                        )
 
-                        // Si pas trouvé avec l'ID exact, essayer de trouver par type et numéro
-                        // (fallback pour gérer les cas où les IDs ont changé)
-                        if (!noteEntry && notes.length > 0) {
-                            // Chercher toutes les notes de cet étudiant pour ce module
-                            const notesEtudiantModule = notes.filter(n => 
-                                n.etudiant_id === etudiant.id && n.module_id === module.id
-                            )
-                            
-                            // Si on a exactement le bon nombre de notes pour ce type d'évaluation
-                            // et qu'il n'y a qu'un seul type d'évaluation, on peut les mapper
-                            if (notesEtudiantModule.length === evaluation.nombreEvaluations && evaluationsConfig.length === 1) {
-                                noteEntry = notesEtudiantModule[i - 1] // Prendre la i-ème note
-                                console.log(`🔄 Note trouvée par fallback: ${etudiant.nom} - Module ${module.code} - Eval ${i} = ${noteEntry.valeur}`)
-                            }
-                        }
-                        
                         if (noteEntry) {
-                            console.log(`✅ Note trouvée: ${etudiant.nom} - Module ${module.code} - Eval ${evalId} = ${noteEntry.valeur}`)
-                            // Ramener la note sur 20 si ce n'est pas le cas (simple règle de trois)
                             const noteSur20 = (noteEntry.valeur / evaluation.noteMax) * 20
                             totalPointsModule += noteSur20 * evaluation.coefficient
                             totalCoeffModule += evaluation.coefficient
-                        } else {
-                            console.log(`⚠️ Note manquante: ${etudiant.nom} - Module ${module.code} - Eval ${evalId}`)
                         }
                     }
                 })
@@ -375,45 +349,95 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                     ? parseFloat((totalPointsModule / totalCoeffModule).toFixed(2))
                     : null
 
-                // Logique de validation du module (généralement >= 10)
-                const estValide = moyenneModule !== null && moyenneModule >= 10
-                if (estValide) {
-                    totalCreditsValides += module.credit
-                }
-
+                module.moyenneCalculee = moyenneModule // Temporaire
                 if (moyenneModule !== null) {
                     totalPointsSemestre += moyenneModule * module.credit
                     totalCreditsSemestre += module.credit
                 }
-
-                modulesResult.push({
-                    ...module,
-                    moyenne: moyenneModule,
-                    valide: estValide
-                })
-            })
-            
-            // Trier les modules par UE (UE1 d'abord, puis UE2)
-            modulesResult.sort((a, b) => {
-                const ueA = (a.ue || 'UE1').toUpperCase()
-                const ueB = (b.ue || 'UE1').toUpperCase()
-                if (ueA === ueB) {
-                    return (a.code || '').localeCompare(b.code || '')
-                }
-                return ueA === 'UE1' ? -1 : 1
             })
 
             const moyenneGenerale = totalCreditsSemestre > 0
                 ? parseFloat((totalPointsSemestre / totalCreditsSemestre).toFixed(2))
                 : null
+            const semestreValide = moyenneGenerale !== null && moyenneGenerale >= 10
 
-            // Statut du semestre (Règles simplifiées, peut être ajusté selon règlement)
-            // Ex: Validé si Moyenne Générale >= 10 
-            const statut = moyenneGenerale !== null && moyenneGenerale >= 10 ? 'VALIDE' : 'AJOURNE'
+            // Deuxième passage: Calcul par UE et statut final
+            let totalCreditsValides = 0
+            const modulesResult = []
+
+            Object.keys(modulesByUE).sort().forEach(ueName => {
+                const modsUE = modulesByUE[ueName]
+                let pointsUE = 0
+                let creditsUE = 0
+                let totalCreditsUEValides = 0
+                let containsCompensatedModule = false
+
+                const modsResultUE = modsUE.map(m => {
+                    const moyenne = m.moyenneCalculee
+                    let valide = false
+                    let status = 'NON_ACQUIS'
+
+                    if (moyenne !== null) {
+                        if (moyenne >= 10) {
+                            valide = true
+                            status = 'ACQUIS'
+                        } else if (semestreValide) {
+                            valide = true
+                            status = 'COMPENSE'
+                            containsCompensatedModule = true
+                        }
+                    }
+
+                    if (valide) {
+                        totalCreditsUEValides += m.credit
+                    }
+
+                    const res = {
+                        ...m,
+                        moyenne: moyenne,
+                        valide: valide,
+                        status: status
+                    }
+                    modulesResult.push(res)
+                    return res
+                })
+
+                pointsUE = modsResultUE.reduce((sum, m) => sum + (m.moyenne !== null ? m.moyenne * m.credit : 0), 0)
+                creditsUE = modsResultUE.reduce((sum, m) => sum + m.credit, 0)
+                const moyenneUE = creditsUE > 0 ? pointsUE / creditsUE : 0
+
+                const ueAcquise = moyenneUE >= 10 || semestreValide
+
+                // NOUVELLE LOGIQUE: Une UE est "par compensation" si elle est acquise ET (moyenne < 10 OU contient un module < 10)
+                let ueStatus = 'NON_ACQUISE'
+                if (ueAcquise) {
+                    if (moyenneUE >= 10 && !containsCompensatedModule) {
+                        ueStatus = 'ACQUISE'
+                    } else {
+                        ueStatus = 'ACQUISE_PAR_COMPENSATION'
+                    }
+                }
+
+                // Si l'UE est acquise (même par compensation), tous ses crédits sont validés
+                const creditsUEFinaux = ueAcquise ? creditsUE : totalCreditsUEValides
+                totalCreditsValides += creditsUEFinaux
+
+                uesResult.push({
+                    ue: ueName,
+                    moyenne: moyenneUE,
+                    credits: creditsUEFinaux,
+                    totalCredits: creditsUE,
+                    valide: ueAcquise,
+                    status: ueStatus
+                })
+            })
+
+            const statut = semestreValide ? 'VALIDE' : 'AJOURNE'
 
             return {
                 etudiant,
                 modules: modulesResult,
+                uesValidees: uesResult, // On retourne aussi les UEs calculées
                 moyenneGenerale,
                 totalCreditsValides,
                 statut
@@ -422,7 +446,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
         // 7. Calcul du rang (seulement si au moins un étudiant a des notes)
         const etudiantsAvecNotesList = bulletin.filter(b => b.moyenneGenerale !== null && b.moyenneGenerale !== undefined)
-        
+
         if (etudiantsAvecNotesList.length > 0) {
             // Tri par moyenne générale décroissante (les null en dernier)
             bulletin.sort((a, b) => {
@@ -448,6 +472,58 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 item.rang = null
             })
         }
+
+        // --- NOUVEAU: Calculer les moyennes de classe par module et générale ---
+
+        // 1. Moyennes par module
+        const statsModules = {}
+        // Initialiser pour chaque module
+        modules.forEach(m => {
+            statsModules[m.id] = { sum: 0, count: 0, avg: null }
+        })
+
+        // Parcourir tous les bulletins pour accumuler les notes
+        bulletin.forEach(etudiantBulletin => {
+            etudiantBulletin.modules.forEach(mod => {
+                if (mod.moyenne !== null && mod.moyenne !== undefined && statsModules[mod.id]) {
+                    statsModules[mod.id].sum += parseFloat(mod.moyenne)
+                    statsModules[mod.id].count++
+                }
+            })
+        })
+
+        // Calculer les moyennes finales
+        Object.keys(statsModules).forEach(moduleId => {
+            const stats = statsModules[moduleId]
+            if (stats.count > 0) {
+                stats.avg = parseFloat((stats.sum / stats.count).toFixed(2))
+            }
+        })
+
+        // 2. Moyenne générale de la classe
+        let moyenneGeneraleClasse = null
+        const notesGenerales = bulletin
+            .map(b => b.moyenneGenerale)
+            .filter(m => m !== null && m !== undefined)
+
+        if (notesGenerales.length > 0) {
+            const sumGenerale = notesGenerales.reduce((acc, val) => acc + val, 0)
+            moyenneGeneraleClasse = parseFloat((sumGenerale / notesGenerales.length).toFixed(2))
+        }
+
+        // 3. Injecter les moyennes de classe dans chaque module de chaque bulletin
+        bulletin.forEach(etudiantBulletin => {
+            etudiantBulletin.modules.forEach(mod => {
+                const stats = statsModules[mod.id]
+                mod.moyenneClasse = stats ? stats.avg : null
+            })
+            // Injecter aussi la moyenne générale de la classe au niveau racine de l'étudiant 
+            // (optionnel mais utile si on veut l'avoir directement)
+            etudiantBulletin.moyenneGeneraleClasse = moyenneGeneraleClasse
+        })
+
+        console.log('DEBUG: Moyennes de classe calculées. Générale:', moyenneGeneraleClasse)
+
 
         console.log('DEBUG: Bulletin calculé avec', bulletin.length, 'étudiants')
         if (bulletin.length > 0) {
@@ -475,7 +551,8 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 notesCount: notes?.length || 0,
                 parametresCount: parametresList?.length || 0,
                 etudiantsAvecNotes,
-                etudiantsSansNotes
+                etudiantsSansNotes,
+                moyenneGeneraleClasse // Ajout métadonnée
             }
         }
 

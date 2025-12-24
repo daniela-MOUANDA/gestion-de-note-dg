@@ -24,6 +24,7 @@ const BulletinsView = () => {
   const [bulletinsModal, setBulletinsModal] = useState({ open: false, classeId: null, semestre: null, classeCode: '' })
   const [bulletinsList, setBulletinsList] = useState([])
   const [loadingBulletins, setLoadingBulletins] = useState(false)
+  const [viewingBulletinId, setViewingBulletinId] = useState(null)
 
   // Fonction pour charger les données
   const loadEtatBulletins = useCallback(async () => {
@@ -679,13 +680,13 @@ const BulletinsView = () => {
                                   {bulletin.etudiants?.matricule}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${bulletin.statut_visa === 'VALIDE'
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${bulletin.statut_visa === 'VISE'
                                     ? 'bg-green-100 text-green-800'
                                     : bulletin.statut_visa === 'REJETE'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-yellow-100 text-yellow-800'
                                     }`}>
-                                    {bulletin.statut_visa === 'VALIDE' ? 'Validé' :
+                                    {bulletin.statut_visa === 'VISE' ? 'Visé' :
                                       bulletin.statut_visa === 'REJETE' ? 'Rejeté' :
                                         'En attente'}
                                   </span>
@@ -700,6 +701,7 @@ const BulletinsView = () => {
                                     <button
                                       onClick={async () => {
                                         try {
+                                          setViewingBulletinId(bulletin.id)
                                           const token = localStorage.getItem('token')
                                           const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
@@ -727,13 +729,25 @@ const BulletinsView = () => {
                                         } catch (error) {
                                           console.error('Erreur lors de la prévisualisation:', error)
                                           showAlert('Erreur lors de la prévisualisation: ' + (error.message || 'Erreur inconnue'), 'error')
+                                        } finally {
+                                          setViewingBulletinId(null)
                                         }
                                       }}
-                                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm flex items-center gap-2"
+                                      disabled={viewingBulletinId === bulletin.id}
+                                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                                       title="Voir le bulletin PDF officiel INPTIC"
                                     >
-                                      <FontAwesomeIcon icon={faEye} />
-                                      <span>Voir</span>
+                                      {viewingBulletinId === bulletin.id ? (
+                                        <>
+                                          <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                          <span>Chargement...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <FontAwesomeIcon icon={faEye} />
+                                          <span>Voir</span>
+                                        </>
+                                      )}
                                     </button>
                                     <button
                                       onClick={async () => {

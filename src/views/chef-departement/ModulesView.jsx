@@ -40,26 +40,67 @@ const ModulesView = () => {
   }, [])
 
   // Générer le code du module automatiquement
-  const generateModuleCode = (nom, semestre) => {
+  const generateModuleCode = (nom, semestre, excludeId = null) => {
     if (!nom || !semestre) return ''
 
-    // Prendre les 3 premières lettres du nom (ou moins si nom court)
-    const prefix = nom
-      .toUpperCase()
-      .replace(/[^A-Z]/g, '') // Retirer les caractères non-alphabétiques
-      .substring(0, 3)
-      .padEnd(3, 'X') // Compléter avec X si moins de 3 lettres
+    // 1. Génération du préfixe intelligent
+    // Nettoyer le nom mais garder les espaces pour identifier les mots
+    const cleanNom = nom.toUpperCase().replace(/[^A-Z\s]/g, '')
+    const words = cleanNom.split(/\s+/).filter(w => w.length > 0)
 
+    let prefix = ''
+    if (words.length >= 2) {
+      // Stratégie Acronyme pour noms composés (ex: "Electronique Analogique" -> "EAN")
+      // On prend la première lettre de chaque mot
+      let acronym = words.map(w => w[0]).join('')
+
+      // Si l'acronyme est trop court (< 3), on complète avec les lettres du dernier mot
+      if (acronym.length < 3) {
+        const lastWord = words[words.length - 1]
+        // On évite de reprendre la première lettre du dernier mot qui est déjà dans l'acronyme
+        // On prend à partir du 2ème caractère (index 1)
+        acronym += lastWord.substring(1, 1 + (3 - acronym.length))
+      }
+      prefix = acronym.substring(0, 3)
+    } else if (words.length === 1) {
+      // Un seul mot : on prend les 3 premières lettres
+      prefix = words[0].substring(0, 3)
+    } else {
+      prefix = 'XXX'
+    }
+
+    // S'assurer qu'on a 3 lettres et compléter par X si besoin
+    prefix = prefix.padEnd(3, 'X')
+
+    // 2. Gestion du suffixe et collisions
     // Extraire le numéro du semestre (S1 -> 1, S6 -> 6)
-    const semestreNum = semestre.replace('S', '')
+    const semestreNum = semestre.replace(/\D/g, '')
 
-    return `${prefix}-${semestreNum}01`
+    // Commencer avec le suffixe 01 (ex: 101, 601)
+    let suffix = 1
+
+    const generateFullCode = (p, s, suf) => {
+      const suffixStr = suf < 10 ? `0${suf}` : `${suf}`
+      return `${p}-${s}${suffixStr}` // ex: EAN-601
+    }
+
+    let candidateCode = generateFullCode(prefix, semestreNum, suffix)
+
+    // Vérifier les collisions avec les modules existants
+    // On exclut le module en cours d'édition (si applicable)
+    // On cherche si ce code existe déjà
+    while (modules.some(m => m.code === candidateCode && m.id !== excludeId)) {
+      suffix++
+      candidateCode = generateFullCode(prefix, semestreNum, suffix)
+    }
+
+    return candidateCode
   }
 
   const loadData = async () => {
     try {
       setLoading(true)
-      
+
       // Charger les modules
       const modulesResult = await getModules()
       if (modulesResult.success) {
@@ -88,14 +129,14 @@ const ModulesView = () => {
 
   const handleAdd = () => {
     setEditingModule(null)
-    setFormData({ 
-      code: '', 
-      nom: '', 
-      credit: '', 
-      semestre: '', 
-      filiereId: '', 
+    setFormData({
+      code: '',
+      nom: '',
+      credit: '',
+      semestre: '',
+      filiereId: '',
       ue: 'UE1',
-      actif: true 
+      actif: true
     })
     setShowModal(true)
   }
@@ -141,11 +182,11 @@ const ModulesView = () => {
 
     try {
       setSaving(true)
-      
+
       // Générer le code automatiquement
-      const code = generateModuleCode(formData.nom, formData.semestre)
+      const code = generateModuleCode(formData.nom, formData.semestre, editingModule?.id)
       const dataToSend = { ...formData, code }
-      
+
       let result
 
       if (editingModule) {
@@ -184,7 +225,7 @@ const ModulesView = () => {
   // Extraire les valeurs uniques pour les filtres
   const semestresUniques = [...new Set(modules.map(m => m.semestre).filter(Boolean))].sort()
   const ueUniques = [...new Set(modules.map(m => m.ue || 'UE1').filter(Boolean))].sort()
-  
+
   // Extraire les filières uniques (peut être un code ou un ID)
   const filieresUniques = [...new Set(
     modules
@@ -198,26 +239,26 @@ const ModulesView = () => {
   // Filtrer les modules selon les critères
   const filteredModules = modules.filter(module => {
     // Filtre de recherche textuelle
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       `${module.code} ${module.nom} ${module.filiere || ''}`.toLowerCase().includes(searchQuery.toLowerCase())
-    
+
     // Filtre par semestre
     const matchesSemestre = !filterSemestre || module.semestre === filterSemestre
-    
+
     // Filtre par UE
     const moduleUE = module.ue || 'UE1'
     const matchesUE = !filterUE || moduleUE === filterUE
-    
+
     // Filtre par filière
     let matchesFiliere = true
     if (filterFiliere) {
       const moduleFiliereCode = module.filiere
       const moduleFiliereId = module.filiereId
-      
+
       // Vérifier si le code correspond
       if (moduleFiliereCode === filterFiliere) {
         matchesFiliere = true
-      } 
+      }
       // Vérifier si l'ID correspond (et récupérer le code de la filière)
       else if (moduleFiliereId) {
         const filiereObj = filieres.find(f => f.id === moduleFiliereId)
@@ -230,7 +271,7 @@ const ModulesView = () => {
         matchesFiliere = false
       }
     }
-    
+
     return matchesSearch && matchesSemestre && matchesUE && matchesFiliere
   })
 
@@ -303,7 +344,7 @@ const ModulesView = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-slate-700 whitespace-nowrap">Filtres :</span>
                 </div>
-                
+
                 {/* Filtre Semestre */}
                 <div className="flex-1 min-w-[150px]">
                   <label className="block text-xs font-medium text-slate-600 mb-1">Semestre</label>
@@ -444,17 +485,15 @@ const ModulesView = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            module.ue === 'UE1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
-                          }`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${module.ue === 'UE1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
+                            }`}>
                             {module.ue || 'UE1'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.filiere || '-'}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            module.actif ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${module.actif ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                             {module.actif ? 'Actif' : 'Inactif'}
                           </span>
                         </td>
@@ -575,7 +614,7 @@ const ModulesView = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Code du module (auto-généré)</label>
                   <input
                     type="text"
-                    value={generateModuleCode(formData.nom, formData.semestre)}
+                    value={generateModuleCode(formData.nom, formData.semestre, editingModule?.id)}
                     readOnly
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-600"
                     placeholder="Ex: BDD-301"

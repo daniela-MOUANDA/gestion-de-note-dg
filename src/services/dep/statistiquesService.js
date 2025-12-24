@@ -589,3 +589,4 @@ function getColorForNiveau(code) {
   }
   return colors[code] || '#8b5cf6'
 }
+

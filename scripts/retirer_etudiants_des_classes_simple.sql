@@ -74,3 +74,4 @@ JOIN niveaux n ON i.niveau_id = n.id
 WHERE i.classe_id IS NULL
 ORDER BY f.nom, n.nom, e.nom, e.prenom;
 */
+

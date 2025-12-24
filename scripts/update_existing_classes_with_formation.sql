@@ -61,3 +61,4 @@ LEFT JOIN formations f ON c.formation_id = f.id
 LEFT JOIN inscriptions i ON i.classe_id = c.id
 GROUP BY c.id, c.code, c.nom, f.code, f.nom
 ORDER BY c.code;
+

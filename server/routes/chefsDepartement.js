@@ -1147,7 +1147,30 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       .eq('id', id)
       .single()
 
-    if (bulletinError || !bulletin) {
+    // Récupérer le DEP séparément si le bulletin a été visé
+    let depUser = null
+    if (bulletin && bulletin.dep_id) {
+      const { data: dep } = await supabaseAdmin
+        .from('utilisateurs')
+        .select('id, nom, prenom')
+        .eq('id', bulletin.dep_id)
+        .single()
+      if (dep) {
+        depUser = dep
+      }
+    }
+
+    if (bulletin) {
+      bulletin.dep = depUser
+    }
+
+    if (bulletinError) {
+      console.error('Erreur lors de la récupération du bulletin:', bulletinError)
+      return res.status(404).json({ success: false, error: `Bulletin non trouvé: ${bulletinError.message}` })
+    }
+
+    if (!bulletin) {
+      console.error('Bulletin introuvable avec l\'ID:', id)
       return res.status(404).json({ success: false, error: 'Bulletin non trouvé' })
     }
 
@@ -1198,25 +1221,22 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
         ue: mod.ue || 'UE',
         nom: mod.nom || '',
         credits: mod.credit || 0,
-        coefficient: mod.coefficient || 1,
+        coefficient: mod.credit || 1, // Fix: Coefficient = Credit
         noteEtudiant: mod.moyenne || 0,
-        moyenneClasse: mod.moyenneClasse || 0
+        moyenneClasse: mod.moyenneClasse || 0,
+        status: mod.status || (mod.valide ? 'ACQUIS' : 'NON_ACQUIS')
       })),
+      rubriqueMoyenne: {
+        moyenneSemestre: etudiantData.moyenneGenerale || 0,
+        moyenneClasse: bulletinDataResult.meta.moyenneGeneraleClasse || 0
+      },
       moyenneSemestre: etudiantData.moyenneGenerale || 0,
+      moyenneClasse: bulletinDataResult.meta.moyenneGeneraleClasse || 0, // Ajout moyenne générale classe
       rangEtudiant: etudiantData.rang || null,
+      totalEtudiants: bulletinDataResult.meta.etudiantsCount || 0, // Ajout effectif classe
       mention: etudiantData.mention || getMention(etudiantData.moyenneGenerale || 0),
       penalitesAbsences: 0,
-      uesValidees: modules.reduce((acc, mod) => {
-        const ueName = mod.ue || 'UE'
-        if (!acc.find(u => u.ue === ueName)) {
-          acc.push({
-            ue: ueName,
-            credits: mod.credit || 0,
-            valide: mod.valide || false
-          })
-        }
-        return acc
-      }, []),
+      uesValidees: etudiantData.uesValidees || [], // Utiliser les UEs calculées par le service
       decision: etudiantData.statut === 'VALIDE'
         ? `${bulletin.semestre} validé`
         : `${bulletin.semestre} ajourné`,
@@ -1229,11 +1249,11 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
     try {
       const pdfGeneratorModule = await import('../services/bulletinPDFGenerator.js')
       const generateBulletinPDF = pdfGeneratorModule.generateBulletinPDF
-      
+
       if (!generateBulletinPDF) {
-        return res.status(501).json({ 
-          success: false, 
-          error: 'Service de génération PDF non disponible. Le service doit être implémenté.' 
+        return res.status(501).json({
+          success: false,
+          error: 'Service de génération PDF non disponible. Le service doit être implémenté.'
         })
       }
 
@@ -1245,7 +1265,22 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
         fs.mkdirSync(uploadsDir, { recursive: true })
       }
 
-      await generateBulletinPDF(pdfData, outputPath)
+      // Inclure le cachet si le bulletin a été visé par le DEP
+      // Le statut passe de 'EN_ATTENTE' à 'VISE' quand le DEP appose son visa
+      const includeStamp = bulletin.statut_visa === 'VISE'
+
+      // Préparer les informations du DEP si le bulletin a été visé
+      let depInfo = null
+      if (includeStamp && bulletin.dep) {
+        depInfo = {
+          dateVisa: bulletin.date_visa || null,
+          nom: bulletin.dep.nom || '',
+          prenom: bulletin.dep.prenom || '',
+          titre: 'Directeur des Études et de la Pédagogie' // Titre du DEP
+        }
+      }
+
+      await generateBulletinPDF(pdfData, outputPath, includeStamp, depInfo)
 
       // Envoyer le PDF en téléchargement
       const nomFichier = `Bulletin_${etudiant.nom || 'etudiant'}_${etudiant.prenom || ''}_${bulletin.semestre || 'S1'}.pdf`
@@ -1260,9 +1295,9 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       })
     } catch (importError) {
       console.error('Erreur lors de l\'import ou de la génération du PDF:', importError)
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Erreur lors de la génération du PDF: ' + importError.message 
+      return res.status(500).json({
+        success: false,
+        error: 'Erreur lors de la génération du PDF: ' + importError.message
       })
     }
 
@@ -1282,9 +1317,9 @@ router.get('/etudiants', async (req, res) => {
     const departementId = req.user.departementId
 
     if (!departementId) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Aucun département associé à votre compte' 
+      return res.status(403).json({
+        success: false,
+        error: 'Aucun département associé à votre compte'
       })
     }
 
@@ -1319,9 +1354,9 @@ router.get('/etudiants/:id', async (req, res) => {
     const departementId = req.user.departementId
 
     if (!departementId) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Aucun département associé à votre compte' 
+      return res.status(403).json({
+        success: false,
+        error: 'Aucun département associé à votre compte'
       })
     }
 

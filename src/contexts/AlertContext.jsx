@@ -15,27 +15,31 @@ export const useAlert = () => {
 export const AlertProvider = ({ children }) => {
   const [alerts, setAlerts] = useState([])
 
-  const showAlert = (message, type = 'info') => {
+  const showAlert = React.useCallback((message, type = 'info') => {
     const id = Date.now()
     const alert = { id, message, type }
-    
+
     setAlerts(prev => [...prev, alert])
-    
+
     // Auto-remove after 4 seconds
     setTimeout(() => {
       setAlerts(prev => prev.filter(a => a.id !== id))
     }, 4000)
-  }
+  }, [])
 
-  const removeAlert = (id) => {
+  const removeAlert = React.useCallback((id) => {
     setAlerts(prev => prev.filter(a => a.id !== id))
-  }
+  }, [])
 
   // Backward compatibility methods
-  const success = (message) => showAlert(message, 'success')
-  const error = (message) => showAlert(message, 'error')
-  const warning = (message) => showAlert(message, 'warning')
-  const info = (message) => showAlert(message, 'info')
+  const success = React.useCallback((message) => showAlert(message, 'success'), [showAlert])
+  const error = React.useCallback((message) => showAlert(message, 'error'), [showAlert])
+  const warning = React.useCallback((message) => showAlert(message, 'warning'), [showAlert])
+  const info = React.useCallback((message) => showAlert(message, 'info'), [showAlert])
+
+  const value = React.useMemo(() => ({
+    showAlert, success, error, warning, info
+  }), [showAlert, success, error, warning, info])
 
   const getAlertStyles = (type) => {
     switch (type) {
@@ -71,9 +75,9 @@ export const AlertProvider = ({ children }) => {
   }
 
   return (
-    <AlertContext.Provider value={{ showAlert, success, error, warning, info }}>
+    <AlertContext.Provider value={value}>
       {children}
-      
+
       {/* Alert Container */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {alerts.map((alert) => {
@@ -85,9 +89,9 @@ export const AlertProvider = ({ children }) => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <FontAwesomeIcon 
-                    icon={styles.icon} 
-                    className={`${styles.iconColor} mr-3`} 
+                  <FontAwesomeIcon
+                    icon={styles.icon}
+                    className={`${styles.iconColor} mr-3`}
                   />
                   <span className="text-sm font-medium">{alert.message}</span>
                 </div>

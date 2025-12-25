@@ -2,8 +2,12 @@ import { DashboardViewModel } from '../viewModels/DashboardViewModel'
 
 // Contrôleur pour le tableau de bord
 export class DashboardController {
-  constructor() {
-    this.viewModel = new DashboardViewModel()
+  constructor(initialCourses = []) {
+    this.viewModel = new DashboardViewModel(initialCourses)
+  }
+
+  setCourses(courses) {
+    this.viewModel.setCourses(courses)
   }
 
   getWeekLabel() {

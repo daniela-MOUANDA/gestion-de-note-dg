@@ -2,10 +2,13 @@ import { CourseModel } from '../models/CourseModel'
 
 // ViewModel pour le tableau de bord
 export class DashboardViewModel {
-  constructor() {
+  constructor(initialCourses = []) {
     this.currentWeek = new Date()
-    this.courses = []
-    this.loadCourses()
+    this.courses = initialCourses
+  }
+
+  setCourses(courses) {
+    this.courses = courses
   }
 
   loadCourses() {
@@ -64,7 +67,7 @@ export class DashboardViewModel {
     const day = startOfWeek.getDay()
     const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1)
     startOfWeek.setDate(diff)
-    
+
     const endOfWeek = new Date(startOfWeek)
     endOfWeek.setDate(startOfWeek.getDate() + 6)
 
@@ -97,7 +100,7 @@ export class DashboardViewModel {
     const { start } = this.getWeekRange()
     const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi']
     const result = []
-    
+
     for (let i = 0; i < 5; i++) {
       const date = new Date(start)
       date.setDate(start.getDate() + i)
@@ -107,7 +110,7 @@ export class DashboardViewModel {
         dateStr: date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
       })
     }
-    
+
     return result
   }
 }

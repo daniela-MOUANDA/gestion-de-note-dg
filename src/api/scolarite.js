@@ -276,6 +276,29 @@ export const getMonProfilEtudiant = async () => {
   return data.etudiant
 }
 
+export const getMesNotes = async () => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/etudiant/mes-notes`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      redirectToLogin('Session expirée')
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    const errorData = await response.json().catch(() => ({ error: 'Erreur lors de la récupération des notes' }))
+    throw new Error(errorData.error || 'Erreur lors de la récupération des notes')
+  }
+  const data = await response.json()
+  return data
+}
+
 // ============================================
 // ATTESTATIONS
 // ============================================

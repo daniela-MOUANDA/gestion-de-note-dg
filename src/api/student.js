@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 /**
  * Récupérer les informations de l'étudiant connecté
@@ -11,7 +11,7 @@ export const getMyInfo = async () => {
             throw new Error('Non authentifié. Veuillez vous connecter.')
         }
 
-        const response = await fetch(`${API_URL}/api/student/me`, {
+        const response = await fetch(`${API_URL}/student/me`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',

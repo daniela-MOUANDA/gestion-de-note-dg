@@ -21,6 +21,7 @@ import chefsDepartementRoutes from './routes/chefsDepartement.js'
 import departementsRoutes from './routes/departements.js'
 import studentRoutes from './routes/student.js'
 import depRoutes from './routes/depRoutes.js'
+import adminSystemeRoutes from './routes/adminSysteme.js'
 
 
 const app = express()
@@ -115,6 +116,16 @@ app.get('/api/dossiers/:etudiantId/:inscriptionId', (req, res, next) => {
   scolariteRoutes(req, res, next)
 })
 
+app.get('/api/etudiant/mon-profil', (req, res, next) => {
+  req.url = '/api/scolarite/etudiant/mon-profil' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '')
+  scolariteRoutes(req, res, next)
+})
+
+app.get('/api/etudiant/mes-notes', (req, res, next) => {
+  req.url = '/api/scolarite/etudiant/mes-notes' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '')
+  scolariteRoutes(req, res, next)
+})
+
 // Routes alias pour les uploads et mises à jour (POST, PUT, DELETE)
 app.post('/api/etudiants/:id/photo', (req, res, next) => {
   req.url = `/api/scolarite/etudiants/${req.params.id}/photo`
@@ -195,6 +206,7 @@ app.use('/api/chef-departement', chefsDepartementRoutes)
 app.use('/api/departements', departementsRoutes)
 app.use('/api/student', studentRoutes)
 app.use('/api/dep', depRoutes)
+app.use('/api/admin-systeme', adminSystemeRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

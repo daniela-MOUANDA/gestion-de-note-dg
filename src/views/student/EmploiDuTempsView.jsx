@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faChevronLeft,
   faChevronRight,
   faChalkboardTeacher,
@@ -41,8 +41,8 @@ const EmploiDuTempsView = () => {
     }
     return new StudentModel(defaultStudentData)
   })
-  
-  const [controller] = useState(() => new DashboardController())
+
+  const [controller] = useState(() => new DashboardController(student.timetable || []))
   const [viewModel, setViewModel] = useState(controller.viewModel)
 
   const handlePreviousWeek = () => {
@@ -71,8 +71,8 @@ const EmploiDuTempsView = () => {
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
           {/* Titre et boutons d'action */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Emploi du temps</h1>
@@ -137,11 +137,10 @@ const EmploiDuTempsView = () => {
                             key={course.id}
                             className="bg-slate-50 rounded-lg p-3 border border-slate-200 hover:shadow-md transition-shadow"
                           >
-                            <span className={`inline-block text-white text-xs px-2 py-1 rounded mb-2 font-medium ${
-                              course.type === 'Cours' 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-700' 
+                            <span className={`inline-block text-white text-xs px-2 py-1 rounded mb-2 font-medium ${course.type === 'Cours'
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-700'
                                 : 'bg-gradient-to-r from-cyan-500 to-cyan-600'
-                            }`}>
+                              }`}>
                               {course.type}
                             </span>
                             <p className="text-xs sm:text-sm font-medium text-slate-700 mb-1">

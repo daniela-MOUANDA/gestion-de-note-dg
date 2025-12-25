@@ -101,6 +101,12 @@ const AuditView = lazy(() => import('./views/chef-scolarite/AuditView'))
 const StatistiquesView = lazy(() => import('./views/chef-scolarite/StatistiquesView'))
 const MessagerieChefScolariteView = lazy(() => import('./views/chef-scolarite/MessagerieChefView'))
 
+// Routes Administrateur Système
+const DashboardAdminSystemeView = lazy(() => import('./views/admin-systeme/DashboardView'))
+const StudentCredentialsView = lazy(() => import('./views/admin-systeme/StudentCredentialsView'))
+const AuditAdminSystemeView = lazy(() => import('./views/admin-systeme/AuditView'))
+const MaintenanceView = lazy(() => import('./views/admin-systeme/MaintenanceView'))
+
 // Composant de chargement pour Suspense
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -576,6 +582,40 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <ArchivageView />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Routes Administrateur Système - Protégées pour le rôle ADMIN_SYSTEME */}
+            <Route
+              path="/admin-systeme/dashboard"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ADMIN_SYSTEME">
+                  <DashboardAdminSystemeView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin-systeme/etudiants/credentials"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ADMIN_SYSTEME">
+                  <StudentCredentialsView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin-systeme/audit"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ADMIN_SYSTEME">
+                  <AuditAdminSystemeView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin-systeme/maintenance"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ADMIN_SYSTEME">
+                  <MaintenanceView />
                 </ProtectedRoute>
               }
             />

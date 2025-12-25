@@ -16,6 +16,7 @@ export class StudentModel {
     this.estActif = data.estActif || false
     this.estBoursier = data.estBoursier || false
     this.semestre = data.semestre || ''
+    this.totalStudentsInClass = data.totalStudentsInClass || 0
     this.derniereConnexion = data.derniereConnexion || null
     this.telephone = data.telephone || null
     this.adresse = data.adresse || null
@@ -32,6 +33,7 @@ export class StudentModel {
     this.dateInscription = data.dateInscription || null
     this.contactParent = data.contactParent || (data.parents && data.parents.length > 0 ? data.parents[0] : null)
     this.parents = data.parents || []
+    this.grades = data.grades || []
   }
 
   get fullName() {

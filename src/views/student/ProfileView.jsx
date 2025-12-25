@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faUser,
   faEnvelope,
   faPhone,
@@ -44,7 +44,11 @@ const ProfileView = () => {
         const etudiantData = await getMonProfilEtudiant()
         setStudent(new StudentModel({
           ...etudiantData,
-          // Mapper les données pour le modèle StudentModel
+          credits: etudiantData.nbrCredits || etudiantData.credits || 0,
+          totalModules: etudiantData.totalModules || 0,
+          rangClasse: etudiantData.rangClasse || 0,
+          classe: etudiantData.classe || '',
+          semestre: etudiantData.semestreActuel || etudiantData.semestre || '',
           niveauDetail: etudiantData.niveauNom || etudiantData.niveau,
           anneeInscription: etudiantData.anneeAcademique ? etudiantData.anneeAcademique.split('-')[0] : '',
           contactParent: etudiantData.parents && etudiantData.parents.length > 0 ? etudiantData.parents[0] : null
@@ -58,7 +62,8 @@ const ProfileView = () => {
     }
 
     loadStudentProfile()
-  }, [isAuthenticated, user, navigate, alertError])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id])
 
   if (loading) {
     return (
@@ -66,7 +71,7 @@ const ProfileView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header studentName="Chargement..." />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32 flex items-center justify-center">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24 flex items-center justify-center">
             <LoadingSpinner size="lg" text="Chargement de votre profil..." />
           </main>
         </div>
@@ -80,7 +85,7 @@ const ProfileView = () => {
         <Sidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <Header studentName="Erreur" />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
               <strong className="font-bold">Erreur!</strong>
               <span className="block sm:inline"> Impossible de charger votre profil.</span>
@@ -96,8 +101,8 @@ const ProfileView = () => {
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
           {/* Titre */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
@@ -109,9 +114,9 @@ const ProfileView = () => {
           <div className="bg-gradient-to-br from-slate-100 to-blue-100 rounded-xl shadow-lg p-4 sm:p-6 border border-slate-200 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 lg:justify-between">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg flex-shrink-0 overflow-hidden">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg flex-shrink-0 overflow-hidden relative">
                   {student.photo ? (
-                    <img 
+                    <img
                       src={student.photo.startsWith('http') ? student.photo : `http://localhost:3000${student.photo}`}
                       alt={student.fullName}
                       className="w-full h-full object-cover"
@@ -121,8 +126,8 @@ const ProfileView = () => {
                       }}
                     />
                   ) : null}
-                  <FontAwesomeIcon 
-                    icon={faUser} 
+                  <FontAwesomeIcon
+                    icon={faUser}
                     className="text-2xl sm:text-3xl"
                     style={{ display: student.photo ? 'none' : 'flex' }}
                   />
@@ -160,7 +165,7 @@ const ProfileView = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Moyenne générale à droite */}
               <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg p-4 sm:p-6 flex-shrink-0 w-full sm:w-48 lg:w-56 relative">
                 <div className="flex items-start justify-between mb-3">
@@ -350,6 +355,56 @@ const ProfileView = () => {
               </div>
             </div>
           </div>
+
+          {/* Section des notes (Optionnelle sur le profil mais demandée par le user) */}
+          {student.grades && student.grades.length > 0 && (
+            <div className="mt-8 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-800">Notes Récentes</h3>
+                <p className="text-sm text-slate-600">Aperçu rapide de vos dernières évaluations</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Module</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Note</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {student.grades.slice(0, 5).map((grade) => (
+                      <tr key={grade.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-slate-800">{grade.module}</div>
+                          <div className="text-xs text-slate-500">{grade.code}</div>
+                        </td>
+                        <td className="px-4 py-4 text-center whitespace-nowrap">
+                          <span className={`text-sm font-bold ${grade.moyenne >= 10 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {grade.moyenne}/20
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${grade.statut === 'Validé' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                            {grade.statut}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="p-4 bg-slate-50 text-center">
+                <button
+                  onClick={() => navigate('/notes')}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  Voir toutes mes notes →
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

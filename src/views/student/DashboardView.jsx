@@ -66,17 +66,29 @@ const DashboardView = () => {
             prenom: result.data.prenom,
             programme: result.data.programme,
             niveau: result.data.niveau,
+            classe: result.data.classe, // Ajouter la classe
+            photo: result.data.photo, // Ajouter la photo
             moyenneGenerale: result.data.moyenneGenerale || 0,
-            credits: result.data.credits || 0,
+            credits: result.data.nbrCredits || result.data.credits || 0, // Utiliser nbrCredits du backend
             totalModules: result.data.totalModules || 0,
             rangClasse: result.data.rangClasse || 0,
-            estActif: result.data.estActif || false,
+            estActif: result.data.estActif || true,
             estBoursier: result.data.estBoursier || false,
-            semestre: result.data.semestre || '',
+            semestre: result.data.semestreActuel || result.data.semestre || '',
+            totalStudentsInClass: result.data.totalStudentsInClass || 0,
             derniereConnexion: user.derniereConnexion || new Date().toISOString()
           })
 
           setStudent(studentData)
+
+          // Sauvegarder dans localStorage pour les autres pages
+          localStorage.setItem('student', JSON.stringify(result.data))
+
+          // Mettre à jour l'emploi du temps dans le contrôleur
+          if (result.data.timetable) {
+            controller.setCourses(result.data.timetable)
+            setViewModel({ ...controller.viewModel })
+          }
         } else {
           setError(result.error || 'Erreur lors du chargement des données')
         }
@@ -166,7 +178,7 @@ const DashboardView = () => {
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
           {/* Message de bienvenue */}
           <div className="mb-6 sm:mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
@@ -182,28 +194,47 @@ const DashboardView = () => {
             {/* Carte d'information étudiant */}
             <div className="lg:flex-1 lg:max-w-2xl bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-slate-200 hover:shadow-xl transition-shadow duration-300">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg flex-shrink-0">
-                  <FontAwesomeIcon icon={faUser} className="text-2xl sm:text-3xl" />
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg flex-shrink-0 overflow-hidden relative">
+                  {student.photo ? (
+                    <img
+                      src={student.photo.startsWith('http') ? student.photo : `http://localhost:3000${student.photo}`}
+                      alt={student.fullName}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                        if (e.target.nextSibling) {
+                          e.target.nextSibling.style.display = 'flex'
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <FontAwesomeIcon
+                    icon={faUser}
+                    className="text-2xl sm:text-3xl"
+                    style={{ display: student.photo ? 'none' : 'flex' }}
+                  />
                 </div>
                 <div className="flex-1 w-full">
                   <p className="text-base sm:text-lg font-semibold text-slate-800 mb-3">
                     {student.identifiantComplet}
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 shadow-sm">
+                    <FontAwesomeIcon icon={faBook} className="mr-1.5 text-xs" />
+                    {student.classe || 'Promotion 2025'}
+                  </span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
+                    <FontAwesomeIcon icon={faCheckCircle} className="mr-1.5 text-xs" />
+                    Étudiant actif
+                  </span>
+                  {student.estBoursier && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
                       <FontAwesomeIcon icon={faCheckCircle} className="mr-1.5 text-xs" />
-                      Étudiant actif
+                      Boursier
                     </span>
-                    {student.estBoursier && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
-                        <FontAwesomeIcon icon={faCheckCircle} className="mr-1.5 text-xs" />
-                        Boursier
-                      </span>
-                    )}
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
-                      {student.semestre}
-                    </span>
-                  </div>
+                  )}
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
+                    {student.semestre}
+                  </span>
                 </div>
               </div>
             </div>
@@ -234,8 +265,8 @@ const DashboardView = () => {
             <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Moyenne générale</p>
-                  <p className="text-3xl font-bold text-slate-800">{student.moyenneGenerale}/20</p>
+                  <p className="text-sm text-slate-500 mb-1">Moyenne générale du semestre en cours</p>
+                  <p className="text-3xl font-bold text-slate-800">{student.moyenneGenerale.toFixed(2)}/20</p>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-3">
                   <FontAwesomeIcon icon={faChartLine} className="text-blue-600 text-xl" />
@@ -247,7 +278,7 @@ const DashboardView = () => {
             <div className="bg-white rounded-lg border-l-4 border-purple-500 shadow-sm p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Crédits</p>
+                  <p className="text-sm text-slate-500 mb-1">Crédits validés</p>
                   <p className="text-3xl font-bold text-slate-800">{student.credits}/60</p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3">
@@ -274,7 +305,9 @@ const DashboardView = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-sm text-slate-500 mb-1">Rang de classe</p>
-                  <p className="text-3xl font-bold text-slate-800">{student.rangClasse}/45</p>
+                  <p className="text-3xl font-bold text-slate-800">
+                    {student.rangClasse ? `${student.rangClasse}/${student.totalStudentsWithNotes || student.totalStudentsInClass || '--'}` : 'N/A'}
+                  </p>
                 </div>
                 <div className="bg-orange-50 rounded-lg p-3">
                   <FontAwesomeIcon icon={faTrophy} className="text-orange-600 text-xl" />

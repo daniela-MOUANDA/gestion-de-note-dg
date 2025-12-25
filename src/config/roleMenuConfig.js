@@ -17,7 +17,9 @@ import {
     faChalkboardTeacher,
     faUserTie,
     faFileContract,
-    faHistory
+    faHistory,
+    faShieldAlt,
+    faLock
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -78,7 +80,6 @@ export const ROLE_MENUS = {
     CHEF_SERVICE_SCOLARITE: [
         { path: '/chef-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
         { path: '/chef-scolarite/gestion-comptes', icon: faUsers, label: 'Gestion des comptes' },
-        { path: '/chef-scolarite/audit', icon: faHistory, label: 'Audit & Activités' },
         { path: '/chef-scolarite/statistiques', icon: faChartLine, label: 'Statistiques' },
         { path: '/chef-scolarite/importer-candidats', icon: faUserPlus, label: 'Importer candidats' },
         { path: '/chef-scolarite/inscriptions', icon: faClipboardList, label: 'Gérer inscriptions' },
@@ -130,6 +131,16 @@ export const ROLE_MENUS = {
         { path: '/admin/profil', icon: faUser, label: 'Profil' },
         { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
     ],
+
+    // Administrateur Système
+    ADMIN_SYSTEME: [
+        { path: '/admin-systeme/dashboard', icon: faHome, label: 'Tableau de bord' },
+        { path: '/admin-systeme/etudiants/credentials', icon: faShieldAlt, label: 'Identifiants Étudiants' },
+        { path: '/admin-systeme/audit', icon: faHistory, label: 'Audit du Système' },
+        { path: '/admin-systeme/maintenance', icon: faCog, label: 'Maintenance' },
+        { path: '/admin/profil', icon: faUser, label: 'Profil' },
+        { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
+    ],
 }
 
 /**
@@ -155,6 +166,7 @@ export const getRoleDashboardTitle = (roleCode, roleName) => {
         AGENT_SCOLARITE: 'Service Scolarité',
         SP_SCOLARITE: 'Secrétaire Particulière - Direction de la Scolarité',
         CHEF_DEPARTEMENT: 'Chef de Département',
+        ADMIN_SYSTEME: 'Administration Système',
     }
 
     return titles[roleCode] || roleName || 'Dashboard'

@@ -768,6 +768,39 @@ router.get('/etudiant/mon-profil', authenticate, async (req, res) => {
   }
 })
 
+// Route pour récupérer les notes de l'étudiant connecté
+router.get('/etudiant/mes-notes', authenticate, async (req, res) => {
+  try {
+    const { getEtudiantByUserId } = await import('../../src/services/scolarite/etudiantService.js')
+
+    // Vérifier que l'utilisateur est bien un étudiant
+    if (req.user.role !== 'ETUDIANT') {
+      return res.status(403).json({
+        success: false,
+        error: 'Accès refusé. Cette route est réservée aux étudiants.'
+      })
+    }
+
+    const etudiant = await getEtudiantByUserId(req.user.id)
+
+    res.json({
+      success: true,
+      notes: etudiant.grades || [],
+      moyenneGenerale: etudiant.moyenneGenerale || 0,
+      credits: etudiant.nbrCredits || 0,
+      totalModules: etudiant.totalModules || 0,
+      modulesValides: (etudiant.grades || []).filter(g => g.statut === 'Validé').length,
+      semestre: etudiant.semestreActuel || ''
+    })
+  } catch (error) {
+    console.error('Erreur lors de la récupération des notes:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur lors de la récupération des notes'
+    })
+  }
+})
+
 // Route pour supprimer un étudiant
 router.delete('/etudiants/:id', authenticate, async (req, res) => {
   try {

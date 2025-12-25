@@ -14,8 +14,15 @@ export const getEtudiantByUserId = async (userId) => {
       throw new Error('Utilisateur non trouvé ou n\'est pas un étudiant')
     }
 
-    // Chercher l'étudiant par matricule (le username est généralement le matricule) ou par email
-    const { data: etudiant, error: etudError } = await supabaseAdmin
+    // Chercher l'étudiant par matricule ou par email
+    let etudiant = null
+    const searchUsername = (utilisateur.username || "").trim()
+    const searchEmail = (utilisateur.email || "").trim()
+
+    console.log(`🔍 Recherche de l'étudiant pour UserID: ${userId}, Username: "${searchUsername}", Email: "${searchEmail}"`)
+
+    // 1. Essai par matricule
+    const { data: byMatricule, error: matError } = await supabaseAdmin
       .from('etudiants')
       .select(`
         *,
@@ -29,161 +36,401 @@ export const getEtudiantByUserId = async (userId) => {
         ),
         parents (id, nom, prenom, telephone, email, lien_parente)
       `)
-      .or(`matricule.eq.${utilisateur.username},email.eq.${utilisateur.email}`)
-      .limit(1)
-      .single()
+      .ilike('matricule', searchUsername)
+      .maybeSingle()
 
-    if (etudError || !etudiant) {
-      throw new Error('Étudiant non trouvé dans la base de données')
-    }
+    if (byMatricule) {
+      etudiant = byMatricule
+      console.log('✅ Étudiant trouvé par matricule (avec jointures)')
+    } else {
+      if (matError) console.error('❌ Erreur recherche matricule:', matError.message)
 
-    // Trouver l'inscription active la plus récente
-    const inscriptions = etudiant.inscriptions || []
-    const inscription = inscriptions
-      .filter(i => i.statut === 'INSCRIT')
-      .sort((a, b) => new Date(b.date_inscription) - new Date(a.date_inscription))[0] || null
+      if (searchEmail) {
+        const { data: byEmail, error: mailError } = await supabaseAdmin
+          .from('etudiants')
+          .select(`
+            *,
+            inscriptions (
+              *,
+              promotions (*),
+              formations (*),
+              filieres (*),
+              niveaux (*),
+              classes (*)
+            ),
+            parents (*)
+          `)
+          .ilike('email', searchEmail)
+          .maybeSingle()
 
-    // Formater les données pour le frontend
-    return {
-      id: etudiant.id,
-      matricule: etudiant.matricule,
-      nom: etudiant.nom,
-      prenom: etudiant.prenom,
-      email: etudiant.email || utilisateur.email,
-      telephone: etudiant.telephone || null,
-      adresse: etudiant.adresse || null,
-      photo: etudiant.photo || null,
-      dateNaissance: etudiant.date_naissance ? etudiant.date_naissance.split('T')[0] : null,
-      lieuNaissance: etudiant.lieu_naissance || null,
-      // Informations académiques
-      filiere: inscription?.filieres?.nom || inscription?.filieres?.code || '',
-      filiereCode: inscription?.filieres?.code || '',
-      niveau: inscription?.niveaux?.code || inscription?.niveaux?.nom || '',
-      niveauNom: inscription?.niveaux?.nom || '',
-      formation: inscription?.formations?.nom || '',
-      classe: inscription?.classes?.nom || inscription?.classes?.code || '',
-      anneeAcademique: inscription?.promotions?.annee || '',
-      statutInscription: inscription?.statut || 'EN_ATTENTE',
-      dateInscription: inscription?.date_inscription ? inscription.date_inscription.split('T')[0] : null,
-      // Informations parentales
-      parents: (etudiant.parents || []).slice(0, 2).map(parent => ({
-        nom: `${parent.prenom || ''} ${parent.nom}`.trim(),
-        telephone: parent.telephone || null,
-        email: parent.email || null,
-        lienParente: parent.lien_parente || null
-      })),
-      // Informations calculées
-      estActif: inscription?.statut === 'INSCRIT',
-      programme: inscription ? `${inscription.filieres?.code || ''} ${inscription.promotions?.annee || ''} ${inscription.formations?.nom || ''}`.trim() : '',
-      // Données par défaut (à calculer plus tard si nécessaire)
-      moyenneGenerale: 0,
-      credits: 0,
-      totalModules: 0,
-      rangClasse: 0,
-      estBoursier: false,
-      semestre: inscription?.niveaux?.ordinal ? `Semestre ${parseInt(inscription.niveaux.ordinal) * 2 - 1}` : ''
-    }
-  } catch (error) {
-    console.error('Erreur lors de la récupération de l\'étudiant:', error)
-    throw error
-  }
-}
-
-// Supprimer un étudiant et toutes ses données associées
-export const deleteEtudiant = async (etudiantId) => {
-  try {
-    // Vérifier que l'étudiant existe
-    const { data: etudiant, error: fetchError } = await supabaseAdmin
-      .from('etudiants')
-      .select('id, matricule, nom, prenom, email')
-      .eq('id', etudiantId)
-      .single()
-
-    if (fetchError || !etudiant) {
-      throw new Error('Étudiant introuvable')
-    }
-
-    // Récupérer toutes les inscriptions de l'étudiant pour mettre à jour les effectifs des classes
-    const { data: inscriptions, error: inscError } = await supabaseAdmin
-      .from('inscriptions')
-      .select('id, classe_id')
-      .eq('etudiant_id', etudiantId)
-
-    if (inscError) {
-      console.error('Erreur lors de la récupération des inscriptions:', inscError)
-    }
-
-    // Décrémenter l'effectif des classes concernées
-    if (inscriptions && inscriptions.length > 0) {
-      const classesIds = [...new Set(inscriptions
-        .map(ins => ins.classe_id)
-        .filter(id => id !== null))]
-      
-      for (const classeId of classesIds) {
-        const { data: classe, error: classeError } = await supabaseAdmin
-          .from('classes')
-          .select('effectif')
-          .eq('id', classeId)
-          .single()
-
-        if (!classeError && classe) {
-          const nouveauEffectif = Math.max(0, (classe.effectif || 0) - 1)
-          await supabaseAdmin
-            .from('classes')
-            .update({ effectif: nouveauEffectif })
-            .eq('id', classeId)
+        if (byEmail) {
+          etudiant = byEmail
+          console.log('✅ Étudiant trouvé par email (avec jointures)')
+        } else if (mailError) {
+          console.error('❌ Erreur recherche email:', mailError.message)
         }
       }
     }
 
-    // Supprimer les parents (cascade devrait le faire automatiquement, mais on le fait explicitement)
-    await supabaseAdmin
-      .from('parents')
-      .delete()
-      .eq('etudiant_id', etudiantId)
-
-    // Supprimer les inscriptions (cascade devrait supprimer les notes, bulletins, etc.)
-    await supabaseAdmin
-      .from('inscriptions')
-      .delete()
-      .eq('etudiant_id', etudiantId)
-
-    // Supprimer le compte utilisateur associé si il existe (par email ou username = matricule)
-    if (etudiant.email || etudiant.matricule) {
-      const { data: utilisateur } = await supabaseAdmin
-        .from('utilisateurs')
-        .select('id')
-        .or(etudiant.email && etudiant.matricule 
-          ? `email.eq.${etudiant.email},username.eq.${etudiant.matricule}`
-          : etudiant.email 
-            ? `email.eq.${etudiant.email}`
-            : `username.eq.${etudiant.matricule}`)
+    // 3. Fallback : Recherche simplifiée sans jointures si rien n'a été trouvé
+    if (!etudiant) {
+      console.log('🔄 Tentative de recherche simplifiée (sans jointures)...')
+      const { data: simpleEtudiant, error: simpleError } = await supabaseAdmin
+        .from('etudiants')
+        .select('*')
+        .or(`matricule.ilike.${searchUsername},email.ilike.${searchEmail || searchUsername}`)
         .maybeSingle()
 
-      if (utilisateur) {
-        await supabaseAdmin
-          .from('utilisateurs')
-          .delete()
-          .eq('id', utilisateur.id)
+      if (simpleEtudiant) {
+        etudiant = simpleEtudiant
+        console.log('✅ Étudiant trouvé via recherche simplifiée')
+
+        // Charger manuellement les inscriptions pour ce cas
+        const { data: manualInsc } = await supabaseAdmin
+          .from('inscriptions')
+          .select('*, promotions(*), formations(*), filieres(*), niveaux(*), classes(*)')
+          .eq('etudiant_id', etudiant.id)
+        etudiant.inscriptions = manualInsc || []
+
+        // Charger manuellement les parents
+        const { data: manualParents } = await supabaseAdmin
+          .from('parents')
+          .select('*')
+          .eq('etudiant_id', etudiant.id)
+        etudiant.parents = manualParents || []
+      } else {
+        if (simpleError) console.error('❌ Erreur recherche simplifiée:', simpleError.message)
       }
     }
 
-    // Supprimer l'étudiant (cascade supprimera automatiquement les inscriptions, parents, etc.)
-    const { error: deleteError } = await supabaseAdmin
-      .from('etudiants')
-      .delete()
-      .eq('id', etudiantId)
-
-    if (deleteError) {
-      throw new Error(`Erreur lors de la suppression de l'étudiant: ${deleteError.message}`)
+    if (!etudiant) {
+      throw new Error(`Étudiant non trouvé pour le matricule "${searchUsername}"`)
     }
 
+    // Sélectionner l'inscription active
+    const inscriptions = etudiant.inscriptions || []
+    const inscription = inscriptions
+      .filter(i => (i.statut || '').toUpperCase() === 'INSCRIT')
+      .sort((a, b) => new Date(b.date_inscription) - new Date(a.date_inscription))[0] ||
+      inscriptions.sort((a, b) => new Date(b.date_inscription) - new Date(a.date_inscription))[0] || null
+
+    // --- CALCULS ACADÉMIQUES ---
+    let moyenneGenerale = 0
+    let totalCredits = 0
+    let nbrModules = 0
+    let rangClasse = null
+    let timetable = []
+    let etudiantNotes = []
+    let totalStudentsInClass = 0
+    let totalStudentsWithNotes = 0
+    
+    // Déterminer le semestre en cours (défini avant le bloc if pour être accessible partout)
+    let semestreActuel = 'S1' // Valeur par défaut
+    if (inscription) {
+      const niveauCode = (inscription.niveaux?.code || '').toUpperCase()
+      semestreActuel = (niveauCode === 'L1') ? 'S1' : (niveauCode === 'L2' ? 'S3' : 'S5')
+    }
+
+    if (inscription) {
+      // 1. Modules de la classe
+      const niveauCode = (inscription.niveaux?.code || '').toUpperCase()
+      const correspondenceNiveauSemestre = { 'L1': ['S1', 'S2'], 'L2': ['S3', 'S4'], 'L3': ['S5', 'S6'] }
+      const semestresNiveau = correspondenceNiveauSemestre[niveauCode] || []
+
+      // Modules du semestre en cours uniquement
+      const { data: classModules } = await supabaseAdmin
+        .from('modules')
+        .select('*')
+        .eq('filiere_id', inscription.filiere_id)
+        .eq('semestre', semestreActuel) // Seulement les modules du semestre en cours
+
+      nbrModules = classModules?.length || 0
+
+      // 2. Notes et Moyenne - Filtrer par semestre en cours
+      // Récupérer les notes avec ou sans inscription_id (car inscription_id peut être nullable)
+      let notesData = null
+      const { data: notesWithInscription } = await supabaseAdmin
+        .from('notes')
+        .select('*, modules(*)')
+        .eq('etudiant_id', etudiant.id)
+        .eq('inscription_id', inscription.id)
+        .eq('semestre', semestreActuel)
+      
+      const { data: notesWithoutInscription } = await supabaseAdmin
+        .from('notes')
+        .select('*, modules(*)')
+        .eq('etudiant_id', etudiant.id)
+        .eq('classe_id', inscription.classe_id)
+        .eq('semestre', semestreActuel)
+        .is('inscription_id', null)
+      
+      // Combiner les deux résultats
+      notesData = [
+        ...(notesWithInscription || []),
+        ...(notesWithoutInscription || [])
+      ]
+
+      if (notesData && notesData.length > 0) {
+        // Organiser les notes par module
+        const notesByModule = {}
+        notesData.forEach(note => {
+          const moduleId = note.module_id
+          if (!notesByModule[moduleId]) {
+            notesByModule[moduleId] = {
+              module: note.modules,
+              notes: []
+            }
+          }
+          notesByModule[moduleId].notes.push(note)
+        })
+
+        // Transformer en format attendu par le frontend
+        etudiantNotes = Object.entries(notesByModule).map(([moduleId, { module, notes }]) => {
+          // Trouver les notes CC1, CC2, CC3 et Examen
+          const cc1 = notes.find(n => n.evaluation_id === 'CC1' || n.evaluation_id?.includes('CC1') || n.evaluation_id === 'cc1')
+          const cc2 = notes.find(n => n.evaluation_id === 'CC2' || n.evaluation_id?.includes('CC2') || n.evaluation_id === 'cc2')
+          const cc3 = notes.find(n => n.evaluation_id === 'CC3' || n.evaluation_id?.includes('CC3') || n.evaluation_id === 'cc3')
+          const examen = notes.find(n => n.evaluation_id === 'EXAMEN' || n.evaluation_id?.includes('EXAMEN') || n.evaluation_id === 'examen' || n.evaluation_id === 'EXAM')
+
+          // Calculer la moyenne (utiliser la note finale si disponible, sinon calculer)
+          let moyenne = 0
+          const noteFinale = notes.find(n => n.evaluation_id === 'MOYENNE' || n.evaluation_id === 'FINAL' || n.evaluation_id === 'moyenne')
+          if (noteFinale) {
+            moyenne = parseFloat(noteFinale.valeur) || 0
+          } else {
+            // Calculer la moyenne à partir des notes disponibles
+            const valeurs = notes.map(n => parseFloat(n.valeur) || 0).filter(v => v > 0)
+            if (valeurs.length > 0) {
+              moyenne = valeurs.reduce((a, b) => a + b, 0) / valeurs.length
+            }
+          }
+
+          return {
+            id: notes[0].id,
+            module_id: moduleId,
+            module: module?.nom || 'Inconnu',
+            code: module?.code || '',
+            note1: cc1 ? parseFloat(cc1.valeur) : null,
+            note2: cc2 ? parseFloat(cc2.valeur) : null,
+            note3: cc3 ? parseFloat(cc3.valeur) : null,
+            examen: examen ? parseFloat(examen.valeur) : null,
+            moyenne: parseFloat(moyenne.toFixed(2)),
+            credit: module?.credit || 0,
+            valeur: moyenne, // Pour le calcul de moyenne générale
+            statut: moyenne >= 10 ? 'Validé' : 'Non validé',
+            tendance: moyenne >= 10 ? 'up' : 'down',
+            allNotes: notes // Garder toutes les notes pour référence
+          }
+        })
+
+        // Calculer la moyenne générale
+        let sumNotesWeighted = 0, sumCoefs = 0
+        etudiantNotes.forEach(note => {
+          const val = note.moyenne || 0
+          const coef = note.credit || 1
+          sumNotesWeighted += (val * coef)
+          sumCoefs += coef
+          if (val >= 10) totalCredits += coef
+        })
+        if (sumCoefs > 0) moyenneGenerale = sumNotesWeighted / sumCoefs
+      }
+
+      // 3. Rang et Effectif - OPTIMISÉ : Calculer le rang uniquement parmi les étudiants avec notes
+      // Récupérer tous les étudiants de la classe pour l'effectif total
+      const { data: allInsc } = await supabaseAdmin
+        .from('inscriptions')
+        .select('id, etudiant_id')
+        .eq('classe_id', inscription.classe_id)
+        .eq('statut', 'INSCRIT')
+
+      if (allInsc) {
+        totalStudentsInClass = allInsc.length
+        
+        // OPTIMISATION : Récupérer toutes les notes de tous les étudiants en une seule requête
+        const inscriptionIds = allInsc.map(i => i.id)
+        const { data: allNotesData } = await supabaseAdmin
+          .from('notes')
+          .select('*, modules(*), inscriptions(id, etudiant_id)')
+          .in('inscription_id', inscriptionIds)
+          .eq('semestre', semestreActuel)
+
+        // Créer un map inscription_id -> etudiant_id pour faciliter la recherche
+        const inscriptionToStudentMap = {}
+        allInsc.forEach(insc => {
+          inscriptionToStudentMap[insc.id] = insc.etudiant_id
+        })
+
+        // Organiser les notes par étudiant
+        const notesByStudent = {}
+        if (allNotesData && allNotesData.length > 0) {
+          allNotesData.forEach(note => {
+            const etudiantId = inscriptionToStudentMap[note.inscription_id] || note.inscriptions?.etudiant_id
+            if (!etudiantId) return
+            
+            if (!notesByStudent[etudiantId]) {
+              notesByStudent[etudiantId] = []
+            }
+            notesByStudent[etudiantId].push(note)
+          })
+        }
+
+        // Calculer les moyennes uniquement pour les étudiants qui ont des notes
+        const studentAverages = []
+        
+        // Fonction helper pour calculer la moyenne d'un étudiant
+        const calculateStudentAverage = (notes) => {
+          if (!notes || notes.length === 0) return 0
+          
+          // Organiser les notes par module
+          const notesByModule = {}
+          notes.forEach(note => {
+            const moduleId = note.module_id
+            if (!notesByModule[moduleId]) {
+              notesByModule[moduleId] = []
+            }
+            notesByModule[moduleId].push(note)
+          })
+
+          // Calculer la moyenne par module puis la moyenne générale
+          let sumNotesWeighted = 0, sumCoefs = 0
+          Object.values(notesByModule).forEach(moduleNotes => {
+            const module = moduleNotes[0]?.modules
+            if (!module) return
+
+            // Trouver la note finale ou calculer la moyenne
+            const noteFinale = moduleNotes.find(n => n.evaluation_id === 'MOYENNE' || n.evaluation_id === 'FINAL' || n.evaluation_id === 'moyenne')
+            let moyenneModule = 0
+            if (noteFinale) {
+              moyenneModule = parseFloat(noteFinale.valeur) || 0
+            } else {
+              const valeurs = moduleNotes.map(n => parseFloat(n.valeur) || 0).filter(v => v > 0)
+              if (valeurs.length > 0) {
+                moyenneModule = valeurs.reduce((a, b) => a + b, 0) / valeurs.length
+              }
+            }
+
+            const coef = parseFloat(module.credit || 1)
+            sumNotesWeighted += (moyenneModule * coef)
+            sumCoefs += coef
+          })
+          
+          return sumCoefs > 0 ? sumNotesWeighted / sumCoefs : 0
+        }
+
+        // Calculer les moyennes pour tous les étudiants qui ont des notes
+        Object.keys(notesByStudent).forEach(etudiantId => {
+          const avg = calculateStudentAverage(notesByStudent[etudiantId])
+          if (avg > 0) { // Seulement inclure les étudiants avec des notes valides
+            studentAverages.push({ id: etudiantId, avg })
+          }
+        })
+
+        // Calculer le rang uniquement parmi les étudiants avec notes
+        if (studentAverages.length > 0) {
+          totalStudentsWithNotes = studentAverages.length
+          studentAverages.sort((a, b) => b.avg - a.avg)
+          const pos = studentAverages.findIndex(s => s.id === etudiant.id)
+          if (pos !== -1) {
+            rangClasse = pos + 1
+            // totalStudentsInClass reste le total d'étudiants dans la classe
+            // totalStudentsWithNotes est le nombre d'étudiants avec notes pour l'affichage du rang
+          } else {
+            // Si l'étudiant n'a pas de notes, ne pas afficher de rang
+            rangClasse = null
+          }
+        } else {
+          // Aucun étudiant n'a de notes
+          rangClasse = null
+          totalStudentsWithNotes = 0
+        }
+      }
+
+      // 4. Emploi du temps
+      const { data: edtData } = await supabaseAdmin
+        .from('emplois_du_temps')
+        .select('*, modules(*), enseignants(*)')
+        .eq('classe_id', inscription.classe_id)
+        .order('jour', { ascending: true })
+        .order('heure_debut', { ascending: true })
+
+      if (edtData) {
+        timetable = edtData.map(item => ({
+          id: item.id,
+          jour: item.jour,
+          heureDebut: item.heure_debut,
+          heureFin: item.heure_fin,
+          matiere: item.modules?.nom || 'Inconnu',
+          professeur: item.enseignants ? `${item.enseignants.prenom || ''} ${item.enseignants.nom}`.trim() : 'N/A',
+          salle: item.salle || 'N/A',
+          type: 'Cours'
+        }))
+      }
+    }
+
+    // --- OBJET FINAL ---
     return {
-      success: true,
-      message: `L'étudiant ${etudiant.prenom} ${etudiant.nom} a été supprimé avec succès`
+      id: etudiant.id,
+      userId: utilisateur.id,
+      matricule: etudiant.matricule,
+      nom: etudiant.nom,
+      prenom: etudiant.prenom,
+      fullName: `${etudiant.prenom} ${etudiant.nom}`,
+      email: etudiant.email || utilisateur.email,
+      telephone: etudiant.telephone || null,
+      adresse: etudiant.adresse || null,
+      photo: etudiant.photo ? (etudiant.photo.startsWith('/') ? etudiant.photo : `/uploads/inscriptions/${etudiant.photo}`) : null,
+      dateNaissance: etudiant.date_naissance ? (typeof etudiant.date_naissance === 'string' ? etudiant.date_naissance.split('T')[0] : etudiant.date_naissance) : null,
+      lieuNaissance: etudiant.lieu_naissance || null,
+      // Infos Académiques
+      filiere: inscription?.filieres?.nom || '',
+      niveau: inscription?.niveaux?.nom || '',
+      niveauCode: inscription?.niveaux?.code || '',
+      classe: inscription?.classes?.nom || '',
+      programme: inscription?.classes ? `${inscription.classes.nom} - ${inscription.filieres?.code || 'INPTIC'}` : 'INPTIC 2025',
+      moyenneGenerale: parseFloat(moyenneGenerale.toFixed(2)),
+      nbrCredits: totalCredits,
+      totalModules: nbrModules,
+      rangClasse: rangClasse,
+      totalStudentsInClass: totalStudentsInClass,
+      totalStudentsWithNotes: totalStudentsWithNotes, // Nombre d'étudiants avec notes pour l'affichage du rang
+      semestreActuel: semestreActuel,
+      anneeAcademique: inscription?.promotions?.annee || '',
+      dateInscription: inscription?.date_inscription ? inscription.date_inscription.split('T')[0] : null,
+      // Données dynamiques pour dashboard
+      grades: (etudiantNotes || []).map(n => ({
+        id: n.id,
+        module: n.module || 'Inconnu',
+        code: n.code || '',
+        note1: n.note1,
+        note2: n.note2,
+        note3: n.note3,
+        examen: n.examen,
+        moyenne: n.moyenne,
+        credit: n.credit,
+        statut: n.statut,
+        tendance: n.tendance
+      })),
+      timetable,
+      parents: (etudiant.parents || []).map(p => ({
+        fullName: `${p.prenom} ${p.nom}`,
+        telephone: p.telephone,
+        email: p.email,
+        lienParente: p.lien_parente
+      }))
     }
   } catch (error) {
-    console.error('Erreur lors de la suppression de l\'étudiant:', error)
+    console.error('Erreur getEtudiantByUserId:', error)
     throw error
+  }
+}
+
+export const deleteEtudiant = async (etudiantId) => {
+  try {
+    const { error } = await supabaseAdmin.from('etudiants').delete().eq('id', etudiantId)
+    if (error) throw error
+    return { success: true }
+  } catch (error) {
+    console.error('Erreur deleteEtudiant:', error)
+    return { success: false, error: error.message }
   }
 }

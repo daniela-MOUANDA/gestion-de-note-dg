@@ -10,7 +10,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
   try {
     // Normaliser l'email (trim et lowercase pour éviter les problèmes de casse)
     const normalizedEmail = email?.trim().toLowerCase()
-    
+
     if (!normalizedEmail || !password) {
       console.log('❌ Email ou mot de passe manquant')
       return {
@@ -24,7 +24,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
     // Si un matricule est fourni, c'est probablement un étudiant
     if (matricule) {
       console.log('🎓 Tentative de connexion étudiant avec matricule:', matricule)
-      
+
       // Chercher l'étudiant par matricule
       const { data: etudiant, error: etudiantError } = await supabaseAdmin
         .from('etudiants')
@@ -43,7 +43,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
         console.log('❌ Étudiant non trouvé avec matricule:', matricule)
         return {
           success: false,
-          error: 'Matricule incorrect'
+          error: "Cet étudiant n'existe pas ou le matricule est incorrect"
         }
       }
 
@@ -70,7 +70,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
       // Si aucun compte Utilisateur n'existe, le créer
       if (!utilisateur) {
         console.log('📝 Création d\'un compte Utilisateur pour l\'étudiant')
-        
+
         // Générer un username unique basé sur le matricule
         let username = matricule.trim().toLowerCase()
         const { data: usernameExists } = await supabaseAdmin
@@ -78,7 +78,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
           .select('id')
           .eq('username', username)
           .single()
-        
+
         if (usernameExists) {
           username = `${matricule.trim()}_${Date.now()}`
         }
@@ -129,7 +129,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
 
         utilisateur = newUser
         console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
-        
+
         // Mettre à jour l'email de l'étudiant si nécessaire
         if (etudiant.email !== normalizedEmail) {
           await supabaseAdmin
@@ -144,10 +144,10 @@ export const authenticateUser = async (email, password, matricule = null) => {
           console.log('❌ Le compte trouvé n\'est pas un compte étudiant')
           return {
             success: false,
-            error: 'Ce compte n\'est pas un compte étudiant'
+            error: 'Ce compte n\'est pas un compte étudiant. Veuillez utiliser l\'interface administrative.'
           }
         }
-        
+
         // Mettre à jour l'email de l'étudiant si nécessaire
         if (etudiant.email !== normalizedEmail) {
           await supabaseAdmin
@@ -160,7 +160,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
     } else {
       // Authentification normale pour les autres utilisateurs
       console.log('🔍 Recherche de l\'utilisateur avec email:', normalizedEmail)
-      
+
       // Trouver l'utilisateur par email
       const { data: user, error: userError } = await supabaseAdmin
         .from('utilisateurs')
@@ -177,6 +177,15 @@ export const authenticateUser = async (email, password, matricule = null) => {
       }
 
       utilisateur = user
+
+      // EMPÊCHER LES ÉTUDIANTS DE SE CONNECTER SUR L'INTERFACE ADMIN
+      if (utilisateur.roles && utilisateur.roles.code === 'ETUDIANT') {
+        console.log('🚫 Tentative de connexion étudiant sur interface admin bloquée:', utilisateur.email)
+        return {
+          success: false,
+          error: 'Accès refusé. Les étudiants doivent se connecter via l\'espace étudiant.'
+        }
+      }
     }
 
     console.log('✅ Utilisateur trouvé:', utilisateur.email, 'Rôle:', utilisateur.roles?.code || 'N/A')
@@ -192,8 +201,8 @@ export const authenticateUser = async (email, password, matricule = null) => {
 
     // Vérifier que le mot de passe est hashé (commence par $2a$, $2b$ ou $2y$)
     const isPasswordHashed = utilisateur.password && (
-      utilisateur.password.startsWith('$2a$') || 
-      utilisateur.password.startsWith('$2b$') || 
+      utilisateur.password.startsWith('$2a$') ||
+      utilisateur.password.startsWith('$2b$') ||
       utilisateur.password.startsWith('$2y$')
     )
 
@@ -218,7 +227,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
       // Vérifier le mot de passe avec bcrypt
       console.log('🔐 Vérification du mot de passe avec bcrypt...')
       const passwordValid = await bcrypt.compare(password, utilisateur.password)
-      
+
       if (!passwordValid) {
         console.log('❌ Mot de passe incorrect pour:', utilisateur.email)
         return {
@@ -247,7 +256,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
     // Cela garantit qu'une seule session active existe par utilisateur
     await supabaseAdmin
       .from('utilisateurs')
-      .update({ 
+      .update({
         token: token,
         derniere_connexion: new Date().toISOString()
       })
@@ -413,14 +422,14 @@ export const verifyToken = async (token, shouldRefresh = false) => {
       }
       throw verifyError
     }
-    
+
     // Vérifier que l'utilisateur existe toujours et est actif
     const { data: utilisateur, error } = await supabaseAdmin
       .from('utilisateurs')
       .select('*, roles (*)')
       .eq('id', decoded.id)
       .single()
-    
+
     if (error || !utilisateur) {
       console.error('❌ Utilisateur introuvable pour ID:', decoded.id)
       return {
@@ -469,7 +478,7 @@ export const verifyToken = async (token, shouldRefresh = false) => {
           }
         }
       }
-      
+
       console.error('❌ Token mismatch pour l\'utilisateur:', utilisateur.email)
       return {
         valid: false,
@@ -486,7 +495,7 @@ export const verifyToken = async (token, shouldRefresh = false) => {
         error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
       }
     }
-    
+
     // Extraire uniquement les champs nécessaires
     const userData = {
       id: utilisateur.id,
@@ -635,7 +644,7 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
 
     // Vérifier le mot de passe actuel
     const passwordValid = await bcrypt.compare(currentPassword, utilisateur.password)
-    
+
     if (!passwordValid) {
       return {
         success: false,

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faDownload,
   faPrint,
   faFilePdf,
@@ -10,110 +11,88 @@ import {
   faTimesCircle,
   faChartLine,
   faMedal,
-  faBook
+  faBook,
+  faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import Sidebar from '../../components/common/Sidebar'
 import Header from '../../components/common/Header'
 import { StudentModel } from '../../models/StudentModel'
+import { getMesNotes } from '../../api/scolarite'
+import { useAuth } from '../../contexts/AuthContext'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const NotesView = () => {
-  // Données par défaut pour l'affichage sans connexion
-  const defaultStudentData = {
-    id: 1,
-    email: 'lidvige.mbo@example.com',
-    matricule: '1045937',
-    nom: 'MBO',
-    prenom: 'Lidvige',
-    programme: 'GI 2025 Génie Informatique',
-    niveau: 'L3',
-    moyenneGenerale: 14.5,
-    credits: 24,
-    totalModules: 15,
-    rangClasse: 5,
-    estActif: true,
-    estBoursier: true,
-    semestre: 'Semestre 5',
-    derniereConnexion: new Date().toISOString()
-  }
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
+  const [student, setStudent] = useState(null)
+  const [grades, setGrades] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [moyenneGenerale, setMoyenneGenerale] = useState(0)
+  const [credits, setCredits] = useState(0)
+  const [totalModules, setTotalModules] = useState(0)
+  const [modulesValides, setModulesValides] = useState(0)
+  const [semestre, setSemestre] = useState('')
 
-  const [student] = useState(() => {
-    const studentData = localStorage.getItem('student')
-    if (studentData) {
-      return new StudentModel(JSON.parse(studentData))
+  useEffect(() => {
+    const loadNotes = async () => {
+      if (!isAuthenticated || !user || user.role !== 'ETUDIANT') {
+        navigate('/login-etudiant')
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Charger les notes depuis l'API
+        const notesData = await getMesNotes()
+
+        if (notesData.success) {
+          setGrades(notesData.notes || [])
+          setMoyenneGenerale(notesData.moyenneGenerale || 0)
+          setCredits(notesData.credits || 0)
+          setTotalModules(notesData.totalModules || 0)
+          setModulesValides(notesData.modulesValides || 0)
+          setSemestre(notesData.semestre || '')
+
+          // Charger les données de l'étudiant depuis localStorage ou créer un modèle minimal
+          const studentData = localStorage.getItem('student')
+          if (studentData) {
+            const parsed = JSON.parse(studentData)
+            setStudent(new StudentModel({
+              ...parsed,
+              moyenneGenerale: notesData.moyenneGenerale || parsed.moyenneGenerale || 0,
+              credits: notesData.credits || parsed.credits || 0,
+              totalModules: notesData.totalModules || parsed.totalModules || 0,
+              semestre: notesData.semestre || parsed.semestre || ''
+            }))
+          } else {
+            // Créer un modèle minimal si pas de données en localStorage
+            setStudent(new StudentModel({
+              id: user.id,
+              email: user.email,
+              nom: user.nom || '',
+              prenom: user.prenom || '',
+              moyenneGenerale: notesData.moyenneGenerale || 0,
+              credits: notesData.credits || 0,
+              totalModules: notesData.totalModules || 0,
+              semestre: notesData.semestre || ''
+            }))
+          }
+        } else {
+          setError(notesData.error || 'Erreur lors du chargement des notes')
+        }
+      } catch (err) {
+        console.error('Erreur lors du chargement des notes:', err)
+        setError(err.message || 'Erreur lors du chargement des notes')
+      } finally {
+        setLoading(false)
+      }
     }
-    return new StudentModel(defaultStudentData)
-  })
 
-  // Données simulées des notes
-  const [grades] = useState([
-    {
-      id: 1,
-      module: 'Programmation web',
-      code: 'INFO3.01.MATTY',
-      note1: 14,
-      note2: 16,
-      note3: null,
-      examen: 16,
-      moyenne: 15.5,
-      credit: 6,
-      statut: 'Validé',
-      tendance: 'up'
-    },
-    {
-      id: 2,
-      module: 'Base de donnée',
-      code: 'INFO3.01.OSSENI',
-      note1: 12,
-      note2: 5,
-      note3: null,
-      examen: 4,
-      moyenne: 7,
-      credit: 3,
-      statut: 'Non validé',
-      tendance: 'down'
-    },
-    {
-      id: 3,
-      module: 'Réseaux',
-      code: 'INFO3.02.OSSENE',
-      note1: 15,
-      note2: 14,
-      note3: 16,
-      examen: 15,
-      moyenne: 15,
-      credit: 4,
-      statut: 'Validé',
-      tendance: 'up'
-    },
-    {
-      id: 4,
-      module: 'Système d\'exploitation',
-      code: 'INFO3.03.MARTIN',
-      note1: 10,
-      note2: 12,
-      note3: 11,
-      examen: 13,
-      moyenne: 11.5,
-      credit: 3,
-      statut: 'Non validé',
-      tendance: 'down'
-    },
-    {
-      id: 5,
-      module: 'Algorithmique avancée',
-      code: 'INFO3.04.DUPONT',
-      note1: 18,
-      note2: 17,
-      note3: 19,
-      examen: 18,
-      moyenne: 18,
-      credit: 5,
-      statut: 'Validé',
-      tendance: 'up'
-    }
-  ])
-
-  const modulesValides = grades.filter(g => g.statut === 'Validé').length
+    loadNotes()
+  }, [isAuthenticated, user, navigate])
 
   const handleDownloadPDF = () => {
     // TODO: Implémenter le téléchargement PDF
@@ -124,13 +103,61 @@ const NotesView = () => {
     window.print()
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <Header studentName="Chargement..." />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24 flex items-center justify-center">
+            <LoadingSpinner size="lg" text="Chargement de vos notes..." />
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <Header studentName="Erreur" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <strong className="font-bold">Erreur!</strong>
+              <span className="block sm:inline"> {error}</span>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <Header studentName="Erreur" />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
+            <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative" role="alert">
+              <strong className="font-bold">Avertissement!</strong>
+              <span className="block sm:inline"> Aucune information d'étudiant trouvée.</span>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+        <Header studentName={student.fullName || `${student.prenom} ${student.nom}`} />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
           {/* Titre et boutons d'action */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>
@@ -138,7 +165,7 @@ const NotesView = () => {
                 Notes
               </h1>
               <p className="text-sm sm:text-base text-slate-600">
-                {student.semestre} - Année académique 2025-2026
+                {semestre || student.semestre || 'Semestre'} - Année académique 2025-2026
               </p>
             </div>
             <div className="flex gap-3">
@@ -167,8 +194,8 @@ const NotesView = () => {
             <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Moyenne générale</p>
-                  <p className="text-3xl font-bold text-slate-800">{student.moyenneGenerale}/20</p>
+                  <p className="text-sm text-slate-500 mb-1">Moyenne générale du semestre en cours</p>
+                  <p className="text-3xl font-bold text-slate-800">{moyenneGenerale.toFixed(2)}/20</p>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-3">
                   <FontAwesomeIcon icon={faChartLine} className="text-blue-600 text-xl" />
@@ -180,8 +207,8 @@ const NotesView = () => {
             <div className="bg-white rounded-lg border-l-4 border-purple-500 shadow-sm p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Crédits</p>
-                  <p className="text-3xl font-bold text-slate-800">{student.credits}/60</p>
+                  <p className="text-sm text-slate-500 mb-1">Crédits validés</p>
+                  <p className="text-3xl font-bold text-slate-800">{credits}/60</p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3">
                   <FontAwesomeIcon icon={faMedal} className="text-purple-600 text-xl" />
@@ -194,7 +221,7 @@ const NotesView = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-sm text-slate-500 mb-1">Total de module</p>
-                  <p className="text-3xl font-bold text-slate-800">{student.totalModules}</p>
+                  <p className="text-3xl font-bold text-slate-800">{totalModules}</p>
                 </div>
                 <div className="bg-violet-50 rounded-lg p-3">
                   <FontAwesomeIcon icon={faBook} className="text-violet-600 text-xl" />
@@ -244,11 +271,10 @@ const NotesView = () => {
                 </thead>
                 <tbody>
                   {grades.map((grade, index) => (
-                    <tr 
-                      key={grade.id} 
-                      className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
-                      }`}
+                    <tr
+                      key={grade.id}
+                      className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                        }`}
                     >
                       <td className="px-4 py-4">
                         <div>
@@ -258,38 +284,37 @@ const NotesView = () => {
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm sm:text-base text-slate-700">
-                          {grade.note1 !== null ? `${grade.note1}/20` : '-'}
+                          {grade.note1 !== null && grade.note1 !== undefined ? `${grade.note1}/20` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm sm:text-base text-slate-700">
-                          {grade.note2 !== null ? `${grade.note2}/20` : '-'}
+                          {grade.note2 !== null && grade.note2 !== undefined ? `${grade.note2}/20` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm sm:text-base text-slate-700">
-                          {grade.note3 !== null ? `${grade.note3}/20` : '-'}
+                          {grade.note3 !== null && grade.note3 !== undefined ? `${grade.note3}/20` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm sm:text-base font-semibold text-slate-800">
-                          {grade.examen}/20
+                          {grade.examen !== null && grade.examen !== undefined ? `${grade.examen}/20` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm sm:text-base font-bold text-slate-800">
-                          {grade.moyenne}/20
+                          {grade.moyenne ? grade.moyenne.toFixed(2) : '0.00'}/20
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm sm:text-base text-slate-700">{grade.credit}</span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          grade.statut === 'Validé' 
-                            ? 'bg-emerald-100 text-emerald-700' 
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${grade.statut === 'Validé'
+                            ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-red-100 text-red-700'
-                        }`}>
+                          }`}>
                           {grade.statut === 'Validé' ? (
                             <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
                           ) : (
@@ -301,13 +326,13 @@ const NotesView = () => {
                       <td className="px-4 py-4 text-center">
                         <div className="flex items-center justify-center">
                           {grade.tendance === 'up' ? (
-                            <FontAwesomeIcon 
-                              icon={faArrowTrendUp} 
+                            <FontAwesomeIcon
+                              icon={faArrowTrendUp}
                               className="text-emerald-500 text-lg"
                             />
                           ) : (
-                            <FontAwesomeIcon 
-                              icon={faArrowTrendDown} 
+                            <FontAwesomeIcon
+                              icon={faArrowTrendDown}
                               className="text-red-500 text-lg"
                             />
                           )}

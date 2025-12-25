@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
-  faEnvelope, 
-  faLock, 
+import {
+  faEnvelope,
+  faLock,
   faSignInAlt,
   faUser,
   faSpinner
@@ -25,24 +25,28 @@ const LoginView = () => {
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
 
+  useEffect(() => {
+    document.title = 'Gestion de Notes - Administration'
+  }, [])
+
   // Fonction pour rediriger selon le rôle
   const redirectByRole = (user) => {
     console.log('Redirection pour l\'utilisateur:', user)
-    
+
     // Utiliser le code du rôle pour la redirection (priorité sur roleDetails)
     const roleCode = user.role || 'UNKNOWN'
     console.log('Redirection par code de rôle:', roleCode)
-    
+
     // Pour certains rôles critiques, forcer la redirection par code plutôt que par routeDashboard
     const criticalRoles = ['CHEF_DEPARTEMENT', 'CHEF_SERVICE_SCOLARITE', 'DEP', 'SP_SCOLARITE']
     const useRouteDashboard = !criticalRoles.includes(roleCode) && user.roleDetails && user.roleDetails.routeDashboard
-    
+
     if (useRouteDashboard) {
       console.log('✅ Redirection vers:', user.roleDetails.routeDashboard)
       navigate(user.roleDetails.routeDashboard, { replace: true })
       return
     }
-    
+
     // Redirection par code de rôle (pour les rôles critiques ou si routeDashboard n'est pas disponible)
     switch (roleCode) {
       case 'ETUDIANT':
@@ -67,6 +71,10 @@ const LoginView = () => {
         console.log('✅ Redirection vers /dep/dashboard pour DEP')
         navigate('/dep/dashboard', { replace: true })
         break
+      case 'ADMIN_SYSTEME':
+        console.log('✅ Redirection vers /admin-systeme/dashboard pour ADMIN_SYSTEME')
+        navigate('/admin-systeme/dashboard', { replace: true })
+        break
       default:
         console.warn('⚠️ Rôle non reconnu:', roleCode)
         // En cas de rôle non reconnu, utiliser routeDashboard si disponible, sinon login
@@ -85,21 +93,21 @@ const LoginView = () => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-    
+
     try {
       const result = await login(email, password)
       console.log('Résultat de la connexion:', result)
-      
+
       if (result.success && result.user) {
         console.log('Utilisateur connecté:', result.user)
         console.log('Rôle de l\'utilisateur:', result.user.role)
-        
+
         // Afficher le modal de succès
         const userName = `${result.user.prenom} ${result.user.nom}`
         setSuccessMessage(`Bienvenue ${userName} ! Connexion réussie.`)
         setShowSuccessModal(true)
         success(`Connexion réussie ! Bienvenue ${userName}`)
-        
+
         // Rediriger après un court délai pour voir le modal
         setTimeout(() => {
           setShowSuccessModal(false)
@@ -163,8 +171,8 @@ const LoginView = () => {
                   required
                   className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-800 placeholder-slate-400 text-sm"
                 />
-                <FontAwesomeIcon 
-                  icon={faEnvelope} 
+                <FontAwesomeIcon
+                  icon={faEnvelope}
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
                 />
               </div>
@@ -186,8 +194,8 @@ const LoginView = () => {
                   required
                   className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-800 placeholder-slate-400 text-sm"
                 />
-                <FontAwesomeIcon 
-                  icon={faLock} 
+                <FontAwesomeIcon
+                  icon={faLock}
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
                 />
               </div>

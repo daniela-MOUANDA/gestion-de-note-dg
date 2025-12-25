@@ -1,23 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
-  faEnvelope, 
+import {
+  faEnvelope,
   faIdCard,
-  faLock, 
+  faLock,
   faSignInAlt,
   faGraduationCap
 } from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAlert } from '../../contexts/AlertContext'
+import Modal from '../../components/common/Modal'
 
 const LoginStudentView = () => {
   const navigate = useNavigate()
   const { login, isAuthenticated, user } = useAuth()
+  const { success, error: showError } = useAlert()
   const [email, setEmail] = useState('')
   const [matricule, setMatricule] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+
+  useEffect(() => {
+    document.title = 'Gestion de Notes - Espace Étudiant'
+  }, [])
 
   // Fonction pour rediriger selon le rôle
   const redirectByRole = (role) => {
@@ -52,21 +62,36 @@ const LoginStudentView = () => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-    
+
     try {
       // Pour les étudiants, on envoie le matricule en plus
       // L'API va vérifier l'email et le mot de passe, et optionnellement le matricule
       const result = await login(email, password, matricule)
-      
+
       if (result.success && result.user) {
-        // Rediriger selon le rôle
-        redirectByRole(result.user.role)
+        // Afficher le modal de succès
+        const userName = `${result.user.prenom} ${result.user.nom}`
+        setSuccessMessage(`Bienvenue ${userName} ! Connexion réussie.`)
+        setShowSuccessModal(true)
+        success(`Connexion réussie ! Bienvenue ${userName}`)
+
+        // Rediriger après un court délai pour voir le modal
+        setTimeout(() => {
+          setShowSuccessModal(false)
+          redirectByRole(result.user.role)
+        }, 1500)
       } else {
-        setError(result.error || 'Erreur lors de la connexion')
+        const errorMsg = result.error || 'Erreur lors de la connexion'
+        setError(errorMsg)
+        setShowErrorModal(true)
+        showError(errorMsg)
         setIsLoading(false)
       }
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue')
+      const errorMsg = err.message || 'Une erreur est survenue'
+      setError(errorMsg)
+      setShowErrorModal(true)
+      showError(errorMsg)
       setIsLoading(false)
     }
   }
@@ -112,8 +137,8 @@ const LoginStudentView = () => {
                   required
                   className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-800 placeholder-slate-400 text-sm"
                 />
-                <FontAwesomeIcon 
-                  icon={faEnvelope} 
+                <FontAwesomeIcon
+                  icon={faEnvelope}
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
                 />
               </div>
@@ -135,8 +160,8 @@ const LoginStudentView = () => {
                   required
                   className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-800 placeholder-slate-400 text-sm"
                 />
-                <FontAwesomeIcon 
-                  icon={faIdCard} 
+                <FontAwesomeIcon
+                  icon={faIdCard}
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
                 />
               </div>
@@ -158,8 +183,8 @@ const LoginStudentView = () => {
                   required
                   className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-800 placeholder-slate-400 text-sm"
                 />
-                <FontAwesomeIcon 
-                  icon={faLock} 
+                <FontAwesomeIcon
+                  icon={faLock}
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"
                 />
               </div>
@@ -185,6 +210,23 @@ const LoginStudentView = () => {
           </form>
         </div>
       </div>
+      {/* Modal de succès */}
+      <Modal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        type="success"
+        title="Connexion réussie !"
+        message={successMessage}
+      />
+
+      {/* Modal d'erreur */}
+      <Modal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        type="error"
+        title="Erreur de connexion"
+        message={error}
+      />
     </div>
   )
 }

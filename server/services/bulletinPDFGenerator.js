@@ -315,12 +315,19 @@ function drawGradesTable(doc, modules, moyenneGeneraleClasse, uesValidees = []) 
     // Dessiner chaque UE
     Object.keys(modulesByUE).sort().forEach(ue => {
         // En-tête UE - Fond blanc
-        const ueHeaderHeight = 15 // Passé de 12 à 15
+        const ueHeaderHeight = 15
         doc.rect(MARGIN_LEFT, currentY, TABLE_WIDTH, ueHeaderHeight).stroke()
-        doc.fontSize(8) // Passé de 7 à 8
+
+        // Afficher le code UE avec le nom personnalisé si disponible
+        const firstModule = modulesByUE[ue][0]
+        const ueHeaderText = firstModule && firstModule.nom_ue
+            ? `${ue} - ${firstModule.nom_ue}`
+            : ue
+
+        doc.fontSize(8)
             .font('Helvetica-Bold')
             .fillColor('#000000')
-            .text(ue, MARGIN_LEFT + 5, currentY + 4)
+            .text(ueHeaderText, MARGIN_LEFT + 5, currentY + 4)
         currentY += ueHeaderHeight
 
         // Modules de l'UE
@@ -512,12 +519,12 @@ function drawCreditsValidation(doc, uesValidees) {
             const xPos = MARGIN_LEFT + (index * colWidth)
             const padding = 5
 
-            // Ligne 1: Nom UE
+            // Ligne 1: Nom UE (Afficher le nom si disponible, sinon le code)
             doc.rect(xPos, currentY, colWidth, rowHeight).stroke()
             doc.fontSize(8) // Passé de 7 à 8
                 .font('Helvetica')
                 .fillColor('#000000')
-                .text(ue.ue || `UE ${index + 1}`, xPos + padding, currentY + 4)
+                .text(ue.nom_ue || ue.ue || `UE ${index + 1}`, xPos + padding, currentY + 4, { width: colWidth - 10, truncate: true })
 
             // Ligne 2: Crédits (Vrai nombre / Total)
             doc.rect(xPos, currentY + rowHeight, colWidth, rowHeight).stroke()

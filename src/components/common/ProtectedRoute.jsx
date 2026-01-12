@@ -10,14 +10,23 @@ import LoadingSpinner from './LoadingSpinner'
  * @param {string|string[]} props.allowedRoles - Rôles autorisés (optionnel)
  * @param {string} props.redirectTo - Route de redirection si non autorisé (défaut: '/login')
  */
-const ProtectedRoute = ({ 
-  children, 
-  requireAuth = true, 
+const ProtectedRoute = ({
+  children,
+  requireAuth = true,
   allowedRoles = null,
-  redirectTo = '/login' 
+  redirectTo = '/login'
 }) => {
   const { isAuthenticated, user, loading } = useAuth()
   const location = useLocation()
+
+  console.log('🛡️ [ProtectedRoute] Rendering:', {
+    path: location.pathname,
+    requireAuth,
+    allowedRoles,
+    isAuthenticated,
+    userRole: user?.role,
+    loading
+  })
 
   // Afficher un spinner pendant le chargement de l'authentification
   if (loading) {
@@ -26,6 +35,7 @@ const ProtectedRoute = ({
 
   // Si l'authentification est requise mais l'utilisateur n'est pas connecté
   if (requireAuth && !isAuthenticated) {
+    console.log('🛡️ [ProtectedRoute] Redirecting to login: Not authenticated')
     // Sauvegarder la route actuelle pour rediriger après connexion
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
@@ -34,16 +44,19 @@ const ProtectedRoute = ({
   if (allowedRoles && user) {
     const userRole = user.role
     const rolesArray = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
-    
+
     // Normaliser les rôles pour la comparaison
     const normalizedUserRole = userRole?.trim().toUpperCase()
     const normalizedRoles = rolesArray.map(r => r?.trim().toUpperCase())
-    
+
     if (!normalizedRoles.includes(normalizedUserRole)) {
+      console.log(`🛡️ [ProtectedRoute] Access Denied: User role ${normalizedUserRole} not in allowed roles:`, normalizedRoles)
       // Rediriger vers le dashboard de l'utilisateur ou la page d'accueil
       const userDashboard = getUserDashboard(userRole)
+      console.log(`🛡️ [ProtectedRoute] Redirecting to dashboard: ${userDashboard}`)
       return <Navigate to={userDashboard} replace />
     }
+    console.log('🛡️ [ProtectedRoute] Access Granted: Role match found')
   }
 
   // Accès autorisé
@@ -55,7 +68,7 @@ const ProtectedRoute = ({
  */
 const getUserDashboard = (role) => {
   const roleCode = role?.trim().toUpperCase()
-  
+
   switch (roleCode) {
     case 'ETUDIANT':
       return '/dashboard'

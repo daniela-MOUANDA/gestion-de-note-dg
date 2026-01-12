@@ -7,7 +7,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         // 1. Récupérer la classe pour obtenir sa filière et son niveau
         const { data: classe, error: classeError } = await supabaseAdmin
             .from('classes')
-            .select('*, filieres(id, code, nom), niveaux(code)')
+            .select('*, filieres(id, code, nom, departements(code)), niveaux(code)')
             .eq('id', classeId)
             .single()
 
@@ -87,7 +87,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         console.log('DEBUG: Recherche modules avec:', { semestre, filiereId, departementId })
         const { data: modules, error: errorModules } = await supabaseAdmin
             .from('modules')
-            .select('id, code, nom, credit, semestre, filiere_id, departement_id, ue')
+            .select('id, code, nom, credit, semestre, filiere_id, departement_id, ue, nom_ue')
             .eq('semestre', semestre)
             .eq('filiere_id', filiereId)
             .eq('departement_id', departementId)
@@ -149,7 +149,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             // Récupérer les notes pour identifier les modules utilisés
             const { data: notesCheck, error: notesError } = await supabaseAdmin
                 .from('notes')
-                .select('module_id, modules(id, code, nom, credit, filiere_id)')
+                .select('module_id, modules(id, code, nom, credit, filiere_id, ue, nom_ue)')
                 .eq('classe_id', classeId)
                 .eq('semestre', semestre)
 
@@ -316,8 +316,11 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             })
 
             const uesResult = []
-            let totalCreditsSemestre = 0
+            let totalCreditsSemestre = 0 // Crédits des modules ayant des notes
             let totalPointsSemestre = 0
+
+            // Calculer le total des crédits attendus pour tout le semestre
+            const totalCreditsAttendus = modules.reduce((sum, m) => sum + (m.credit || 0), 0)
 
             // Calculer la moyenne générale d'abord pour savoir si on compense
             // On fait un premier passage
@@ -359,7 +362,13 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             const moyenneGenerale = totalCreditsSemestre > 0
                 ? parseFloat((totalPointsSemestre / totalCreditsSemestre).toFixed(2))
                 : null
-            const semestreValide = moyenneGenerale !== null && moyenneGenerale >= 10
+
+            // Le semestre n'est valide que si la moyenne sur l'ENSEMBLE des crédits attendus est >= 10
+            const moyenneSyllabus = totalCreditsAttendus > 0
+                ? parseFloat((totalPointsSemestre / totalCreditsAttendus).toFixed(2))
+                : 0
+
+            const semestreValide = moyenneSyllabus >= 10
 
             // Deuxième passage: Calcul par UE et statut final
             let totalCreditsValides = 0
@@ -424,6 +433,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
                 uesResult.push({
                     ue: ueName,
+                    nom_ue: modsResultUE[0]?.nom_ue || '',
                     moyenne: moyenneUE,
                     credits: creditsUEFinaux,
                     totalCredits: creditsUE,
@@ -434,13 +444,32 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
             const statut = semestreValide ? 'VALIDE' : 'AJOURNE'
 
+            // --- NOUVELLE LOGIQUE: Formule spéciale pour RSN (RT et GI) ---
+            const deptCode = classe.filieres?.departements?.code || ''
+            const filiereCode = classe.filieres?.code || ''
+
+            let moyenneFinale = moyenneGenerale
+
+            if (deptCode === 'RSN' && (filiereCode === 'RT' || filiereCode === 'GI')) {
+                // Formule demandée: (Total Points) / 30
+                moyenneFinale = parseFloat((totalPointsSemestre / 30).toFixed(2))
+                console.log(`📊 Formule Spéciale RSN (${filiereCode}) pour ${etudiant.nom}: (${totalPointsSemestre} / 30) = ${moyenneFinale}`)
+            } else {
+                // Pour les autres, on utilise la moyenne sur les crédits attendus (Syllabus)
+                // pour être cohérent avec la validation
+                moyenneFinale = moyenneSyllabus
+            }
+
+            // Mettre à jour le statut final basé sur la moyenneFinale calculée
+            const statutFinal = (moyenneFinale >= 10) ? 'VALIDE' : 'AJOURNE'
+
             return {
                 etudiant,
                 modules: modulesResult,
                 uesValidees: uesResult, // On retourne aussi les UEs calculées
-                moyenneGenerale,
+                moyenneGenerale: moyenneFinale,
                 totalCreditsValides,
-                statut
+                statut: statutFinal
             }
         })
 

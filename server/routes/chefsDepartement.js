@@ -63,6 +63,11 @@ import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartem
 import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
 import { supabaseAdmin } from '../../src/lib/supabase.js'
 import { getMention } from '../utils/mentions.js'
+// Imports des générateurs PDF
+import { generateBulletinPDF } from '../services/bulletinPDFGenerator.js'
+import { generatePlanchePDF } from '../services/planchePDFGenerator.js'
+import { generatePlancheAnnuelPDF } from '../services/plancheAnnuelPDFGenerator.js'
+import { getAnnualPlancheData } from '../../src/services/chefDepartement/plancheAnnuelService.js'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1125,6 +1130,39 @@ router.get('/bulletins/:bulletinId/pdf', authenticate, async (req, res) => {
   }
 })
 
+router.get('/releves/bulletin/:classeId', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const { semestre } = req.query
+    const departementId = req.user.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getBulletinData(classeId, semestre, departementId)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/releves/annual/:classeId', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const departementId = req.user.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getAnnualPlancheData(classeId, departementId)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
 // Télécharger le bulletin en PDF (template officiel INPTIC)
 router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
   try {
@@ -1219,6 +1257,7 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       anneeUniversitaire: promotion.annee || '',
       modules: modules.map(mod => ({
         ue: mod.ue || 'UE',
+        nom_ue: mod.nom_ue || '',
         nom: mod.nom || '',
         credits: mod.credit || 0,
         coefficient: mod.credit || 1, // Fix: Coefficient = Credit
@@ -1247,16 +1286,6 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
     // Note: Le service de génération PDF doit être créé
     // Pour l'instant, retourner une erreur indiquant que le service n'est pas encore implémenté
     try {
-      const pdfGeneratorModule = await import('../services/bulletinPDFGenerator.js')
-      const generateBulletinPDF = pdfGeneratorModule.generateBulletinPDF
-
-      if (!generateBulletinPDF) {
-        return res.status(501).json({
-          success: false,
-          error: 'Service de génération PDF non disponible. Le service doit être implémenté.'
-        })
-      }
-
       const outputPath = path.join(__dirname, '../uploads', `bulletin_${id}_${Date.now()}.pdf`)
 
       // S'assurer que le dossier uploads existe
@@ -1303,6 +1332,149 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
 
   } catch (error) {
     console.error('Erreur lors de la génération du PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/**
+ * Générer et télécharger la planche (résultats de toute la classe) au format PDF
+ */
+router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
+  try {
+    const { classeId, semestre } = req.params
+    console.log(`📑 [Backend] Generation PDF Planche: Classe=${classeId}, Semestre=${semestre}`)
+    const departementId = req.user?.departementId
+    console.log(`👤 [Backend] User DEP ID:`, departementId)
+
+    if (!departementId) {
+      console.error('❌ [Backend] departementId manquant dans req.user')
+      return res.status(403).json({ success: false, error: 'Accès non autorisé : Département non identifié' })
+    }
+
+    // charger les données consolidées via le service de relevés
+    // On réutilise getBulletinData qui calcule déjà tout pour la classe
+    const result = await getBulletinData(classeId, semestre)
+
+    if (!result.success) {
+      return res.status(500).json(result)
+    }
+
+    const { data: studentsData, meta } = result
+
+    // Récupérer les infos de la classe et de sa promotion
+    const { data: classe, error: classeError } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres(nom, departements(code)), promotions(annee)')
+      .eq('id', classeId)
+      .single()
+
+    if (classeError) throw classeError
+
+    console.log(`📊 [Backend] Students to map:`, studentsData.length)
+
+    // Mapper les données pour le générateur de planche
+    const plancheData = {
+      classe: {
+        nom: classe?.nom || 'Inconnue',
+        filiere: classe?.filieres?.nom || '',
+        departement: classe?.filieres?.departements?.code || ''
+      },
+      anneeUniversitaire: classe?.promotions?.annee || '2024-2025',
+      students: studentsData.map(s => {
+        if (!s.etudiant) console.warn('⚠️ [Backend] Étudiant manquant dans studentsData pour un item')
+        return {
+          nom: s.etudiant?.nom || 'N/A',
+          prenom: s.etudiant?.prenom || '',
+          // matricule: s.etudiant?.matricule,
+          modules: (s.modules || []).map(m => ({
+            id: m.id,
+            nom: m.nom,
+            code: m.code,
+            noteEtudiant: m.moyenne,
+            credit: m.credit
+          })),
+          uesValidees: s.uesValidees || [],
+          moyenneSemestre: s.moyenneGenerale,
+          totalCreditsValides: s.totalCreditsValides,
+          rangEtudiant: s.rang,
+          decision: s.statut === 'VALIDE' ? 'Semestre validé' : 'Semestre ajourné'
+        }
+      })
+    }
+
+    console.log(`📋 [Backend] PlancheData préparé. Nombre d'étudiants:`, plancheData.students.length)
+
+    // Générer le PDF via le nouveau service
+    const uploadsDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+
+    const outputPath = path.join(uploadsDir, `planche_${classeId}_${Date.now()}.pdf`)
+    console.log(`🛠️ [Backend] Appel generatePlanchePDF vers ${outputPath}`)
+    await generatePlanchePDF(plancheData, outputPath)
+
+    // Télécharger le fichier
+    const fileName = `Planche_${classe?.nom}_${semestre}.pdf`
+    res.download(outputPath, fileName, (err) => {
+      if (err) console.error('Erreur envoi PDF:', err)
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+
+  } catch (error) {
+    console.error('❌ [Backend] ERREUR CRITIQUE Planche PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/**
+ * Générer et télécharger la planche ANNUELLE au format PDF
+ */
+router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const departementId = req.user?.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getAnnualPlancheData(classeId, departementId)
+    if (!result.success) return res.status(500).json(result)
+
+    // Infos classe pour l'en-tête
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres(nom), promotions(annee)')
+      .eq('id', classeId)
+      .single()
+
+    const plancheData = {
+      classe: {
+        nom: classe?.nom,
+        filiere: classe?.filieres?.nom
+      },
+      anneeUniversitaire: classe?.promotions?.annee,
+      semA: result.meta?.semestreA || 'S1',
+      semB: result.meta?.semestreB || 'S2',
+      students: result.data.map(s => ({
+        nom: s.etudiant.nom,
+        prenom: s.etudiant.prenom,
+        s1: s.s1,
+        s2: s.s2,
+        annuel: s.annuel
+      }))
+    }
+
+    const uploadsDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+
+    const outputPath = path.join(uploadsDir, `planche_annuelle_${classeId}_${Date.now()}.pdf`)
+    await generatePlancheAnnuelPDF(plancheData, outputPath)
+
+    res.download(outputPath, `Planche_Annuelle_${classe?.nom}.pdf`, (err) => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+  } catch (error) {
+    console.error('❌ [Backend] Erreur Planche Annuelle PDF:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })

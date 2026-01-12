@@ -25,10 +25,10 @@ export const getModulesByDepartement = async (departementId, filiereId = null) =
       success: true,
       modules: (modules || []).map(mod => {
         // Gérer le cas où affectations_module_enseignant n'est pas un tableau
-        const affectations = Array.isArray(mod.affectations_module_enseignant) 
-          ? mod.affectations_module_enseignant 
+        const affectations = Array.isArray(mod.affectations_module_enseignant)
+          ? mod.affectations_module_enseignant
           : (mod.affectations_module_enseignant ? [mod.affectations_module_enseignant] : [])
-        
+
         return {
           id: mod.id,
           code: mod.code,
@@ -38,6 +38,7 @@ export const getModulesByDepartement = async (departementId, filiereId = null) =
           filiere: mod.filieres ? `${mod.filieres.code} - ${mod.filieres.nom}` : '-',
           filiereId: mod.filiere_id,
           ue: mod.ue || 'UE1',
+          nom_ue: mod.nom_ue || '',
           enseignants: affectations.map(aff => ({
             id: aff.enseignants?.id,
             nom: aff.enseignants?.nom,
@@ -61,7 +62,7 @@ export const getModulesByDepartement = async (departementId, filiereId = null) =
 // Créer un nouveau module
 export const createModule = async (data, departementId) => {
   try {
-    const { code, nom, credit, semestre, filiereId, ue } = data
+    const { code, nom, credit, semestre, filiereId, ue, nom_ue } = data
 
     if (!code || !nom || !credit || !semestre || !filiereId || !ue) {
       return {
@@ -111,6 +112,7 @@ export const createModule = async (data, departementId) => {
         filiere_id: filiereId,
         departement_id: departementId,
         ue,
+        nom_ue,
         actif: data.actif !== undefined ? data.actif : true
       })
       .select('*, filieres (*)')
@@ -129,6 +131,7 @@ export const createModule = async (data, departementId) => {
         filiere: module.filieres ? `${module.filieres.code} - ${module.filieres.nom}` : '-',
         filiereId: module.filiere_id,
         ue: module.ue,
+        nom_ue: module.nom_ue,
         actif: module.actif
       }
     }
@@ -163,6 +166,7 @@ export const updateModule = async (id, data, departementId) => {
       credit: data.credit ? parseInt(data.credit) : existing.credit,
       semestre: data.semestre,
       ue: data.ue || existing.ue || 'UE1',
+      nom_ue: data.nom_ue !== undefined ? data.nom_ue : existing.nom_ue,
       actif: data.actif !== undefined ? data.actif : existing.actif
     }
 
@@ -211,6 +215,17 @@ export const updateModule = async (id, data, departementId) => {
 
     if (error) throw error
 
+    // Synchroniser le nom de l'UE pour tous les modules de la même UE dans cette filière et ce semestre
+    if (data.nom_ue !== undefined && data.nom_ue !== existing.nom_ue) {
+      await supabaseAdmin
+        .from('modules')
+        .update({ nom_ue: data.nom_ue })
+        .eq('ue', updateData.ue)
+        .eq('filiere_id', updateData.filiere_id || existing.filiere_id)
+        .eq('semestre', updateData.semestre || existing.semestre)
+        .eq('departement_id', departementId)
+    }
+
     return {
       success: true,
       module: {
@@ -222,6 +237,7 @@ export const updateModule = async (id, data, departementId) => {
         filiere: module.filieres ? `${module.filieres.code} - ${module.filieres.nom}` : '-',
         filiereId: module.filiere_id,
         ue: module.ue,
+        nom_ue: module.nom_ue,
         actif: module.actif
       }
     }

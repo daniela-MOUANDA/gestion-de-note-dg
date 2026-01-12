@@ -42,6 +42,7 @@ const RepartitionClasseView = lazy(() => import('./views/chef/RepartitionClasses
 const EmploiDuTempsChefDepartementView = lazy(() => import('./views/chef-departement/EmploiDuTempsView'))
 const NotesChefDepartementView = lazy(() => import('./views/chef-departement/NotesView'))
 const RelevesNotesView = lazy(() => import('./views/chef-departement/RelevesNotesView'))
+const PlanchesView = lazy(() => import('./views/chef-departement/PlanchesView'))
 const BulletinsChefDepartementView = lazy(() => import('./views/chef-departement/BulletinsView'))
 const StatistiquesChefDepartementView = lazy(() => import('./views/chef-departement/StatistiquesView'))
 const MessagerieChefView = lazy(() => import('./views/chef/MessagerieChefView'))
@@ -316,6 +317,14 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
                   <RelevesNotesView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chef/planches"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <PlanchesView />
                 </ProtectedRoute>
               }
             />
@@ -731,8 +740,15 @@ function App() {
                 <div className="min-h-screen flex items-center justify-center bg-slate-50">
                   <div className="text-center">
                     <h1 className="text-4xl font-bold text-slate-800 mb-4">404</h1>
-                    <p className="text-slate-600 mb-6">Page non trouvée</p>
-                    <Navigate to="/login" replace />
+                    <p className="text-slate-600 mb-6">Page non trouvée : {window.location.pathname}</p>
+                    {/* Temporairement désactivé pour debugger */}
+                    {/* <Navigate to="/login" replace /> */}
+                    <button
+                      onClick={() => window.location.href = '/login'}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Retour à la connexion
+                    </button>
                   </div>
                 </div>
               }

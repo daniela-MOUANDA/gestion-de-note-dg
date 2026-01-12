@@ -59,7 +59,7 @@ const RelevesNotesView = () => {
             if (result.success) {
                 setBulletinData(result.data || [])
                 setMetaData(result.meta)
-                
+
                 // Messages informatifs selon les métadonnées
                 if (result.meta) {
                     console.log('📊 Métadonnées:', {
@@ -68,7 +68,7 @@ const RelevesNotesView = () => {
                         notesCount: result.meta.notesCount,
                         parametresCount: result.meta.parametresCount
                     })
-                    
+
                     if (result.data && result.data.length === 0) {
                         if (result.meta.etudiantsCount === 0) {
                             showAlert('Aucun étudiant inscrit dans cette classe', 'warning')
@@ -211,13 +211,12 @@ const RelevesNotesView = () => {
                                                 const prevMod = index > 0 ? bulletinData[0].modules[index - 1] : null
                                                 const prevUE = prevMod?.ue || 'UE1'
                                                 const isFirstOfUE = ue !== prevUE
-                                                
+
                                                 return (
-                                                    <th 
-                                                        key={mod.id} 
-                                                        className={`px-2 py-3 text-center text-xs font-semibold text-slate-700 border-l min-w-[100px] ${
-                                                            isFirstOfUE ? 'border-l-2 border-l-blue-400 bg-blue-50/30' : 'border-slate-100'
-                                                        }`}
+                                                    <th
+                                                        key={mod.id}
+                                                        className={`px-2 py-3 text-center text-xs font-semibold text-slate-700 border-l min-w-[100px] ${isFirstOfUE ? 'border-l-2 border-l-blue-400 bg-blue-50/30' : 'border-slate-100'
+                                                            }`}
                                                     >
                                                         <div className="truncate w-24 mx-auto" title={mod.nom}>
                                                             {mod.code}
@@ -225,8 +224,8 @@ const RelevesNotesView = () => {
                                                         <div className="text-[10px] text-slate-500 font-normal">
                                                             ({mod.credit} Crédits)
                                                         </div>
-                                                        <div className="text-[9px] font-bold text-blue-600 mt-0.5">
-                                                            {ue}
+                                                        <div className="text-[9px] font-bold text-blue-600 mt-0.5 truncate" title={mod.nom_ue || ue}>
+                                                            {mod.nom_ue ? `${ue}: ${mod.nom_ue}` : ue}
                                                         </div>
                                                     </th>
                                                 )
@@ -263,13 +262,12 @@ const RelevesNotesView = () => {
                                                     const prevMod = index > 0 ? item.modules[index - 1] : null
                                                     const prevUE = prevMod?.ue || 'UE1'
                                                     const isFirstOfUE = ue !== prevUE
-                                                    
+
                                                     return (
-                                                        <td 
-                                                            key={mod.id} 
-                                                            className={`px-2 py-3 text-center border-l ${
-                                                                isFirstOfUE ? 'border-l-2 border-l-blue-400 bg-blue-50/30' : 'border-slate-100'
-                                                            }`}
+                                                        <td
+                                                            key={mod.id}
+                                                            className={`px-2 py-3 text-center border-l ${isFirstOfUE ? 'border-l-2 border-l-blue-400 bg-blue-50/30' : 'border-slate-100'
+                                                                }`}
                                                         >
                                                             {mod.moyenne !== null && mod.moyenne !== undefined ? (
                                                                 <span className={`text-sm font-medium ${mod.valide ? 'text-green-600' : 'text-red-600'}`}>

@@ -32,6 +32,7 @@ const ModulesView = () => {
     semestre: '',
     filiereId: '',
     ue: 'UE1',
+    nom_ue: '',
     actif: true
   })
 
@@ -136,6 +137,7 @@ const ModulesView = () => {
       semestre: '',
       filiereId: '',
       ue: 'UE1',
+      nom_ue: '',
       actif: true
     })
     setShowModal(true)
@@ -150,6 +152,7 @@ const ModulesView = () => {
       semestre: module.semestre,
       filiereId: module.filiereId,
       ue: module.ue || 'UE1',
+      nom_ue: module.nom_ue || '',
       actif: module.actif
     })
     setShowModal(true)
@@ -487,7 +490,7 @@ const ModulesView = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${module.ue === 'UE1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
                             }`}>
-                            {module.ue || 'UE1'}
+                            {module.nom_ue ? `${module.ue} - ${module.nom_ue}` : (module.ue || 'UE1')}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-slate-600">{module.filiere || '-'}</td>
@@ -582,31 +585,26 @@ const ModulesView = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Unité d'Enseignement (UE) *</label>
-                <div className="flex gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="ue"
-                      value="UE1"
-                      checked={formData.ue === 'UE1'}
-                      onChange={(e) => setFormData({ ...formData, ue: e.target.value })}
-                      className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-slate-700">UE1</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="ue"
-                      value="UE2"
-                      checked={formData.ue === 'UE2'}
-                      onChange={(e) => setFormData({ ...formData, ue: e.target.value })}
-                      className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-slate-700">UE2</span>
-                  </label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Unité d'Enseignement (Code) *</label>
+                  <input
+                    type="text"
+                    value={formData.ue}
+                    onChange={(e) => setFormData({ ...formData, ue: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: UE1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'UE</label>
+                  <input
+                    type="text"
+                    value={formData.nom_ue}
+                    onChange={(e) => setFormData({ ...formData, nom_ue: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Mathématiques"
+                  />
                 </div>
               </div>
               {formData.nom && formData.semestre && (

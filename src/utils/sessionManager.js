@@ -18,7 +18,7 @@ let isFirstCheck = true // Flag pour la première vérification après connexion
 export const verifySessionConsistency = async (skipConsistencyCheck = false) => {
   try {
     const token = localStorage.getItem('token')
-    
+
     if (!token) {
       return { valid: false, error: 'Token manquant' }
     }
@@ -33,18 +33,18 @@ export const verifySessionConsistency = async (skipConsistencyCheck = false) => 
           const currentTime = Math.floor(Date.now() / 1000)
           const timeUntilExpiry = payload.exp - currentTime
           const oneHour = 3600 // 1 heure en secondes
-          
+
           // Si le token expire dans moins d'1 heure, demander un renouvellement
           const shouldRefresh = timeUntilExpiry < oneHour && timeUntilExpiry > 0
-          
+
           const result = await verifyToken(shouldRefresh)
-          
+
           // Si un nouveau token a été renvoyé, le mettre à jour
           if (result.token) {
             localStorage.setItem('token', result.token)
             console.log('✅ Token renouvelé automatiquement')
           }
-          
+
           if (!result.valid || !result.user) {
             return { valid: false, error: result.error || 'Session invalide' }
           }
@@ -56,18 +56,18 @@ export const verifySessionConsistency = async (skipConsistencyCheck = false) => 
             // Vérification CRITIQUE : Si l'ID change, c'est qu'un autre utilisateur s'est connecté
             // Il faut IMMÉDIATEMENT déconnecter pour éviter le basculement
             if (lastVerifiedUserId && lastVerifiedUserId !== result.user.id) {
-              console.error('❌ DÉTECTION CRITIQUE: Changement d\'utilisateur détecté!')
-              console.error('   Ancien ID:', lastVerifiedUserId)
-              console.error('   Nouveau ID:', result.user.id)
-              console.error('   ⚠️ ATTENTION: Un autre utilisateur s\'est connecté. Déconnexion immédiate.')
-              
+              console.error('🛡️ [sessionManager] DÉTECTION CRITIQUE: Changement d\'utilisateur détecté!')
+              console.error('🛡️ [sessionManager] Ancien ID:', lastVerifiedUserId)
+              console.error('🛡️ [sessionManager] Nouveau ID:', result.user.id)
+              console.error('🛡️ [sessionManager] ⚠️ ATTENTION: Un autre utilisateur s\'est connecté. Déconnexion immédiate.')
+
               // Supprimer immédiatement le token pour éviter tout basculement
               localStorage.removeItem('token')
               localStorage.removeItem('user')
-              
-              return { 
-                valid: false, 
-                error: 'Un autre utilisateur s\'est connecté. Veuillez vous reconnecter.' 
+
+              return {
+                valid: false,
+                error: 'Un autre utilisateur s\'est connecté. Veuillez vous reconnecter.'
               }
             }
 
@@ -77,14 +77,14 @@ export const verifySessionConsistency = async (skipConsistencyCheck = false) => 
               console.error('   Ancien rôle:', lastVerifiedUserRole)
               console.error('   Nouveau rôle:', result.user.role)
               console.error('   ⚠️ ATTENTION: Le rôle a changé. Déconnexion immédiate.')
-              
+
               // Supprimer immédiatement le token pour éviter tout basculement
               localStorage.removeItem('token')
               localStorage.removeItem('user')
-              
-              return { 
-                valid: false, 
-                error: 'Incohérence de session détectée. Veuillez vous reconnecter.' 
+
+              return {
+                valid: false,
+                error: 'Incohérence de session détectée. Veuillez vous reconnecter.'
               }
             }
           }
@@ -103,7 +103,7 @@ export const verifySessionConsistency = async (skipConsistencyCheck = false) => 
 
     // Si le décodage échoue, faire une vérification normale
     const result = await verifyToken(false)
-    
+
     if (!result.valid || !result.user) {
       return { valid: false, error: result.error || 'Session invalide' }
     }
@@ -140,7 +140,7 @@ export const startSessionMonitoring = (onSessionInvalid, interval = 120000) => {
     if (!result.valid) {
       // Ne déconnecter que si c'est une erreur critique (pas d'erreur réseau)
       if (result.error && !result.error.includes('réseau') && !result.error.includes('timeout')) {
-        console.warn('⚠️ Session invalide détectée:', result.error)
+        console.warn('🛡️ [sessionManager] Initial check failed:', result.error)
         if (onSessionInvalid) {
           onSessionInvalid(result.error)
         }

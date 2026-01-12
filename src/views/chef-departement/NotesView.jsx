@@ -1403,7 +1403,7 @@ const NotesView = () => {
                                     }}
                                     min="0"
                                     max={evaluation.noteMax}
-                                    step="0.25"
+                                    step="0.01"
                                     placeholder={`/${evaluation.noteMax}`}
                                     className="w-full px-2 py-1.5 text-sm text-center border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />

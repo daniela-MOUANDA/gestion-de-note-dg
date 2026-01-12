@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/chef-departement'
 
 // Fonction helper pour les requêtes
 const request = async (endpoint, options = {}) => {
@@ -10,8 +10,11 @@ const request = async (endpoint, options = {}) => {
   }
 
   const url = `${API_BASE_URL}${endpoint}`
-  console.log(`🌐 [API] ${options.method || 'GET'} ${url}`)
-  console.log(`🔑 [API] Token présent:`, !!token)
+  console.log(`🌐 [API Request] ${options.method || 'GET'} ${url}`)
+  console.log(`🔑 [API Request] Auth Headers:`, {
+    hasToken: !!token,
+    authHeader: headers.Authorization ? 'Bearer [PRESENT]' : 'NONE'
+  })
 
   try {
     const response = await fetch(url, {
@@ -73,7 +76,7 @@ export const verifierEtatBulletins = async (classeId, semestre) => {
 }
 
 export const getEtatBulletinsToutesClasses = async (semestre = null) => {
-  const url = semestre 
+  const url = semestre
     ? `/bulletins/etat-toutes-classes?semestre=${semestre}`
     : '/bulletins/etat-toutes-classes'
   return request(url)
@@ -400,9 +403,47 @@ export const getBulletinData = async (classeId, semestre) => {
   return request(`/releves/bulletin/${classeId}?semestre=${semestre}`)
 }
 
+export const getAnnualBulletinData = async (classeId) => {
+  return request(`/releves/annual/${classeId}`)
+}
+
 export const updateEmploiDuTempsId = async (id, data) => {
   return request(`/emploi-du-temps/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)
   })
+}
+
+export const exportPlanchePDF = async (classeId, semestre) => {
+  const token = localStorage.getItem('token')
+  const url = `${API_BASE_URL}/classes/${classeId}/planches/${semestre}/pdf`
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors du téléchargement de la planche')
+  }
+
+  return response.blob()
+}
+
+export const exportAnnualPlanchePDF = async (classeId) => {
+  const token = localStorage.getItem('token')
+  const url = `${API_BASE_URL}/classes/${classeId}/planches/annuel/pdf`
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors du téléchargement de la planche annuelle')
+  }
+
+  return response.blob()
 }

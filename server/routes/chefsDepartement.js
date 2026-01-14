@@ -67,6 +67,7 @@ import { getMention } from '../utils/mentions.js'
 import { generateBulletinPDF } from '../services/bulletinPDFGenerator.js'
 import { generatePlanchePDF } from '../services/planchePDFGenerator.js'
 import { generatePlancheAnnuelPDF } from '../services/plancheAnnuelPDFGenerator.js'
+import { generatePlancheExcel, generateAnnualExcel } from '../services/plancheExcelGenerator.js'
 import { getAnnualPlancheData } from '../../src/services/chefDepartement/plancheAnnuelService.js'
 import { fileURLToPath } from 'url'
 
@@ -1353,7 +1354,7 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
 
     // charger les données consolidées via le service de relevés
     // On réutilise getBulletinData qui calcule déjà tout pour la classe
-    const result = await getBulletinData(classeId, semestre)
+    const result = await getBulletinData(classeId, semestre, departementId)
 
     if (!result.success) {
       return res.status(500).json(result)
@@ -1426,6 +1427,71 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
 })
 
 /**
+ * Générer et télécharger la planche au format Excel
+ */
+router.get('/classes/:classeId/planches/:semestre/excel', async (req, res) => {
+  try {
+    const { classeId, semestre } = req.params
+    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom } = req.query
+    const departementId = req.user?.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getBulletinData(classeId, semestre, departementId)
+    if (!result.success) return res.status(500).json(result)
+
+    const { data: studentsData } = result
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres(nom, departements(code)), promotions(annee)')
+      .eq('id', classeId)
+      .single()
+
+    const plancheData = {
+      classe: {
+        nom: queryClasseNom || classe?.nom || 'Classe Inconnue',
+        filiere: queryFiliereNom || (Array.isArray(classe?.filieres) ? classe?.filieres[0]?.nom : classe?.filieres?.nom) || classe?.filiere?.nom || 'Filière Inconnue',
+        departement: (Array.isArray(classe?.filieres) ? (Array.isArray(classe?.filieres[0]?.departements) ? classe?.filieres[0]?.departements[0]?.code : classe?.filieres[0]?.departements?.code) : classe?.filieres?.departements?.code) || 'INPTIC'
+      },
+      anneeUniversitaire: classe?.promotions?.annee || '2024-2025',
+      semestre: semestre,
+      students: studentsData.map(s => ({
+        nom: s.etudiant?.nom || 'N/A',
+        prenom: s.etudiant?.prenom || '',
+        modules: (s.modules || []).map(m => ({
+          id: m.id,
+          nom: m.nom,
+          ue: m.ue,
+          nom_ue: m.nom_ue,
+          noteEtudiant: m.moyenne,
+          credit: m.credit
+        })),
+        uesValidees: s.uesValidees || [],
+        moyenneSemestre: s.moyenneGenerale,
+        totalCreditsValides: s.totalCreditsValides,
+        rangEtudiant: s.rang,
+        decision: s.statut === 'VALIDE' ? 'Semestre validé' : 'Semestre ajourné'
+      }))
+    }
+
+    const tempDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
+
+    const outputPath = path.join(tempDir, `planche_${classeId}_${Date.now()}.xlsx`)
+    await generatePlancheExcel(plancheData, outputPath)
+
+    res.download(outputPath, `Planche_${classe?.nom}_${semestre}.xlsx`, (err) => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+  } catch (error) {
+    console.error('❌ [Backend] Erreur Planche Excel:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/**
  * Générer et télécharger la planche ANNUELLE au format PDF
  */
 router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
@@ -1475,6 +1541,60 @@ router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
     })
   } catch (error) {
     console.error('❌ [Backend] Erreur Planche Annuelle PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/**
+ * Générer et télécharger la planche ANNUELLE au format Excel
+ */
+router.get('/classes/:classeId/planches/annuel/excel', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom } = req.query
+    const departementId = req.user?.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getAnnualPlancheData(classeId, departementId)
+    if (!result.success) return res.status(500).json(result)
+
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres(nom), promotions(annee)')
+      .eq('id', classeId)
+      .single()
+
+    const plancheData = {
+      classe: {
+        nom: classe?.nom,
+        filiere: classe?.filieres?.nom
+      },
+      anneeUniversitaire: classe?.promotions?.annee,
+      semA: result.meta?.semestreA || 'S1',
+      semB: result.meta?.semestreB || 'S2',
+      students: result.data.map(s => ({
+        nom: s.etudiant.nom,
+        prenom: s.etudiant.prenom,
+        s1: s.s1,
+        s2: s.s2,
+        annuel: s.annuel
+      }))
+    }
+
+    const tempDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
+
+    const outputPath = path.join(tempDir, `planche_annuelle_${classeId}_${Date.now()}.xlsx`)
+    await generateAnnualExcel(plancheData, outputPath)
+
+    res.download(outputPath, `Planche_Annuelle_${classe?.nom}.xlsx`, (err) => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+  } catch (error) {
+    console.error('❌ [Backend] Erreur Planche Annuelle Excel:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })

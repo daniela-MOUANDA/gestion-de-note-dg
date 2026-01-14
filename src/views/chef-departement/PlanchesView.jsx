@@ -8,7 +8,7 @@ import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
-import { getClasses, getBulletinData, exportPlanchePDF, exportAnnualPlanchePDF, getAnnualBulletinData } from '../../api/chefDepartement.js'
+import { getClasses, getBulletinData, exportPlanchePDF, exportPlancheExcel, exportAnnualPlanchePDF, exportAnnualPlancheExcel, getAnnualBulletinData } from '../../api/chefDepartement.js'
 import * as XLSX from 'xlsx'
 
 const PlanchesView = () => {
@@ -237,6 +237,42 @@ const PlanchesView = () => {
         }
     }
 
+    const exportToExcel = async () => {
+        if (!selectedClasse || !selectedSemestre) return
+
+        try {
+            setLoading(true)
+            const classInfo = getSelectedClasseInfo()
+            const classeNom = classInfo?.nom || 'Classe'
+            const filiereNom = classInfo?.filieres?.nom || ''
+
+            let blob
+            if (selectedSemestre === 'ANNUEL') {
+                blob = await exportAnnualPlancheExcel(selectedClasse, classeNom, filiereNom)
+            } else {
+                blob = await exportPlancheExcel(selectedClasse, selectedSemestre, classeNom, filiereNom)
+            }
+
+            // Créer un lien pour le téléchargement
+            const url = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+
+            link.setAttribute('download', `Planche_${classeNom}_${selectedSemestre}.xlsx`)
+
+            document.body.appendChild(link)
+            link.click()
+            link.parentNode.removeChild(link)
+
+            showAlert('Planche Excel générée avec succès', 'success')
+        } catch (error) {
+            console.error('Erreur export Excel:', error)
+            showAlert('Erreur lors de la génération du fichier Excel', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     return (
         <div className="min-h-screen bg-slate-50">
             <AdminSidebar />
@@ -291,7 +327,14 @@ const PlanchesView = () => {
                                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md"
                                     >
                                         <FontAwesomeIcon icon={faDownload} />
-                                        Télécharger Planche (PDF)
+                                        PDF
+                                    </button>
+                                    <button
+                                        onClick={exportToExcel}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md"
+                                    >
+                                        <FontAwesomeIcon icon={faTable} />
+                                        Excel
                                     </button>
                                 </>
                             )}

@@ -431,6 +431,31 @@ export const exportPlanchePDF = async (classeId, semestre) => {
   return response.blob()
 }
 
+export const exportPlancheExcel = async (classeId, semestre, classeNom = '', filiereNom = '') => {
+  const token = localStorage.getItem('token')
+  let url = `${API_BASE_URL}/classes/${classeId}/planches/${semestre}/excel`
+
+  const params = new URLSearchParams()
+  if (classeNom) params.append('classeNom', classeNom)
+  if (filiereNom) params.append('filiereNom', filiereNom)
+
+  if (params.toString()) {
+    url += `?${params.toString()}`
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors du téléchargement de la planche Excel')
+  }
+
+  return response.blob()
+}
+
 export const exportAnnualPlanchePDF = async (classeId) => {
   const token = localStorage.getItem('token')
   const url = `${API_BASE_URL}/classes/${classeId}/planches/annuel/pdf`
@@ -443,6 +468,31 @@ export const exportAnnualPlanchePDF = async (classeId) => {
 
   if (!response.ok) {
     throw new Error('Erreur lors du téléchargement de la planche annuelle')
+  }
+
+  return response.blob()
+}
+
+export const exportAnnualPlancheExcel = async (classeId, classeNom = '', filiereNom = '') => {
+  const token = localStorage.getItem('token')
+  let url = `${API_BASE_URL}/classes/${classeId}/planches/annuel/excel`
+
+  const params = new URLSearchParams()
+  if (classeNom) params.append('classeNom', classeNom)
+  if (filiereNom) params.append('filiereNom', filiereNom)
+
+  if (params.toString()) {
+    url += `?${params.toString()}`
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error('Erreur lors du téléchargement de la planche annuelle Excel')
   }
 
   return response.blob()

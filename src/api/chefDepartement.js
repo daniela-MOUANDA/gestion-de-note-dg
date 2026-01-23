@@ -136,6 +136,23 @@ export const affecterEtudiantsAClasse = async (data) => {
   })
 }
 
+/**
+ * Récupère TOUS les étudiants pour la répartition manuelle (filière, niveau, formation)
+ */
+export const getEtudiantsTouts = async (filiereId, niveauId, formation) => {
+  return request(`/repartition/etudiants-tous?filiereId=${filiereId}&niveauId=${niveauId}&formation=${formation}`)
+}
+
+/**
+ * Reclasse manuellement des étudiants par lot
+ */
+export const reclasserEtudiantsManuellement = async (data) => {
+  return request('/repartition/reclasser-manuel', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
 // ============================================
 // CLASSES
 // ============================================

@@ -123,7 +123,7 @@ export const getEtudiantByUserId = async (userId) => {
     let etudiantNotes = []
     let totalStudentsInClass = 0
     let totalStudentsWithNotes = 0
-    
+
     // Déterminer le semestre en cours (défini avant le bloc if pour être accessible partout)
     let semestreActuel = 'S1' // Valeur par défaut
     if (inscription) {
@@ -155,7 +155,7 @@ export const getEtudiantByUserId = async (userId) => {
         .eq('etudiant_id', etudiant.id)
         .eq('inscription_id', inscription.id)
         .eq('semestre', semestreActuel)
-      
+
       const { data: notesWithoutInscription } = await supabaseAdmin
         .from('notes')
         .select('*, modules(*)')
@@ -163,7 +163,7 @@ export const getEtudiantByUserId = async (userId) => {
         .eq('classe_id', inscription.classe_id)
         .eq('semestre', semestreActuel)
         .is('inscription_id', null)
-      
+
       // Combiner les deux résultats
       notesData = [
         ...(notesWithInscription || []),
@@ -245,7 +245,7 @@ export const getEtudiantByUserId = async (userId) => {
 
       if (allInsc) {
         totalStudentsInClass = allInsc.length
-        
+
         // OPTIMISATION : Récupérer toutes les notes de tous les étudiants en une seule requête
         const inscriptionIds = allInsc.map(i => i.id)
         const { data: allNotesData } = await supabaseAdmin
@@ -266,7 +266,7 @@ export const getEtudiantByUserId = async (userId) => {
           allNotesData.forEach(note => {
             const etudiantId = inscriptionToStudentMap[note.inscription_id] || note.inscriptions?.etudiant_id
             if (!etudiantId) return
-            
+
             if (!notesByStudent[etudiantId]) {
               notesByStudent[etudiantId] = []
             }
@@ -276,11 +276,11 @@ export const getEtudiantByUserId = async (userId) => {
 
         // Calculer les moyennes uniquement pour les étudiants qui ont des notes
         const studentAverages = []
-        
+
         // Fonction helper pour calculer la moyenne d'un étudiant
         const calculateStudentAverage = (notes) => {
           if (!notes || notes.length === 0) return 0
-          
+
           // Organiser les notes par module
           const notesByModule = {}
           notes.forEach(note => {
@@ -313,7 +313,7 @@ export const getEtudiantByUserId = async (userId) => {
             sumNotesWeighted += (moyenneModule * coef)
             sumCoefs += coef
           })
-          
+
           return sumCoefs > 0 ? sumNotesWeighted / sumCoefs : 0
         }
 
@@ -426,8 +426,45 @@ export const getEtudiantByUserId = async (userId) => {
 
 export const deleteEtudiant = async (etudiantId) => {
   try {
+    // 1. Récupérer le matricule/email de l'étudiant pour trouver son compte utilisateur
+    const { data: etudiant } = await supabaseAdmin
+      .from('etudiants')
+      .select('matricule, email')
+      .eq('id', etudiantId)
+      .single()
+
+    // 2. Supprimer l'étudiant (cascade sur inscriptions, etc. si configuré, sinon devra être géré)
+    // Supabase gère souvent les cascades, mais le compte utilisateur n'est pas lié par une FK stricte dans ce code
     const { error } = await supabaseAdmin.from('etudiants').delete().eq('id', etudiantId)
     if (error) throw error
+
+    // 3. Supprimer le compte utilisateur associé s'il existe
+    if (etudiant && etudiant.matricule) {
+      console.log(`🗑️ Suppression du compte utilisateur associé au matricule: ${etudiant.matricule}`)
+
+      // Essayer de supprimer par username = matricule
+      const { error: userError } = await supabaseAdmin
+        .from('utilisateurs')
+        .delete()
+        .eq('username', etudiant.matricule)
+
+      if (userError) {
+        console.error('Erreur suppression compte utilisateur (username):', userError)
+      } else {
+        console.log('✅ Compte utilisateur supprimé avec succès (username)')
+      }
+
+      // Par sécurité, si un compte existe avec l'email mais un username différent (cas rare)
+      if (etudiant.email) {
+        const { error: emailError } = await supabaseAdmin
+          .from('utilisateurs')
+          .delete()
+          .eq('email', etudiant.email)
+
+        if (!emailError) console.log('✅ Nettoyage par email effectué')
+      }
+    }
+
     return { success: true }
   } catch (error) {
     console.error('Erreur deleteEtudiant:', error)

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faUser,
   faEnvelope,
   faPhone,
@@ -16,7 +16,7 @@ import { uploadProfilePhoto, getCurrentUser } from '../../api/auth'
 const ProfilAdminView = () => {
   const { user, logout, isAuthenticated, updateUser } = useAuth()
   const navigate = useNavigate()
-  
+
   // Rediriger vers la page de connexion si l'utilisateur n'est pas authentifié
   useEffect(() => {
     if (!isAuthenticated && !user) {
@@ -29,7 +29,7 @@ const ProfilAdminView = () => {
   const [uploadSuccess, setUploadSuccess] = useState('')
   const [loading, setLoading] = useState(true)
   const [userData, setUserData] = useState(null)
-  
+
   const getRoleLabel = (role) => {
     if (!role) return 'Utilisateur'
     const labels = {
@@ -64,7 +64,7 @@ const ProfilAdminView = () => {
 
       try {
         setLoading(true)
-        
+
         // Utiliser d'abord les données du contexte (toujours disponibles)
         const role = user.role || ''
         const userEmail = user.email || ''
@@ -81,11 +81,11 @@ const ProfilAdminView = () => {
           service: getServiceLabel(role),
           poste: getRoleLabel(role)
         }
-        
+
         // Afficher immédiatement les données du contexte
         setUserData(initialData)
         setLoading(false)
-        
+
         // Ensuite, essayer de récupérer les données complètes depuis l'API en arrière-plan
         // MAIS seulement si l'ID et l'email correspondent exactement à celui de l'utilisateur connecté
         try {
@@ -192,7 +192,7 @@ const ProfilAdminView = () => {
             poste: getRoleLabel(role)
           }
           setUserData(newUserData)
-          
+
           // Mettre à jour le contexte AuthContext pour que le header se mette à jour
           if (updateUser && updatedUser.photo) {
             updateUser({ photo: updatedUser.photo })
@@ -202,7 +202,7 @@ const ProfilAdminView = () => {
     } catch (error) {
       const errorMessage = error.message || 'Erreur lors de l\'upload de la photo'
       setUploadError(errorMessage)
-      
+
       // Ne déconnecter que si c'est vraiment une erreur de session expirée (pas juste "Token invalide")
       // Attendre un peu pour voir si c'est une erreur temporaire
       if (errorMessage.includes('session a expiré') && !errorMessage.includes('Token invalide')) {
@@ -221,7 +221,7 @@ const ProfilAdminView = () => {
     }
   }
 
-  const photoUrl = userData?.photo 
+  const photoUrl = userData?.photo
     ? (userData.photo.startsWith('http') ? userData.photo : `http://localhost:3000${userData.photo}`)
     : null
 
@@ -235,8 +235,8 @@ const ProfilAdminView = () => {
     )
   }
 
-  const nomComplet = userData.prenom && userData.nom 
-    ? `${userData.prenom} ${userData.nom}` 
+  const nomComplet = userData.prenom && userData.nom
+    ? `${userData.prenom} ${userData.nom}`
     : userData.email || 'Utilisateur'
 
   return (
@@ -249,36 +249,45 @@ const ProfilAdminView = () => {
       </div>
 
       {/* Carte de la photo de profil */}
-      <div className="flex justify-center mb-6">
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200 w-80 h-80 flex flex-col items-center justify-center">
-          <div className="relative group mb-3">
-            <div 
-              className="w-40 h-40 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-all duration-300 overflow-hidden relative border-4 border-white"
+      {/* En-tête du profil avec Layout Pro */}
+      <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6 mb-8">
+        <div className="flex flex-col md:flex-row gap-8 items-start">
+          {/* Colonne Gauche: Photo (Carré) */}
+          <div className="relative group shrink-0 mx-auto md:mx-0">
+            <div
+              className="w-48 h-48 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-50 border-4 border-white shadow-lg overflow-hidden relative cursor-pointer group-hover:shadow-xl transition-all duration-300"
               onClick={handlePhotoClick}
-              title="Cliquer pour changer la photo"
             >
               {photoUrl ? (
-                <img 
-                  src={photoUrl} 
+                <img
+                  src={photoUrl}
                   alt={nomComplet}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.style.display = 'none'
                   }}
                 />
-              ) : null}
-              {!photoUrl && (
-                <FontAwesomeIcon icon={faUser} className="text-4xl" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                  <FontAwesomeIcon icon={faUser} className="text-6xl" />
+                </div>
               )}
-              {/* Overlay avec icône caméra au survol */}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
-                {isUploading ? (
-                  <FontAwesomeIcon icon={faSpinner} className="text-white text-2xl animate-spin" />
-                ) : (
-                  <FontAwesomeIcon icon={faCamera} className="text-white text-2xl" />
-                )}
+
+              {/* Overlay Upload */}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                <div className="flex flex-col items-center text-white">
+                  {isUploading ? (
+                    <FontAwesomeIcon icon={faSpinner} className="text-3xl animate-spin mb-2" />
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faCamera} className="text-3xl mb-2" />
+                      <span className="text-xs font-medium">Modifier la photo</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -286,37 +295,59 @@ const ProfilAdminView = () => {
               onChange={handlePhotoChange}
               className="hidden"
             />
+
+            {(uploadError || uploadSuccess) && (
+              <div className={`mt-2 text-xs text-center md:text-left ${uploadError ? 'text-red-600' : 'text-green-600'}`}>
+                {uploadError || uploadSuccess}
+              </div>
+            )}
           </div>
-          {(uploadError || uploadSuccess) && (
-            <div className={`text-xs mb-2 ${uploadError ? 'text-red-600' : 'text-green-600'}`}>
-              {uploadError || uploadSuccess}
+
+          {/* Colonne Droite: Informations */}
+          <div className="flex-1 text-center md:text-left space-y-4 pt-2">
+            <div>
+              <h2 className="text-3xl font-bold text-slate-800 tracking-tight">
+                {userData.prenom} {userData.nom}
+              </h2>
+              <p className="text-lg text-blue-600 font-medium mt-1">
+                {userData.poste}
+              </p>
+              <div className="h-1 w-20 bg-blue-600 rounded-full mt-3 mx-auto md:mx-0 opacity-20"></div>
             </div>
-          )}
-          <div className="text-center">
-            <h2 className="text-lg font-bold text-slate-800 mb-1">
-              {nomComplet}
-            </h2>
-            <p className="text-xs text-slate-600 mb-2">
-              {userData.poste} - {userData.service}
-            </p>
-            <div className="flex flex-wrap justify-center gap-1.5 mb-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 shadow-sm">
-                <FontAwesomeIcon icon={faCheckCircle} className="mr-1 text-xs" />
-                Utilisateur actif
+
+            <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium tracking-wide bg-blue-50 text-blue-700 border border-blue-200">
+                {userData.service}
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <FontAwesomeIcon icon={faCheckCircle} className="mr-1.5" />
+                Compte Actif
+              </span>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
                 {userData.role ? userData.role.replace(/_/g, ' ') : 'Utilisateur'}
               </span>
             </div>
-            <div className="flex flex-col items-center gap-1 text-xs text-slate-600">
-              <div className="flex items-center">
-                <FontAwesomeIcon icon={faEnvelope} className="mr-1.5 text-blue-600 text-xs" />
-                <span className="truncate max-w-[200px]">{userData.email}</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 mt-6 pt-6 border-t border-slate-100">
+              <div className="flex items-center justify-center md:justify-start group transition-colors duration-200">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mr-3 group-hover:bg-blue-100 transition-colors">
+                  <FontAwesomeIcon icon={faEnvelope} />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Email</span>
+                  <span className="text-sm font-medium text-slate-700">{userData.email}</span>
+                </div>
               </div>
+
               {userData.telephone && userData.telephone !== 'N/A' && (
-                <div className="flex items-center">
-                  <FontAwesomeIcon icon={faPhone} className="mr-1.5 text-blue-600 text-xs" />
-                  {userData.telephone}
+                <div className="flex items-center justify-center md:justify-start group transition-colors duration-200">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mr-3 group-hover:bg-blue-100 transition-colors">
+                    <FontAwesomeIcon icon={faPhone} />
+                  </div>
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Téléphone</span>
+                    <span className="text-sm font-medium text-slate-700">{userData.telephone}</span>
+                  </div>
                 </div>
               )}
             </div>

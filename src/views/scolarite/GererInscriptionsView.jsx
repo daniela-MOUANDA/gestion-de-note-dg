@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
   faIdCard, faMoneyBillWave, faImage, faUpload, faUser, faCalendar,
   faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt, faBook, faTrash,
@@ -32,8 +32,8 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 const GererInscriptionsView = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  
-  
+
+
   const { showAlert, success, error: alertError } = useAlert()
   const { user } = useAuth()
   const [typeInscription, setTypeInscription] = useState('inscription')
@@ -48,7 +48,7 @@ const GererInscriptionsView = () => {
   const [viewMode, setViewMode] = useState('grid') // 'grid' ou 'list'
   const [showCredentialsModal, setShowCredentialsModal] = useState(false)
   const [studentCredentials, setStudentCredentials] = useState(null)
-  
+
   // États pour les données de la base
   const [formations, setFormations] = useState([])
   const [filieres, setFilieres] = useState([])
@@ -56,7 +56,7 @@ const GererInscriptionsView = () => {
   const [promotions, setPromotions] = useState([])
   const [etudiants, setEtudiants] = useState([])
   const [loading, setLoading] = useState(false)
-  
+
   // États pour l'édition
   const [editingInfo, setEditingInfo] = useState(false)
   const [etudiantInfo, setEtudiantInfo] = useState({})
@@ -68,7 +68,7 @@ const GererInscriptionsView = () => {
   })
   const [uploading, setUploading] = useState({})
   const [dossierComplet, setDossierComplet] = useState(null)
-  
+
   // Charger les formations et filières au montage
   useEffect(() => {
     const loadData = async () => {
@@ -96,7 +96,7 @@ const GererInscriptionsView = () => {
     }
     loadData()
   }, [])
-  
+
   // Charger les niveaux quand formation et filière sont sélectionnés
   useEffect(() => {
     if (selectedFormation && selectedFiliere) {
@@ -113,7 +113,7 @@ const GererInscriptionsView = () => {
       setNiveaux([])
     }
   }, [selectedFormation, selectedFiliere])
-  
+
   // Charger les étudiants quand filière, niveau, formation et promotion sont sélectionnés
   useEffect(() => {
     if (selectedFiliere && selectedNiveau && selectedFormation && selectedPromotion) {
@@ -159,7 +159,7 @@ const GererInscriptionsView = () => {
       if (selectedEtudiant && selectedEtudiant.inscriptionId) {
         try {
           setLoading(true)
-          
+
           // Vérifier que le token existe avant de faire l'appel
           const token = localStorage.getItem('token')
           if (!token) {
@@ -167,18 +167,18 @@ const GererInscriptionsView = () => {
             navigate('/login', { replace: true })
             return
           }
-          
+
           const response = await getDossierEtudiant(selectedEtudiant.id, selectedEtudiant.inscriptionId)
           // La réponse de l'API est { success: true, dossier: {...} }
           const dossier = response.dossier || response
           setDossierComplet(dossier)
           setSelectedInscription(dossier.inscription ? { id: dossier.inscription.id } : { id: selectedEtudiant.inscriptionId })
-          
+
           // Charger les parents
           const parentsData = await getParents(selectedEtudiant.id)
           const parentsList = Array.isArray(parentsData) ? parentsData : (parentsData.parents || [])
           setParents(parentsList)
-          
+
           // Initialiser les données des parents
           const newParentData = {
             PERE: { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' },
@@ -198,7 +198,7 @@ const GererInscriptionsView = () => {
             }
           })
           setParentData(newParentData)
-          
+
           // Initialiser les informations de l'étudiant
           setEtudiantInfo({
             email: dossier.etudiant?.email || '',
@@ -250,9 +250,9 @@ const GererInscriptionsView = () => {
   // Valider qu'au moins un parent est renseigné
   const hasAtLeastOneParent = (parents) => {
     if (!parents || parents.length === 0) return false
-    return parents.some(parent => 
-      parent.nom && 
-      parent.prenom && 
+    return parents.some(parent =>
+      parent.nom &&
+      parent.prenom &&
       parent.telephone
     )
   }
@@ -291,23 +291,23 @@ const GererInscriptionsView = () => {
       alertError('Aucune inscription sélectionnée')
       return
     }
-    
+
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = documentType === 'photo' ? 'image/*' : '.pdf'
     input.onchange = async (e) => {
       const file = e.target.files[0]
       if (!file) return
-      
+
       try {
         setUploading({ ...uploading, [documentType]: true })
         const result = await uploadDocumentInscription(selectedInscription.id, documentType, file)
         success(`Document ${documentType} uploadé avec succès!`)
-        
+
         // Recharger le dossier
         const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
         setDossierComplet(dossier.dossier)
-        
+
         // Mettre à jour la liste des étudiants
         const etudiantsData = await getEtudiantsParFiliereNiveau(
           selectedFiliere,
@@ -332,21 +332,21 @@ const GererInscriptionsView = () => {
       alertError('Aucune inscription sélectionnée')
       return
     }
-    
+
     // Confirmation avant suppression
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce document ? Vous pourrez ensuite uploader un nouveau document.')) {
       return
     }
-    
+
     try {
       setUploading({ ...uploading, [documentType]: true })
       await deleteDocumentInscription(selectedInscription.id, documentType)
       success('Document supprimé avec succès!')
-      
+
       // Recharger le dossier
       const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
       setDossierComplet(dossier.dossier)
-      
+
       // Mettre à jour la liste des étudiants
       const etudiantsData = await getEtudiantsParFiliereNiveau(
         selectedFiliere,
@@ -372,13 +372,13 @@ const GererInscriptionsView = () => {
       navigate('/login', { replace: true })
       return
     }
-    
+
     try {
       setLoading(true)
       await updateEtudiantInfo(selectedEtudiant.id, etudiantInfo)
       success('Informations mises à jour avec succès!')
       setEditingInfo(false)
-      
+
       // Recharger le dossier
       const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
       setDossierComplet(dossier.dossier || dossier)
@@ -401,12 +401,12 @@ const GererInscriptionsView = () => {
       navigate('/login', { replace: true })
       return
     }
-    
+
     try {
       setUploading({ ...uploading, photoProfil: true })
       const result = await uploadPhotoEtudiant(selectedEtudiant.id, file)
       success('Photo de profil uploadée avec succès!')
-      
+
       // Recharger le dossier
       const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
       setDossierComplet(dossier.dossier || dossier)
@@ -426,11 +426,11 @@ const GererInscriptionsView = () => {
       setLoading(true)
       await upsertParent(selectedEtudiant.id, parentData)
       success('Parent enregistré avec succès!')
-      
+
       // Recharger le dossier complet pour mettre à jour la validation
       const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
       setDossierComplet(dossier.dossier || dossier)
-      
+
       // Recharger les parents
       const parentsData = await getParents(selectedEtudiant.id)
       const parentsList = Array.isArray(parentsData) ? parentsData : (parentsData.parents || [])
@@ -451,7 +451,7 @@ const GererInscriptionsView = () => {
 
     // Confirmation avant suppression
     const confirmMessage = `Êtes-vous sûr de vouloir supprimer l'étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} ?\n\nCette action est irréversible et supprimera également toutes ses inscriptions et données associées.`
-    
+
     if (!window.confirm(confirmMessage)) {
       return
     }
@@ -460,11 +460,11 @@ const GererInscriptionsView = () => {
       setLoading(true)
       await deleteEtudiant(selectedEtudiant.id)
       success(`L'étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été supprimé avec succès`)
-      
+
       // Retourner à la liste et recharger les étudiants
       setSelectedEtudiant(null)
       setDossierComplet(null)
-      
+
       // Recharger la liste des étudiants
       if (selectedFiliere && selectedNiveau) {
         const etudiantsData = await getEtudiantsParFiliereNiveau(
@@ -489,7 +489,7 @@ const GererInscriptionsView = () => {
       alertError('Aucune inscription sélectionnée')
       return
     }
-    
+
     // Validation complète
     const validation = canFinalizeInscription()
     if (!validation.valid) {
@@ -500,11 +500,11 @@ const GererInscriptionsView = () => {
       }
       return
     }
-    
+
     try {
       setLoading(true)
       const result = await finaliserInscription(selectedInscription.id, user.id)
-      
+
       // Afficher les identifiants dans une modal
       if (result.password) {
         setStudentCredentials({
@@ -515,21 +515,21 @@ const GererInscriptionsView = () => {
         })
         setShowCredentialsModal(true)
       }
-      
-      const message = typeInscription === 'inscription' 
+
+      const message = typeInscription === 'inscription'
         ? `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`
         : `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été réinscrit avec succès!`
       success(message)
-      
+
       // Recharger le dossier pour mettre à jour le statut
       const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
       const dossierData = dossier.dossier || dossier
       setDossierComplet(dossierData)
-      
+
       // Recharger les parents
       const parentsData = await getParents(selectedEtudiant.id)
       setParents(Array.isArray(parentsData) ? parentsData : (parentsData.parents || []))
-      
+
       // Recharger la liste
       const etudiantsData = await getEtudiantsParFiliereNiveau(
         selectedFiliere,
@@ -563,14 +563,14 @@ const GererInscriptionsView = () => {
                 Sélectionnez le type de formation pour commencer
               </p>
             </div>
-            
+
             {/* Dropdown pour choisir entre Inscription et Réinscription */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-md p-6 border-2 border-blue-200 mb-6">
               <label className="block text-lg font-bold text-slate-800 mb-3">
                 Type d'opération
               </label>
-              <select 
-                value={typeInscription} 
+              <select
+                value={typeInscription}
                 onChange={(e) => setTypeInscription(e.target.value)}
                 className="w-full px-5 py-4 border-2 border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-800 font-semibold text-lg bg-white cursor-pointer transition-all hover:border-blue-400"
               >
@@ -662,7 +662,7 @@ const GererInscriptionsView = () => {
                 <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
               </button>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-                {typeInscription === 'inscription' ? 'Inscriptions' : 'Réinscriptions'} - {filieres.find(f => f.id === selectedFiliere)?.nom || filieres.find(f => f.id === selectedFiliere)?.code}
+                {typeInscription === 'inscription' ? 'Inscriptions' : 'Réinscriptions'} - {filieres.find(f => f.id === selectedFiliere)?.code || filieres.find(f => f.id === selectedFiliere)?.nom}
               </h1>
               <p className="text-sm sm:text-base text-slate-600">Sélectionnez le niveau d'études</p>
             </div>
@@ -708,7 +708,7 @@ const GererInscriptionsView = () => {
         </div>
       )
     }
-    
+
     const dossier = dossierComplet || {
       etudiant: selectedEtudiant,
       inscription: {
@@ -719,7 +719,7 @@ const GererInscriptionsView = () => {
     const isAlreadyFinalized = dossier.inscription?.statut === 'INSCRIT'
     const validation = canFinalizeInscription()
     const canFinalize = validation.valid && !isAlreadyFinalized
-    
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
         <AdminSidebar />
@@ -739,17 +739,16 @@ const GererInscriptionsView = () => {
                     {typeInscription === 'inscription' ? 'Inscription' : 'Réinscription'} • {filieres.find(f => f.id === selectedFiliere)?.nom || 'Filière'} • {niveaux.find(n => n.id === selectedNiveau)?.nom || niveaux.find(n => n.id === selectedNiveau)?.code || 'Niveau'}
                   </p>
                 </div>
-                <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${
-                  isAlreadyFinalized 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : documentsComplete 
-                      ? 'bg-green-100 text-green-700' 
+                <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${isAlreadyFinalized
+                    ? 'bg-blue-100 text-blue-700'
+                    : documentsComplete
+                      ? 'bg-green-100 text-green-700'
                       : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {isAlreadyFinalized 
-                    ? '✓ Déjà inscrit' 
-                    : documentsComplete 
-                      ? '✓ Dossier complet' 
+                  }`}>
+                  {isAlreadyFinalized
+                    ? '✓ Déjà inscrit'
+                    : documentsComplete
+                      ? '✓ Dossier complet'
                       : '⚠ Documents manquants'}
                 </span>
               </div>
@@ -760,7 +759,7 @@ const GererInscriptionsView = () => {
                 <div className="text-center mb-4">
                   <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
                     {dossier.etudiant.photo ? (
-                      <img 
+                      <img
                         src={dossier.etudiant.photo.startsWith('http') ? dossier.etudiant.photo : `http://localhost:3000${dossier.etudiant.photo}`}
                         alt={`${dossier.etudiant.prenom} ${dossier.etudiant.nom}`}
                         className="w-full h-full object-cover rounded-full"
@@ -902,14 +901,14 @@ const GererInscriptionsView = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Section Parents */}
             <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200 mb-6">
               <h3 className="text-lg font-bold text-slate-800 mb-4">Informations sur les parents</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {['PERE', 'MERE', 'TUTEUR'].map((type) => {
                   const currentParentData = parentData[type] || { nom: '', prenom: '', telephone: '', email: '', profession: '', adresse: '' }
-                  
+
                   const handleParentChange = (field, value) => {
                     setParentData({
                       ...parentData,
@@ -919,13 +918,13 @@ const GererInscriptionsView = () => {
                       }
                     })
                   }
-                  
+
                   const handleParentBlur = () => {
                     if (currentParentData.nom && currentParentData.prenom) {
                       handleSaveParent({ ...currentParentData, type })
                     }
                   }
-                  
+
                   return (
                     <div key={type} className="border border-slate-200 rounded-lg p-4">
                       <h4 className="font-semibold text-slate-800 mb-3">
@@ -1052,7 +1051,7 @@ const GererInscriptionsView = () => {
                             </div>
                           </div>
                         ) : (
-                          <button 
+                          <button
                             onClick={() => handleFileUpload(docType)}
                             disabled={uploading[docType]}
                             className="w-full mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
@@ -1081,14 +1080,13 @@ const GererInscriptionsView = () => {
                     Inscription déjà finalisée
                   </div>
                 ) : (
-                  <button 
-                    onClick={handleFinaliserInscription} 
+                  <button
+                    onClick={handleFinaliserInscription}
                     disabled={!canFinalize || loading}
-                    className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${
-                      canFinalize && !loading 
-                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${canFinalize && !loading
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
                         : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                    }`}
+                      }`}
                     title={!canFinalize && !isAlreadyFinalized ? validation.reason : ''}
                   >
                     {loading ? (
@@ -1118,7 +1116,7 @@ const GererInscriptionsView = () => {
   // Vue 4: Liste des étudiants
   const etudiantsFiltres = etudiants.filter(e => {
     if (!e) return false
-    
+
     // Filtre par statut d'inscription
     if (filtreInscrit === 'inscrits' && !(e.inscrit || e.statut === 'INSCRIT')) {
       return false
@@ -1126,7 +1124,7 @@ const GererInscriptionsView = () => {
     if (filtreInscrit === 'non-inscrits' && (e.inscrit || e.statut === 'INSCRIT')) {
       return false
     }
-    
+
     // Filtre par recherche textuelle
     const nomComplet = `${e.nom || ''} ${e.prenom || ''}`.toLowerCase()
     const matricule = (e.matricule || '').toLowerCase()
@@ -1157,12 +1155,12 @@ const GererInscriptionsView = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Rechercher par nom ou matricule..." 
-                  value={searchQuery} 
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom ou matricule..."
+                  value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                  className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="sm:w-64">
@@ -1179,22 +1177,20 @@ const GererInscriptionsView = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    viewMode === 'grid' 
-                      ? 'bg-blue-500 text-white border-blue-500' 
+                  className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${viewMode === 'grid'
+                      ? 'bg-blue-500 text-white border-blue-500'
                       : 'bg-white text-slate-700 hover:bg-slate-50'
-                  }`}
+                    }`}
                   title="Vue grille"
                 >
                   <FontAwesomeIcon icon={faTh} />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    viewMode === 'list' 
-                      ? 'bg-blue-500 text-white border-blue-500' 
+                  className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${viewMode === 'list'
+                      ? 'bg-blue-500 text-white border-blue-500'
                       : 'bg-white text-slate-700 hover:bg-slate-50'
-                  }`}
+                    }`}
                   title="Vue liste"
                 >
                   <FontAwesomeIcon icon={faList} />
@@ -1229,7 +1225,7 @@ const GererInscriptionsView = () => {
                       <div className="flex items-start gap-4 mb-4">
                         <div className="relative w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
                           {etudiant.photo ? (
-                            <img 
+                            <img
                               src={etudiant.photo.startsWith('http') ? etudiant.photo : `http://localhost:3000${etudiant.photo}`}
                               alt={`${etudiant.prenom || ''} ${etudiant.nom || ''}`}
                               className="w-full h-full object-cover rounded-full"
@@ -1255,9 +1251,8 @@ const GererInscriptionsView = () => {
                           <p className="text-sm text-slate-600">{etudiant.matricule || 'N/A'}</p>
                           <p className="text-sm text-slate-600">{etudiant.email || 'Email non renseigné'}</p>
                         </div>
-                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                          docsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${docsComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
                           {docsComplete ? '✓ Complet' : '⚠ Incomplet'}
                         </span>
                       </div>
@@ -1268,7 +1263,7 @@ const GererInscriptionsView = () => {
                             // Vérifier si le document est uploadé (peut être string ou objet)
                             const docData = etudiant.documents?.[doc]
                             const isUploaded = typeof docData === 'string' ? !!docData : docData?.uploaded || false
-                            
+
                             // Labels pour l'affichage
                             const labels = {
                               acteNaissance: 'Acte',
@@ -1278,11 +1273,10 @@ const GererInscriptionsView = () => {
                               releveBac: 'Relevé Bac',
                               attestationReussiteBac: 'Attest. Bac'
                             }
-                            
+
                             return (
-                              <span key={doc} className={`text-xs px-2 py-1 rounded ${
-                                isUploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                              }`}>
+                              <span key={doc} className={`text-xs px-2 py-1 rounded ${isUploaded ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                }`}>
                                 {labels[doc] || doc}
                               </span>
                             )
@@ -1290,13 +1284,13 @@ const GererInscriptionsView = () => {
                         </div>
                       </div>
                       {etudiant.inscrit || etudiant.statut === 'INSCRIT' ? (
-                        <button 
+                        <button
                           onClick={() => setSelectedEtudiant(etudiant)}
                           className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
                           <FontAwesomeIcon icon={faCheckCircle} />Déjà inscrit - Voir le dossier
                         </button>
                       ) : (
-                        <button 
+                        <button
                           onClick={() => setSelectedEtudiant(etudiant)}
                           className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2">
                           <FontAwesomeIcon icon={faEye} />Voir le dossier
@@ -1332,17 +1326,16 @@ const GererInscriptionsView = () => {
                         attestationReussiteBac: 'Attest. Bac'
                       }
                       return (
-                        <tr 
-                          key={etudiant.id} 
-                          className={`hover:bg-blue-50 transition-all duration-200 ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
-                          }`}
+                        <tr
+                          key={etudiant.id}
+                          className={`hover:bg-blue-50 transition-all duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                            }`}
                         >
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-4">
                               <div className="relative w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-base overflow-hidden flex-shrink-0 ring-2 ring-blue-100">
                                 {etudiant.photo ? (
-                                  <img 
+                                  <img
                                     src={etudiant.photo.startsWith('http') ? etudiant.photo : `http://localhost:3000${etudiant.photo}`}
                                     alt={`${etudiant.prenom || ''} ${etudiant.nom || ''}`}
                                     className="w-full h-full object-cover rounded-full"
@@ -1393,22 +1386,21 @@ const GererInscriptionsView = () => {
                                 ✓ Inscrit
                               </span>
                             ) : (
-                              <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-block w-fit ${
-                                docsComplete ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-amber-100 text-amber-700 border border-amber-300'
-                              }`}>
+                              <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-block w-fit ${docsComplete ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-amber-100 text-amber-700 border border-amber-300'
+                                }`}>
                                 {docsComplete ? '✓ Complet' : '⚠ Incomplet'}
                               </span>
                             )}
                           </td>
                           <td className="px-6 py-5 text-center">
                             {etudiant.inscrit || etudiant.statut === 'INSCRIT' ? (
-                              <button 
+                              <button
                                 onClick={() => setSelectedEtudiant(etudiant)}
                                 className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
                                 <FontAwesomeIcon icon={faCheckCircle} />Voir
                               </button>
                             ) : (
-                              <button 
+                              <button
                                 onClick={() => setSelectedEtudiant(etudiant)}
                                 className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
                                 <FontAwesomeIcon icon={faEye} />Voir
@@ -1463,7 +1455,7 @@ const GererInscriptionsView = () => {
                   <FontAwesomeIcon icon={faIdCard} className="text-blue-600" />
                   Identifiants de connexion
                 </h3>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>

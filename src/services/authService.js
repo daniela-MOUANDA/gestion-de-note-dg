@@ -36,7 +36,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
           )
         `)
         .eq('matricule', matricule.trim())
-        .eq('inscriptions.statut', 'INSCRIT')
+        .in('inscriptions.statut', ['INSCRIT', 'EN_ATTENTE'])
         .single()
 
       if (etudiantError || !etudiant) {

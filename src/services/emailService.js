@@ -98,132 +98,183 @@ export const sendStudentCredentials = async (etudiant, password, matricule) => {
   <meta charset="UTF-8">
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       line-height: 1.6;
       color: #333;
       max-width: 600px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      margin: 20px auto;
     }
     .header {
-      background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+      background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
       color: white;
-      padding: 30px;
+      padding: 40px 20px;
       text-align: center;
-      border-radius: 10px 10px 0 0;
+    }
+    .logo {
+      background-color: white;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .logo img {
+      max-width: 60px;
+      max-height: 60px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
     }
     .content {
-      background: #f9fafb;
       padding: 30px;
-      border: 1px solid #e5e7eb;
-      border-top: none;
+    }
+    .welcome-text {
+      font-size: 16px;
+      color: #374151;
+      margin-bottom: 25px;
     }
     .credentials-box {
-      background: white;
-      border: 2px solid #3B82F6;
-      border-radius: 8px;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #3b82f6;
+      border-radius: 6px;
       padding: 20px;
-      margin: 20px 0;
+      margin: 25px 0;
     }
-    .credential-item {
-      margin: 15px 0;
-      padding: 10px;
-      background: #f3f4f6;
-      border-radius: 5px;
+    .credential-row {
+      display: flex;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+    .credential-row:last-child {
+      margin-bottom: 0;
     }
     .credential-label {
-      font-weight: bold;
-      color: #1f2937;
-      display: inline-block;
-      min-width: 120px;
+      font-weight: 600;
+      width: 120px;
+      color: #64748b;
     }
     .credential-value {
-      color: #3B82F6;
-      font-weight: bold;
-      font-family: monospace;
+      color: #1e293b;
+      font-family: 'Consolas', monospace;
+      font-weight: 600;
+      font-size: 16px;
+      background-color: #e2e8f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .cta-button {
+      display: block;
+      width: fit-content;
+      margin: 30px auto;
+      background-color: #3b82f6;
+      color: white;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      transition: background-color 0.3s;
+    }
+    .cta-button:hover {
+      background-color: #2563eb;
+    }
+    .security-notice {
+      background-color: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-top: 25px;
+      display: flex;
+      align-items: start;
+    }
+    .security-icon {
+      margin-right: 10px;
+      font-size: 18px;
     }
     .footer {
-      background: #1f2937;
-      color: white;
+      background-color: #1f2937;
+      color: #9ca3af;
       padding: 20px;
       text-align: center;
-      border-radius: 0 0 10px 10px;
       font-size: 12px;
+      border-top: 1px solid #374151;
     }
-    .warning {
-      background: #fef3c7;
-      border-left: 4px solid #f59e0b;
-      padding: 15px;
-      margin: 20px 0;
-      border-radius: 5px;
-    }
-    .button {
-      display: inline-block;
-      background: #3B82F6;
-      color: white;
-      padding: 12px 30px;
-      text-decoration: none;
-      border-radius: 5px;
-      margin: 20px 0;
+    .footer p {
+      margin: 5px 0;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>🎓 Bienvenue à l'INPTIC</h1>
-    <p>Votre inscription a été finalisée avec succès</p>
-  </div>
-  
-  <div class="content">
-    <p>Bonjour <strong>${etudiant.prenom} ${etudiant.nom}</strong>,</p>
-    
-    <p>Votre inscription à l'Institut National de la Poste, des Technologies de l'Information et de la Communication (INPTIC) a été finalisée avec succès.</p>
-    
-    <p>Vous pouvez maintenant accéder à votre espace étudiant en utilisant les identifiants suivants :</p>
-    
-    <div class="credentials-box">
-      <h3 style="margin-top: 0; color: #3B82F6;">🔐 Vos identifiants de connexion</h3>
-      
-      <div class="credential-item">
-        <span class="credential-label">📧 Email :</span>
-        <span class="credential-value">${etudiant.email}</span>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <img src="${process.env.FRONTEND_URL || 'http://localhost:5173'}/images/logo.png" alt="INPTIC Logo">
       </div>
-      
-      <div class="credential-item">
-        <span class="credential-label">🆔 Matricule :</span>
-        <span class="credential-value">${matricule}</span>
-      </div>
-      
-      <div class="credential-item">
-        <span class="credential-label">🔑 Mot de passe :</span>
-        <span class="credential-value">${password}</span>
-      </div>
+      <h1>Bienvenue à l'INPTIC</h1>
     </div>
     
-    <div class="warning">
-      <strong>⚠️ Important :</strong> Pour des raisons de sécurité, nous vous recommandons fortement de changer ce mot de passe lors de votre première connexion.
+    <div class="content">
+      <p class="welcome-text">Bonjour <strong>${etudiant.prenom} ${etudiant.nom}</strong>,</p>
+      
+      <p class="welcome-text">
+        Nous sommes ravis de vous confirmer votre inscription. Votre compte étudiant a été créé avec succès.
+        Vous pouvez dès à présent accéder à votre espace numérique pour consulter vos notes, emplois du temps et documents.
+      </p>
+      
+      <div class="credentials-box">
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #1e3a8a; font-size: 18px;">🔐 Vos identifiants de connexion</h3>
+        
+        <div class="credential-row">
+          <span class="credential-label">Email :</span>
+          <span class="credential-value" style="background: none; padding-left: 0;">${etudiant.email}</span>
+        </div>
+        
+        <div class="credential-row">
+          <span class="credential-label">Matricule :</span>
+          <span class="credential-value">${matricule}</span>
+        </div>
+        
+        <div class="credential-row">
+          <span class="credential-label">Mot de passe :</span>
+          <span class="credential-value">${password}</span>
+        </div>
+      </div>
+      
+      <div class="security-notice">
+        <span class="security-icon">⚠️</span>
+        <div>
+          <strong>Sécurité :</strong> Ce mot de passe est temporaire. Nous vous recommandons vivement de le modifier dès votre première connexion via les paramètres de votre profil.
+        </div>
+      </div>
+      
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login-etudiant" class="cta-button">Accéder à mon Espace Étudiant</a>
+      
+      <p style="font-size: 14px; color: #64748b; margin-top: 30px;">
+        Si vous rencontrez des difficultés pour vous connecter, n'hésitez pas à contacter le service informatique ou la scolarité.
+      </p>
     </div>
     
-    <p>Pour accéder à votre espace étudiant :</p>
-    <ol>
-      <li>Rendez-vous sur la page de connexion : <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login-etudiant">${process.env.FRONTEND_URL || 'http://localhost:5173'}/login-etudiant</a></li>
-      <li>Entrez votre email, votre matricule et votre mot de passe</li>
-      <li>Une fois connecté, vous pourrez accéder à toutes les fonctionnalités de votre espace étudiant</li>
-    </ol>
-    
-    <div style="text-align: center;">
-      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login-etudiant" class="button">Accéder à mon espace étudiant</a>
+    <div class="footer">
+      <p><strong>INPTIC</strong> - Institut National de la Poste, des Technologies de l'Information et de la Communication</p>
+      <p>Ceci est un message automatique, merci de ne pas y répondre directement.</p>
     </div>
-    
-    <p>Si vous avez des questions ou besoin d'assistance, n'hésitez pas à contacter le service de scolarité.</p>
-    
-    <p>Cordialement,<br>
-    <strong>Service de Scolarité - INPTIC</strong></p>
-  </div>
-  
-  <div class="footer">
-    <p>Institut National de la Poste, des Technologies de l'Information et de la Communication (INPTIC)</p>
-    <p>Cet email a été envoyé automatiquement, merci de ne pas y répondre.</p>
   </div>
 </body>
 </html>
@@ -271,8 +322,8 @@ Service de Scolarité - INPTIC
     })
     // Ne pas faire échouer la finalisation si l'email échoue
     // Mais retourner l'erreur pour information
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: error.message,
       details: {
         code: error.code,

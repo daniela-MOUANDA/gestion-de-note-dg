@@ -196,7 +196,7 @@ function drawStudentInfo(doc, student, classe, semestre) {
             optionLabel = "Option: Développement d'Applications Réparties"
         } else if (filiereLabel.includes('Réseaux') || classe.code?.includes('RT')) {
             optionLabel = "Option: AZUR"
-        } else if (filiereLabel.includes('Multimédia') || classe.code?.includes('MMI')) {
+        } else if (filiereLabel.includes('Multimédia') || filiereLabel.includes('Techniques') || classe.code?.includes('MTIC') || classe.code?.includes('MMI')) {
             optionLabel = "Option: Web mastering"
         } else if (classe.option) {
             optionLabel = `Option: ${classe.option}` // Fallback si présent

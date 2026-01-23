@@ -230,13 +230,30 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             }
         }
 
-        // 4. Récupérer les paramètres pour chaque module
-        console.log('DEBUG: Querying parametres...')
-        const moduleIds = modules.map(m => m.id)
+        // 4. Récupérer toutes les notes (DÉPLACÉ AVANT LES PARAMÈTRES)
+        const etudiantIds = etudiants.map(e => e.id)
+        const { data: notes, error: errorNotes } = await supabaseAdmin
+            .from('notes')
+            .select('*, modules(id, code, nom, filiere_id)')
+            .eq('semestre', semestre)
+            .in('etudiant_id', etudiantIds)
+
+        if (errorNotes) {
+            console.error('DEBUG: Notes error', errorNotes)
+            throw errorNotes
+        }
+
+        // 5. Récupérer les paramètres pour TOUS les modules (Locaux + Étrangers trouvés dans les notes)
+        const localModuleIds = modules.map(m => m.id)
+        const foreignModuleIds = notes ? [...new Set(notes.map(n => n.module_id))] : []
+        const allModuleIds = [...new Set([...localModuleIds, ...foreignModuleIds])]
+
+        console.log('DEBUG: Querying parametres for', allModuleIds.length, 'modules')
+
         const { data: parametresList, error: errorParams } = await supabaseAdmin
             .from('parametres_notation')
             .select('*')
-            .in('module_id', moduleIds)
+            .in('module_id', allModuleIds)
             .eq('semestre', semestre)
 
         if (errorParams) console.error('DEBUG: Params error', errorParams)
@@ -264,45 +281,59 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             console.log(`⚠️ Modules sans paramètres:`, modulesSansParametres.map(m => m.code).join(', '))
         }
 
-        // 5. Récupérer toutes les notes pour cette classe et ce semestre
-        // Important: On récupère TOUTES les notes, pas seulement celles des modules de la filière
-        // car un module peut avoir été créé pour une autre filière mais utilisé pour cette classe
-        console.log('DEBUG: Querying notes...')
-        console.log('DEBUG: Recherche notes pour classe_id:', classeId, 'semestre:', semestre)
-        const { data: notes, error: errorNotes } = await supabaseAdmin
-            .from('notes')
-            .select('*, modules(id, code, nom, filiere_id)')
-            .eq('classe_id', classeId)
-            .eq('semestre', semestre)
 
-        if (errorNotes) {
-            console.error('DEBUG: Notes error', errorNotes)
-            throw errorNotes
-        }
-        console.log('DEBUG: Notes found', notes?.length)
-        if (notes && notes.length > 0) {
-            console.log('DEBUG: Exemple de note:', notes[0])
-            // Afficher les différents evaluation_id trouvés
-            const evalIds = [...new Set(notes.map(n => n.evaluation_id).filter(Boolean))]
-            console.log('DEBUG: Evaluation IDs trouvés dans les notes:', evalIds.slice(0, 10))
 
-            // Grouper les notes par module
-            const notesByModule = {}
-            notes.forEach(n => {
-                if (!notesByModule[n.module_id]) notesByModule[n.module_id] = []
-                notesByModule[n.module_id].push(n)
-            })
-            Object.keys(notesByModule).forEach(moduleId => {
-                const module = modules.find(m => m.id === moduleId)
-                const noteModule = notesByModule[moduleId][0]?.modules
-                console.log(`📝 Notes pour module ${module?.code || noteModule?.code || moduleId}: ${notesByModule[moduleId].length}`)
-                if (noteModule && !module) {
-                    console.log(`⚠️ Module ${noteModule.code} utilisé dans les notes mais pas dans la liste des modules de la filière (filiere_id: ${noteModule.filiere_id} vs attendu: ${filiereId})`)
+
+        // --- PRÉPARATION DU MAPPING INTELLIGENT DES NOTES ---
+        // But : Permettre de retrouver une note même si l'ID du module ou de l'évaluation diffère (cas des étudiants reclassés)
+
+        // 1. Indexer les Signatures d'Évaluation (Type + Index -> ID) pour chaque Module ID
+        // Map: ModuleID -> { EvalID -> "TYPE_INDEX" }
+        const evalSignatureByModuleId = {}
+
+        if (parametresList) {
+            parametresList.forEach(p => {
+                const moduleId = p.module_id
+                if (!evalSignatureByModuleId[moduleId]) evalSignatureByModuleId[moduleId] = {}
+
+                if (p.evaluations) {
+                    p.evaluations.forEach(e => {
+                        // On suppose que l'ordre et le type sont constants entre les formations
+                        for (let i = 1; i <= e.nombreEvaluations; i++) {
+                            const evalId = `${e.id}_${i}`
+                            const signature = `${e.type}_${i}`
+                            evalSignatureByModuleId[moduleId][evalId] = signature
+                        }
+                    })
                 }
             })
-        } else {
-            console.log('⚠️ Aucune note trouvée dans la base de données pour cette classe et ce semestre')
         }
+
+        // 2. Indexer les Notes par Étudiant -> CodeModule -> SignatureÉvaluation
+        const studentNotesMap = {}
+        if (notes) {
+            notes.forEach(n => {
+                const etudId = n.etudiant_id
+                const modCode = n.modules?.code
+                const modId = n.module_id
+                const evalId = n.evaluation_id
+
+                if (!etudId || !modCode || !modId || !evalId) return
+
+                // Trouver la signature de cette note (selon son module d'origine)
+                const signatures = evalSignatureByModuleId[modId]
+                const signature = signatures ? signatures[evalId] : null
+
+                if (signature) {
+                    if (!studentNotesMap[etudId]) studentNotesMap[etudId] = {}
+                    if (!studentNotesMap[etudId][modCode]) studentNotesMap[etudId][modCode] = {}
+
+                    // On stocke la note indexée par sa signature fonctionnelle
+                    studentNotesMap[etudId][modCode][signature] = n
+                }
+            })
+        }
+        console.log(`🧠 Smart Mapping prêt : ${Object.keys(studentNotesMap).length} étudiants indexés`)
 
         // 6. Calcul des moyennes et rangs
         console.log('DEBUG: Calcul des moyennes pour', etudiants.length, 'étudiants')
@@ -334,11 +365,23 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 evaluationsConfig.forEach(evaluation => {
                     for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
                         const evalId = `${evaluation.id}_${i}`
-                        const noteEntry = notes.find(n =>
+
+                        // Stratégie 1: Recherche stricte (ID exact)
+                        let noteEntry = notes.find(n =>
                             n.etudiant_id === etudiant.id &&
                             n.module_id === module.id &&
                             n.evaluation_id === evalId
                         )
+
+                        // Stratégie 2: Recherche intelligente (Code Module + Signature Éval)
+                        // Si non trouvé (étudiant reclassé ?)
+                        if (!noteEntry && module.code) {
+                            const targetSignature = evalSignatureByModuleId[module.id] ? evalSignatureByModuleId[module.id][evalId] : null
+
+                            if (targetSignature && studentNotesMap[etudiant.id] && studentNotesMap[etudiant.id][module.code]) {
+                                noteEntry = studentNotesMap[etudiant.id][module.code][targetSignature]
+                            }
+                        }
 
                         if (noteEntry) {
                             const noteSur20 = (noteEntry.valeur / evaluation.noteMax) * 20
@@ -450,10 +493,10 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
             let moyenneFinale = moyenneGenerale
 
-            if (deptCode === 'RSN' && (filiereCode === 'RT' || filiereCode === 'GI')) {
+            if (deptCode === 'RSN' && (filiereCode === 'RT' || filiereCode === 'GI') || deptCode === 'MTIC') {
                 // Formule demandée: (Total Points) / 30
                 moyenneFinale = parseFloat((totalPointsSemestre / 30).toFixed(2))
-                console.log(`📊 Formule Spéciale RSN (${filiereCode}) pour ${etudiant.nom}: (${totalPointsSemestre} / 30) = ${moyenneFinale}`)
+                console.log(`📊 Formule Spéciale RSN/MTIC pour ${etudiant.nom}: (${totalPointsSemestre} / 30) = ${moyenneFinale}`)
             } else {
                 // Pour les autres, on utilise la moyenne sur les crédits attendus (Syllabus)
                 // pour être cohérent avec la validation

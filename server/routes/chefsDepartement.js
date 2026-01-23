@@ -15,7 +15,9 @@ import {
   getEtudiantsPourRepartition,
   createClassesFromRepartition,
   getNiveaux,
-  getEtudiantsByClasse
+  getEtudiantsByClasse,
+  getEtudiantsPourRepartitionManuelle,
+  reclasserEtudiantsManuellement
 } from '../../src/services/chefDepartementService.js'
 import {
   getModulesByDepartement,
@@ -432,6 +434,36 @@ router.post('/repartition/affecter-classe', async (req, res) => {
 
     const { affecterEtudiantsAClasse } = await import('../../src/services/chefDepartementService.js')
     const result = await affecterEtudiantsAClasse(departementId, filiereId, niveauId, classeId, inscriptionIds, formation)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/repartition/etudiants-tous', async (req, res) => {
+  try {
+    const { filiereId, niveauId, formation } = req.query
+    const departementId = req.user.departementId
+
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await getEtudiantsPourRepartitionManuelle(departementId, filiereId, niveauId, formation)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.post('/repartition/reclasser-manuel', async (req, res) => {
+  try {
+    const { filiereId, niveauId, classeId, inscriptionIds, mode } = req.body
+    const departementId = req.user.departementId
+
+    if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    const result = await reclasserEtudiantsManuellement(departementId, filiereId, niveauId, classeId, inscriptionIds, mode)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
   } catch (error) {
@@ -1006,6 +1038,15 @@ router.get('/bulletins/classe/:classeId', async (req, res) => {
       promotion = dernierePromotion
     }
 
+    // Récupérer les inscrits actifs de la classe
+    const { data: inscriptions } = await supabaseAdmin
+      .from('inscriptions')
+      .select('etudiant_id')
+      .eq('classe_id', classeId)
+      .eq('statut', 'INSCRIT')
+
+    const validStudentIds = inscriptions ? inscriptions.map(i => i.etudiant_id) : []
+
     // Récupérer les bulletins
     const { data: bulletins, error: bulletinsError } = await supabaseAdmin
       .from('bulletins')
@@ -1025,6 +1066,7 @@ router.get('/bulletins/classe/:classeId', async (req, res) => {
       .eq('promotion_id', promotion.id)
       .eq('classe_id', classeId)
       .eq('semestre', semestre)
+      .in('etudiant_id', validStudentIds)
 
     if (bulletinsError) throw bulletinsError
 

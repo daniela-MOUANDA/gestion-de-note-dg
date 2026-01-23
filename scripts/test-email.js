@@ -1,72 +1,81 @@
+import nodemailer from 'nodemailer'
 import dotenv from 'dotenv'
-import { sendStudentCredentials } from '../src/services/emailService.js'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-// Charger les variables d'environnement
-dotenv.config()
+// Configuration de l'environnement
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+// Charger le .env depuis la racine du projet
+const envPath = path.resolve(__dirname, '../.env')
+console.log(`📂 Chargement du fichier .env depuis : ${envPath}`)
+const result = dotenv.config({ path: envPath })
 
-async function testEmail() {
-  console.log('\n🧪 Test de configuration SMTP\n')
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  
-  // Afficher la configuration (sans le mot de passe complet)
-  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER
-  const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com'
-  const smtpPort = parseInt(process.env.SMTP_PORT || '587')
-  
-  console.log('📋 Configuration SMTP:')
-  console.log(`   Host: ${smtpHost}`)
-  console.log(`   Port: ${smtpPort}`)
-  console.log(`   User: ${smtpUser || '❌ NON DÉFINI'}`)
-  console.log(`   Pass: ${smtpPass ? '✅ Défini (' + smtpPass.length + ' caractères)' : '❌ NON DÉFINI'}`)
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-
-  if (!smtpUser || !smtpPass) {
-    console.error('❌ Configuration SMTP incomplète!')
-    console.log('\n💡 Pour configurer SMTP, ajoutez dans votre fichier .env:')
-    console.log('   SMTP_HOST=smtp.gmail.com')
-    console.log('   SMTP_PORT=587')
-    console.log('   SMTP_USER=votre-email@gmail.com')
-    console.log('   SMTP_PASS=votre-mot-de-passe-application')
-    process.exit(1)
-  }
-
-  // Test avec un email fictif
-  console.log('📤 Test d\'envoi d\'email...\n')
-  
-  const testEtudiant = {
-    nom: 'TEST',
-    prenom: 'Étudiant',
-    email: smtpUser // Envoyer à l'adresse SMTP pour test
-  }
-  
-  const testPassword = 'Test123!@#'
-  const testMatricule = '26000'
-
-  try {
-    const result = await sendStudentCredentials(testEtudiant, testPassword, testMatricule)
-    
-    if (result.success) {
-      console.log('\n✅ Test réussi!')
-      console.log(`   Email envoyé avec succès (Message ID: ${result.messageId})`)
-      console.log(`   Vérifiez votre boîte de réception: ${testEtudiant.email}`)
-    } else {
-      console.error('\n❌ Échec de l\'envoi:')
-      console.error(`   Erreur: ${result.error}`)
-      if (result.details) {
-        console.error(`   Détails:`, result.details)
-      }
-    }
-  } catch (error) {
-    console.error('\n❌ Erreur lors du test:')
-    console.error(`   ${error.message}`)
-    if (error.code) {
-      console.error(`   Code: ${error.code}`)
-    }
-  }
-  
-  console.log('\n')
+if (result.error) {
+  console.error('❌ Erreur lors du chargement de .env:', result.error)
+} else {
+  console.log('✅ Fichier .env chargé avec succès')
 }
 
-testEmail()
+// Vérification des variables
+const config = {
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  user: process.env.SMTP_USER,
+  // Masquer le mot de passe dans les logs
+  pass: process.env.SMTP_PASS ? '********' : 'NON DÉFINI'
+}
 
+console.log('📝 Configuration SMTP trouvée :', config)
+
+if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  console.error('❌ Erreur : SMTP_USER ou SMTP_PASS manquant dans le fichier .env')
+  process.exit(1)
+}
+
+// Création du transporteur
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: parseInt(process.env.SMTP_PORT) === 465, // true pour 465, false pour les autres
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  },
+  tls: {
+    rejectUnauthorized: false // Utile pour certains serveurs mail d'entreprise mal configurés
+  }
+})
+
+// Test de connexion
+console.log('🔄 Tentative de connexion au serveur SMTP...')
+
+transporter.verify(function (error, success) {
+  if (error) {
+    console.error('❌ Échec de la connexion SMTP :')
+    console.error(error)
+  } else {
+    console.log('✅ Connexion SMTP réussie ! Le serveur est prêt à envoyer des messages.')
+
+    // Envoi d'un mail de test
+    const mailOptions = {
+      from: `"Test INPTIC" <${process.env.SMTP_USER}>`,
+      to: process.env.SMTP_USER, // S'envoyer le mail à soi-même pour tester
+      subject: "Test de configuration Email INPTIC",
+      text: "Si vous recevez ce message, c'est que la configuration SMTP fonctionne correctement !",
+      html: "<h1>Test réussi !</h1><p>Si vous recevez ce message, c'est que la configuration SMTP fonctionne correctement !</p>"
+    }
+
+    console.log(`📧 Tentative d'envoi d'un mail de test à ${process.env.SMTP_USER}...`)
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error('❌ Erreur lors de l\'envoi du mail de test :', error)
+      } else {
+        console.log('✅ Email envoyé avec succès !')
+        console.log('ID du message :', info.messageId)
+        console.log('Réponse du serveur :', info.response)
+      }
+    })
+  }
+})

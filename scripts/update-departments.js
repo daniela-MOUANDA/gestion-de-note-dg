@@ -110,7 +110,7 @@ async function updateDepartments() {
     }
 
     if (mticDept) {
-        await upsertFiliere('MMI', 'Management et Multimedia de l\'Information', mticDept.id);
+        await upsertFiliere('MTIC', 'Management des Techniques de l\'Information et de la Communication', mticDept.id);
     }
 
     console.log('--- Terminé ---');

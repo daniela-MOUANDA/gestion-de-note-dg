@@ -2,18 +2,19 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useAuth } from '../../contexts/AuthContext'
-import { 
-  faHome, 
-  faFileAlt, 
-  faCalendarAlt, 
-  faGraduationCap, 
-  faExclamationTriangle, 
+import {
+  faHome,
+  faFileAlt,
+  faCalendarAlt,
+  faGraduationCap,
+  faExclamationTriangle,
   faQuestionCircle,
   faSignOutAlt,
   faBars,
   faTimes,
   faUser,
-  faBell
+  faBell,
+  faFolderOpen
 } from '@fortawesome/free-solid-svg-icons'
 
 const Sidebar = () => {
@@ -24,6 +25,7 @@ const Sidebar = () => {
 
   const menuItems = [
     { path: '/dashboard', icon: faHome, label: 'Tableau de bord' },
+    { path: '/mon-dossier', icon: faFolderOpen, label: 'Mon Dossier' },
     { path: '/documents', icon: faFileAlt, label: 'Documents' },
     { path: '/emploi-du-temps', icon: faCalendarAlt, label: 'Emploi du temps' },
     { path: '/notes', icon: faGraduationCap, label: 'Notes' },
@@ -39,9 +41,9 @@ const Sidebar = () => {
       <aside className="hidden lg:flex lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:z-30">
         <div className="w-64 h-full bg-gradient-to-b from-slate-800 to-slate-900 text-white shadow-xl overflow-y-auto">
           <div className="p-6 border-b border-slate-700">
-            <img 
-              src="/images/logo.png" 
-              alt="Logo INPTIC" 
+            <img
+              src="/images/logo.png"
+              alt="Logo INPTIC"
               className="h-20 w-auto object-contain mx-auto"
             />
           </div>
@@ -52,14 +54,13 @@ const Sidebar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center px-6 py-3.5 transition-all duration-200 ${
-                    isActive
+                  className={`flex items-center px-6 py-3.5 transition-all duration-200 ${isActive
                       ? 'bg-blue-600 text-white border-r-4 border-blue-400 shadow-lg'
                       : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                  }`}
+                    }`}
                 >
-                  <FontAwesomeIcon 
-                    icon={item.icon} 
+                  <FontAwesomeIcon
+                    icon={item.icon}
                     className={`mr-3 text-lg ${isActive ? 'text-white' : 'text-slate-400'}`}
                   />
                   <span className="font-medium text-sm">{item.label}</span>
@@ -83,9 +84,9 @@ const Sidebar = () => {
       {/* Sidebar Mobile - Hamburger Menu */}
       <div className="lg:hidden fixed top-0 left-0 z-50 w-full bg-gradient-to-b from-slate-800 to-slate-900 shadow-lg">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <img 
-            src="/images/logo.png" 
-            alt="Logo INPTIC" 
+          <img
+            src="/images/logo.png"
+            alt="Logo INPTIC"
             className="h-8 w-auto object-contain"
           />
           <button
@@ -104,15 +105,14 @@ const Sidebar = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center px-6 py-3.5 transition-all ${
-                    isActive
+                  className={`flex items-center px-6 py-3.5 transition-all ${isActive
                       ? 'bg-blue-600 text-white'
                       : 'text-slate-300 hover:bg-slate-700'
-                  }`}
+                    }`}
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <FontAwesomeIcon 
-                    icon={item.icon} 
+                  <FontAwesomeIcon
+                    icon={item.icon}
                     className="mr-3 text-lg"
                   />
                   <span className="font-medium">{item.label}</span>

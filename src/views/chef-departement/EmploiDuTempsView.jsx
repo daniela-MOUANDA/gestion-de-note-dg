@@ -98,7 +98,7 @@ const EmploiDuTempsView = () => {
     classeId: '',
     moduleId: '',
     enseignantId: '',
-    jour: 'LUNDI',
+    jours: ['LUNDI'], // Changé de 'jour' à 'jours' (tableau)
     heureDebut: '08:00',
     heureFin: '10:00',
     salle: '',
@@ -234,7 +234,7 @@ const EmploiDuTempsView = () => {
       classeId: selectedClasse,
       moduleId: '',
       enseignantId: '',
-      jour: 'LUNDI',
+      jours: ['LUNDI'],
       heureDebut: '08:00',
       heureFin: '10:00',
       salle: '',
@@ -257,7 +257,7 @@ const EmploiDuTempsView = () => {
       moduleId: cours.module?.id || '',
       enseignantId: cours.enseignant?.id || '',
       enseignantNom: cours.enseignant ? `${cours.enseignant.prenom} ${cours.enseignant.nom}` : '',
-      jour: cours.jour,
+      jours: [cours.jour],
       heureDebut: cours.heureDebut,
       heureFin: cours.heureFin,
       salle: cours.salle || '',
@@ -276,6 +276,11 @@ const EmploiDuTempsView = () => {
     // Validation
     if (!formData.classeId || !formData.moduleId || !formData.enseignantId || !formData.heureDebut || !formData.heureFin) {
       showAlert('Veuillez remplir les champs obligatoires', 'error')
+      return
+    }
+
+    if (formData.estRecurrent && (!formData.jours || formData.jours.length === 0)) {
+      showAlert('Veuillez sélectionner au moins un jour', 'error')
       return
     }
 
@@ -635,8 +640,9 @@ const EmploiDuTempsView = () => {
               {/* Type d'ajout */}
               <div className="flex gap-4 p-1 bg-slate-100 rounded-lg max-w-md mx-auto">
                 <button
-                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${formData.estRecurrent ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setFormData({ ...formData, estRecurrent: true })}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${formData.estRecurrent ? 'bg-white shadow text-blue-700' : 'text-slate-500 hover:text-slate-700'} ${formData.typeActivite === 'DEVOIR' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => formData.typeActivite !== 'DEVOIR' && setFormData({ ...formData, estRecurrent: true })}
+                  title={formData.typeActivite === 'DEVOIR' ? 'Un devoir est toujours un événement ponctuel' : ''}
                 >
                   <FontAwesomeIcon icon={faRepeat} className="mr-2" />
                   Cours Récurrent
@@ -702,8 +708,15 @@ const EmploiDuTempsView = () => {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Type Activité</label>
                     <select
                       value={formData.typeActivite}
-                      onChange={(e) => setFormData({ ...formData, typeActivite: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      onChange={(e) => {
+                        const newType = e.target.value;
+                        setFormData({
+                          ...formData,
+                          typeActivite: newType,
+                          estRecurrent: newType === 'DEVOIR' ? false : formData.estRecurrent
+                        });
+                      }}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="COURS">Cours Magistral</option>
                       <option value="TP">Travaux Pratiques (TP)</option>
@@ -790,14 +803,25 @@ const EmploiDuTempsView = () => {
                   {formData.estRecurrent ? (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Jour de la semaine *</label>
-                        <select
-                          value={formData.jour}
-                          onChange={(e) => setFormData({ ...formData, jour: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg bg-blue-50 border-blue-200 text-blue-800 font-medium"
-                        >
-                          {jours.map(j => <option key={j} value={j}>{j}</option>)}
-                        </select>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Jours de la semaine *</label>
+                        <div className="grid grid-cols-3 gap-2 pb-2">
+                          {jours.map(j => (
+                            <label key={j} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${formData.jours.includes(j) ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                              <input
+                                type="checkbox"
+                                className="hidden"
+                                checked={formData.jours.includes(j)}
+                                onChange={(e) => {
+                                  const newJours = e.target.checked
+                                    ? [...formData.jours, j]
+                                    : formData.jours.filter(item => item !== j)
+                                  setFormData({ ...formData, jours: newJours })
+                                }}
+                              />
+                              <span className="text-xs">{j}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -826,7 +850,7 @@ const EmploiDuTempsView = () => {
 
                       <div className="text-xs text-blue-600 bg-blue-50 p-3 rounded border border-blue-100 italic mt-2">
                         <FontAwesomeIcon icon={faRepeat} className="mr-1" />
-                        Cours répété chaque {formData.jour.toLowerCase()}.
+                        Cours répété chaque {formData.jours.join(', ').toLowerCase()}.
                       </div>
                     </>
                   ) : (

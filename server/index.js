@@ -22,6 +22,7 @@ import departementsRoutes from './routes/departements.js'
 import studentRoutes from './routes/student.js'
 import depRoutes from './routes/depRoutes.js'
 import adminSystemeRoutes from './routes/adminSysteme.js'
+import notificationsRoutes from './routes/notifications.js'
 
 
 const app = express()
@@ -207,6 +208,7 @@ app.use('/api/departements', departementsRoutes)
 app.use('/api/student', studentRoutes)
 app.use('/api/dep', depRoutes)
 app.use('/api/admin-systeme', adminSystemeRoutes)
+app.use('/api/notifications', notificationsRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

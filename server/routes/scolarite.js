@@ -562,7 +562,9 @@ router.delete('/inscriptions/:id/documents/:type', authenticate, async (req, res
     }
 
     // Supprimer le document
-    const result = await deleteInscriptionDocument(id, type)
+    const agentId = req.user?.id
+    const { raison } = req.body || {}
+    const result = await deleteInscriptionDocument(id, type, agentId, raison || 'Supprimé par la scolarité pour re-téléversement')
 
     res.json({
       success: true,
@@ -822,4 +824,256 @@ router.delete('/etudiants/:id', authenticate, async (req, res) => {
   }
 })
 
+// =====================================================
+// ROUTES POUR LE SYSTÈME DE VALIDATION DES DOCUMENTS
+// =====================================================
+
+import {
+  getStudentDocuments,
+  uploadStudentDocument,
+  validateDocument,
+  getPendingDocuments,
+  DOCUMENT_TYPES
+} from '../../src/services/scolarite/documentValidationService.js'
+import { sendDocumentRejectionNotification } from '../../src/services/emailService.js'
+
+// Configuration multer pour les documents d'étudiants
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max par document
+  fileFilter: (req, file, cb) => {
+    // Accepter seulement images et PDFs
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Type de fichier non autorisé. Seulement JPG, PNG et PDF sont acceptés.'))
+    }
+  }
+})
+
+// [ÉTUDIANT] Récupérer tous ses documents avec statuts
+router.get('/student/documents/status', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const { getEtudiantByUserId } = await import('../../src/services/scolarite/etudiantService.js')
+
+    // Récupérer l'étudiant via le service (avec synchronisation user_id si besoin)
+    let etudiant;
+    try {
+      etudiant = await getEtudiantByUserId(userId)
+    } catch (e) {
+      return res.status(404).json({ error: 'Étudiant non trouvé' })
+    }
+
+    // Récupérer l'inscription active
+    const { data: inscription, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('id')
+      .eq('etudiant_id', etudiant.id)
+      .order('date_inscription', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (inscError || !inscription) {
+      return res.status(404).json({ error: 'Aucune inscription trouvée' })
+    }
+
+    const result = await getStudentDocuments(etudiant.id, inscription.id)
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error })
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur GET /student/documents/status:', error)
+    res.status(500).json({ error: 'Erreur lors de la récupération des documents' })
+  }
+})
+
+// [ÉTUDIANT] Téléverser un document
+router.post('/student/documents/upload', authenticate, documentUpload.single('file'), async (req, res) => {
+  try {
+    const userId = req.user.id
+    const { documentType } = req.body
+    const { getEtudiantByUserId } = await import('../../src/services/scolarite/etudiantService.js')
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Aucun fichier fourni' })
+    }
+
+    if (!documentType || !Object.values(DOCUMENT_TYPES).includes(documentType)) {
+      return res.status(400).json({ error: 'Type de document invalide' })
+    }
+
+    // Récupérer l'étudiant via le service (avec synchronisation user_id si besoin)
+    let etudiant;
+    try {
+      etudiant = await getEtudiantByUserId(userId)
+    } catch (e) {
+      return res.status(404).json({ error: 'Étudiant non trouvé' })
+    }
+
+    // Récupérer l'inscription active
+    const { data: inscription, error: inscError } = await supabaseAdmin
+      .from('inscriptions')
+      .select('id')
+      .eq('etudiant_id', etudiant.id)
+      .order('date_inscription', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (inscError || !inscription) {
+      return res.status(404).json({ error: 'Aucune inscription trouvée' })
+    }
+
+    const result = await uploadStudentDocument(etudiant.id, inscription.id, documentType, req.file)
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error })
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur POST /student/documents/upload:', error)
+    res.status(500).json({ error: 'Erreur lors du téléversement du document' })
+  }
+})
+
+// [AGENT] Récupérer tous les documents en attente de validation
+router.get('/agent/documents/pending', authenticate, async (req, res) => {
+  try {
+    // Vérifier que l'utilisateur est un agent de scolarité
+    const userRole = req.user.role_name
+    if (!['SUPER_ADMIN', 'SCOLARITE'].includes(userRole)) {
+      return res.status(403).json({ error: 'Accès non autorisé' })
+    }
+
+    const result = await getPendingDocuments()
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error })
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur GET /agent/documents/pending:', error)
+    res.status(500).json({ error: 'Erreur lors de la récupération des documents en attente' })
+  }
+})
+
+// [AGENT] Valider un document
+router.post('/agent/documents/validate', authenticate, async (req, res) => {
+  try {
+    const { inscriptionId, documentType, statut, commentaire } = req.body
+    const agentId = req.user.id
+
+    // Vérifier que l'utilisateur est un agent de scolarité
+    const userRole = req.user.role_name
+    if (!['SUPER_ADMIN', 'SCOLARITE'].includes(userRole)) {
+      return res.status(403).json({ error: 'Accès non autorisé' })
+    }
+
+    if (!inscriptionId || !documentType || !statut) {
+      return res.status(400).json({ error: 'Paramètres manquants' })
+    }
+
+    const result = await validateDocument(inscriptionId, documentType, statut, agentId, commentaire)
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error })
+    }
+
+    // Si le document est rejeté, envoyer un email à l'étudiant
+    if (statut === 'REJETE' && result.data && result.data.etudiants) {
+      const etudiant = result.data.etudiants
+      const documentLabel = {
+        PHOTO: 'Photo d\'identité',
+        ACTE_NAISSANCE: 'Acte de naissance légalisé',
+        ATTESTATION_BAC: 'Attestation et relevé légalisé BAC',
+        PIECE_IDENTITE: 'Pièce d\'identité',
+        QUITTANCE_PAIEMENT: 'Quittance de paiement'
+      }[documentType]
+
+      // Envoyer email en arrière-plan (fire-and-forget)
+      sendDocumentRejectionNotification(
+        etudiant,
+        [{ label: documentLabel, commentaire }],
+        etudiant.matricule
+      ).catch(err => console.error('Erreur envoi email rejet:', err))
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Erreur POST /agent/documents/validate:', error)
+    res.status(500).json({ error: 'Erreur lors de la validation du document' })
+  }
+})
+
+// [AGENT] Rejeter plusieurs documents en une fois
+router.post('/agent/documents/reject-multiple', authenticate, async (req, res) => {
+  try {
+    const { inscriptionId, rejections } = req.body // rejections = [{ documentType, commentaire }]
+    const agentId = req.user.id
+
+    // Vérifier que l'utilisateur est un agent de scolarité
+    const userRole = req.user.role_name
+    if (!['SUPER_ADMIN', 'SCOLARITE'].includes(userRole)) {
+      return res.status(403).json({ error: 'Accès non autorisé' })
+    }
+
+    if (!inscriptionId || !rejections || !Array.isArray(rejections) || rejections.length === 0) {
+      return res.status(400).json({ error: 'Paramètres manquants ou invalides' })
+    }
+
+    const results = []
+    let etudiantData = null
+
+    for (const rejection of rejections) {
+      const result = await validateDocument(
+        inscriptionId,
+        rejection.documentType,
+        'REJETE',
+        agentId,
+        rejection.commentaire
+      )
+      results.push(result)
+
+      // Garder les infos de l'étudiant pour l'email
+      if (result.success && result.data && result.data.etudiants) {
+        etudiantData = result.data.etudiants
+      }
+    }
+
+    // Envoyer UN SEUL email avec tous les documents rejetés
+    if (etudiantData) {
+      const documentLabels = {
+        PHOTO: 'Photo d\'identité',
+        ACTE_NAISSANCE: 'Acte de naissance légalisé',
+        ATTESTATION_BAC: 'Attestation et relevé légalisé BAC',
+        PIECE_IDENTITE: 'Pièce d\'identité',
+        QUITTANCE_PAIEMENT: 'Quittance de paiement'
+      }
+
+      const documentsRejetes = rejections.map(r => ({
+        label: documentLabels[r.documentType],
+        commentaire: r.commentaire
+      }))
+
+      sendDocumentRejectionNotification(
+        etudiantData,
+        documentsRejetes,
+        etudiantData.matricule
+      ).catch(err => console.error('Erreur envoi email rejet multiple:', err))
+    }
+
+    res.json({ success: true, results })
+  } catch (error) {
+    console.error('Erreur POST /agent/documents/reject-multiple:', error)
+    res.status(500).json({ error: 'Erreur lors du rejet des documents' })
+  }
+})
+
 export default router
+

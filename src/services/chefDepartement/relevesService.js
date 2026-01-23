@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { calculerMoyenneGenerale } from '../scolarite/calculationService.js'
 
 export const getBulletinData = async (classeId, semestre, departementId) => {
     try {
@@ -487,21 +488,17 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
             const statut = semestreValide ? 'VALIDE' : 'AJOURNE'
 
-            // --- NOUVELLE LOGIQUE: Formule spéciale pour RSN (RT et GI) ---
+            // --- CALCUL DE LA MOYENNE FINALE AVEC LE SERVICE CENTRALISÉ ---
             const deptCode = classe.filieres?.departements?.code || ''
             const filiereCode = classe.filieres?.code || ''
 
-            let moyenneFinale = moyenneGenerale
-
-            if (deptCode === 'RSN' && (filiereCode === 'RT' || filiereCode === 'GI') || deptCode === 'MTIC') {
-                // Formule demandée: (Total Points) / 30
-                moyenneFinale = parseFloat((totalPointsSemestre / 30).toFixed(2))
-                console.log(`📊 Formule Spéciale RSN/MTIC pour ${etudiant.nom}: (${totalPointsSemestre} / 30) = ${moyenneFinale}`)
-            } else {
-                // Pour les autres, on utilise la moyenne sur les crédits attendus (Syllabus)
-                // pour être cohérent avec la validation
-                moyenneFinale = moyenneSyllabus
-            }
+            const moyenneFinale = calculerMoyenneGenerale(
+                totalPointsSemestre,
+                totalCreditsAttendus,
+                totalCreditsSemestre,
+                deptCode,
+                filiereCode
+            )
 
             // Mettre à jour le statut final basé sur la moyenneFinale calculée
             const statutFinal = (moyenneFinale >= 10) ? 'VALIDE' : 'AJOURNE'

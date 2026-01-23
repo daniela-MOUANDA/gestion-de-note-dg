@@ -20,10 +20,10 @@ export const saveDocument = async (file, etudiantId, documentType) => {
     const ext = path.extname(file.originalname)
     const filename = `${etudiantId}-${documentType}-${Date.now()}${ext}`
     const filepath = path.join(UPLOAD_DIR, filename)
-    
+
     // Écrire le fichier
     fs.writeFileSync(filepath, file.buffer)
-    
+
     // Retourner l'URL relative
     return `/uploads/inscriptions/${filename}`
   } catch (error) {
@@ -36,10 +36,10 @@ export const saveDocument = async (file, etudiantId, documentType) => {
 export const deleteDocument = async (documentUrl) => {
   try {
     if (!documentUrl) return
-    
+
     const filename = path.basename(documentUrl)
     const filepath = path.join(UPLOAD_DIR, filename)
-    
+
     if (fs.existsSync(filepath)) {
       fs.unlinkSync(filepath)
     }
@@ -49,18 +49,18 @@ export const deleteDocument = async (documentUrl) => {
 }
 
 // Supprimer un document d'inscription
-export const deleteInscriptionDocument = async (inscriptionId, documentType) => {
+export const deleteInscriptionDocument = async (inscriptionId, documentType, agentId = null, commentaire = 'Supprimé par la scolarité') => {
   try {
     const { data: inscription, error } = await supabaseAdmin
       .from('inscriptions')
       .select('*')
       .eq('id', inscriptionId)
       .single()
-    
+
     if (error || !inscription) {
       throw new Error('Inscription introuvable')
     }
-    
+
     // Déterminer quel champ utiliser selon le type de document
     let fieldName = null
     switch (documentType) {
@@ -85,23 +85,53 @@ export const deleteInscriptionDocument = async (inscriptionId, documentType) => 
       default:
         throw new Error(`Type de document inconnu: ${documentType}`)
     }
-    
+
     const documentUrl = inscription[fieldName]
-    
-    if (!documentUrl) {
-      return { success: true, message: 'Document déjà absent' }
+
+    // S'il y a un fichier physique, on essaie de le supprimer
+    if (documentUrl) {
+      await deleteDocument(documentUrl)
     }
-    
-    await deleteDocument(documentUrl)
-    
+
+    // On marque le document comme REJETE au lieu de simplement mettre à NULL
+    // Cela permet à l'étudiant de voir qu'il doit le re-téléverser
+    const statusField = `${fieldName}_statut`
+    const commentField = `${fieldName}_commentaire`
+    const dateField = `${fieldName}_date_validation`
+
+    const updateData = {
+      [fieldName]: null,
+      [statusField]: 'REJETE',
+      [commentField]: commentaire,
+      [dateField]: new Date().toISOString()
+    }
+
+    // Si l'inscription était déjà finalisée, on la repasse en statut 'VALIDE'
+    // pour permettre de nouveau les modifications si nécessaire.
+    if (inscription.statut === 'INSCRIT') {
+      updateData.statut = 'VALIDE'
+    }
+
+    if (agentId) {
+      updateData.agent_valideur_id = agentId
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from('inscriptions')
-      .update({ [fieldName]: null })
+      .update(updateData)
       .eq('id', inscriptionId)
-    
-    if (updateError) throw updateError
-    
-    return { success: true, message: 'Document supprimé avec succès' }
+
+    if (updateError) {
+      // Si les colonnes de statut n'existent pas encore (migration non faite), on met juste à NULL
+      const { error: fallbackError } = await supabaseAdmin
+        .from('inscriptions')
+        .update({ [fieldName]: null })
+        .eq('id', inscriptionId)
+
+      if (fallbackError) throw fallbackError
+    }
+
+    return { success: true, message: 'Document supprimé et marqué comme rejeté' }
   } catch (error) {
     console.error('Erreur lors de la suppression du document:', error)
     throw error
@@ -112,7 +142,7 @@ export const deleteInscriptionDocument = async (inscriptionId, documentType) => 
 export const updateInscriptionDocument = async (inscriptionId, documentType, documentUrl) => {
   try {
     const updateData = {}
-    
+
     switch (documentType) {
       case 'acteNaissance':
         updateData.copie_acte_naissance = documentUrl
@@ -138,24 +168,24 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
       default:
         throw new Error(`Type de document inconnu: ${documentType}`)
     }
-    
+
     const { data: inscription, error: fetchError } = await supabaseAdmin
       .from('inscriptions')
       .select('*')
       .eq('id', inscriptionId)
       .single()
-    
+
     if (fetchError || !inscription) {
       throw new Error('Inscription introuvable')
     }
-    
+
     // Supprimer l'ancien document si il existe
     const fieldName = Object.keys(updateData)[0]
     const oldDocumentUrl = inscription[fieldName]
     if (oldDocumentUrl) {
       await deleteDocument(oldDocumentUrl)
     }
-    
+
     // Si on upload la photo d'identité, synchroniser avec la photo de profil de l'étudiant
     if (documentType === 'photo' && documentUrl) {
       await supabaseAdmin
@@ -163,16 +193,16 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
         .update({ photo: documentUrl })
         .eq('id', inscription.etudiant_id)
     }
-    
+
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('inscriptions')
       .update(updateData)
       .eq('id', inscriptionId)
       .select()
       .single()
-    
+
     if (updateError) throw updateError
-    
+
     return updated
   } catch (error) {
     console.error('Erreur lors de la mise à jour du document:', error)
@@ -184,12 +214,12 @@ export const updateInscriptionDocument = async (inscriptionId, documentType, doc
 export const updateEtudiantInfo = async (etudiantId, data) => {
   try {
     const updateData = {}
-    
+
     if (data.email !== undefined) updateData.email = data.email
     if (data.telephone !== undefined) updateData.telephone = data.telephone
     if (data.adresse !== undefined) updateData.adresse = data.adresse
     if (data.nationalite !== undefined) updateData.nationalite = data.nationalite
-    
+
     // Mettre à jour la photo de profil si fournie
     if (data.photo !== undefined) {
       const { data: etudiant } = await supabaseAdmin
@@ -197,23 +227,23 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
         .select('photo')
         .eq('id', etudiantId)
         .single()
-      
+
       if (etudiant && etudiant.photo) {
         await deleteDocument(etudiant.photo)
       }
-      
+
       updateData.photo = data.photo
     }
-    
+
     const { data: updated, error } = await supabaseAdmin
       .from('etudiants')
       .update(updateData)
       .eq('id', etudiantId)
       .select()
       .single()
-    
+
     if (error) throw error
-    
+
     return updated
   } catch (error) {
     console.error('Erreur lors de la mise à jour des informations étudiant:', error)
@@ -230,7 +260,7 @@ export const upsertParent = async (etudiantId, parentData) => {
       .eq('etudiant_id', etudiantId)
       .eq('type', parentData.type)
       .single()
-    
+
     if (existing) {
       const { data: updated, error } = await supabaseAdmin
         .from('parents')
@@ -245,7 +275,7 @@ export const upsertParent = async (etudiantId, parentData) => {
         .eq('id', existing.id)
         .select()
         .single()
-      
+
       if (error) throw error
       return updated
     } else {
@@ -263,7 +293,7 @@ export const upsertParent = async (etudiantId, parentData) => {
         })
         .select()
         .single()
-      
+
       if (error) throw error
       return created
     }
@@ -281,7 +311,7 @@ export const getParents = async (etudiantId) => {
       .select('*')
       .eq('etudiant_id', etudiantId)
       .order('type', { ascending: true })
-    
+
     if (error) throw error
     return parents || []
   } catch (error) {
@@ -309,17 +339,17 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
       `)
       .eq('id', etudiantId)
       .single()
-    
+
     if (etudError || !etudiant) {
       throw new Error('Étudiant introuvable')
     }
-    
+
     const inscription = (etudiant.inscriptions || []).find(i => i.id === inscriptionId)
-    
+
     if (!inscription) {
       throw new Error(`Aucune inscription trouvée pour l'étudiant ${etudiantId} avec l'ID d'inscription ${inscriptionId}`)
     }
-    
+
     // Synchroniser la photo
     let photoProfil = etudiant.photo
     if (!photoProfil && inscription.photo_identite) {
@@ -334,7 +364,7 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
         .update({ photo_identite: photoProfil })
         .eq('id', inscriptionId)
     }
-    
+
     return {
       etudiant: {
         id: etudiant.id,

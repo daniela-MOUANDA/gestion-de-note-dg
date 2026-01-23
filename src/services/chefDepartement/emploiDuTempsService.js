@@ -143,6 +143,16 @@ export const createEmploiDuTemps = async (data, departementId) => {
 
     if (error) throw error
 
+    // Notification asynchrone pour la classe
+    import('../notificationService.js').then(({ notifyNouveauCours }) => {
+      notifyNouveauCours(
+        classeId,
+        emploiDuTemps.modules?.nom,
+        emploiDuTemps.jour,
+        emploiDuTemps.heure_debut
+      )
+    }).catch(err => console.error('Erreur notification EDT:', err))
+
     return {
       success: true,
       emploiDuTemps: {
@@ -194,6 +204,11 @@ export const deleteEmploiDuTemps = async (id, departementId) => {
       .eq('id', id)
 
     if (error) throw error
+
+    // Notification asynchrone pour la classe
+    import('../notificationService.js').then(({ notifyChangementEDT }) => {
+      notifyChangementEDT(existing.classe_id, `Le cours de ${existing.modules?.nom} a été supprimé.`)
+    }).catch(err => console.error('Erreur notification suppression EDT:', err))
 
     return {
       success: true,

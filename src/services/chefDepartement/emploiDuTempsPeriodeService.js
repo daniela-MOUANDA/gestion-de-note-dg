@@ -43,7 +43,7 @@ export const createEmploiDuTempsAvecPeriode = async (data, departementId) => {
             classeId,
             moduleId,
             enseignantId,
-            jour,
+            jours, // Peut être un tableau ou un seul jour
             heureDebut,
             heureFin,
             salle,
@@ -56,22 +56,37 @@ export const createEmploiDuTempsAvecPeriode = async (data, departementId) => {
             dateSpecifique = null
         } = data
 
+        // Normalisation de jours en tableau
+        const listJours = Array.isArray(jours) ? jours : (data.jour ? [data.jour] : [])
+
+        // Validation spécifique : DEVOIR doit être ponctuel
+        if (typeActivite === 'DEVOIR' && estRecurrent) {
+            return {
+                success: false,
+                error: 'Un devoir ne peut pas être récurrent. Veuillez sélectionner "Événement Ponctuel".'
+            }
+        }
+
         // Validation des champs obligatoires
-        if (!classeId || !moduleId || !enseignantId || !jour || !heureDebut || !heureFin || !semestre || !anneeAcademique) {
-            return {
-                success: false,
-                error: 'Tous les champs obligatoires doivent être remplis'
+        if (!classeId || !moduleId || !enseignantId || listJours.length === 0 || !heureDebut || !heureFin || !semestre || !anneeAcademique) {
+            if (!dateSpecifique && !estRecurrent) {
+                // Pour un ponctuel, le jour peut être déduit de la date, donc on valide différemment
+            } else if (listJours.length === 0) {
+                return {
+                    success: false,
+                    error: 'Veuillez sélectionner au moins un jour de la semaine'
+                }
             }
         }
 
-        if (!dateDebut || !dateFin) {
+        if (estRecurrent && (!dateDebut || !dateFin)) {
             return {
                 success: false,
-                error: 'Les dates de début et de fin sont obligatoires'
+                error: 'Les dates de début et de fin sont obligatoires pour les cours récurrents'
             }
         }
 
-        if (new Date(dateFin) < new Date(dateDebut)) {
+        if (estRecurrent && new Date(dateFin) < new Date(dateDebut)) {
             return {
                 success: false,
                 error: 'La date de fin doit être après la date de début'
@@ -120,61 +135,72 @@ export const createEmploiDuTempsAvecPeriode = async (data, departementId) => {
             }
         }
 
-        // Générer un UUID pour le groupe de récurrence
+        // Générer un UUID pour le groupe de récurrence (un seul groupe pour toute la sélection)
         const groupeRecurrence = estRecurrent ? crypto.randomUUID() : null
 
         // Préparer les entrées à insérer
         let emploisToInsert = []
 
         if (estRecurrent) {
-            // Cours récurrent : créer une entrée pour chaque occurrence
-            const dates = getDatesForWeekday(jour, dateDebut, dateFin)
+            // Cours récurrent : créer une entrée pour chaque occurrence de CHAQUE jour sélectionné
+            for (const itemJour of listJours) {
+                const dates = getDatesForWeekday(itemJour, dateDebut, dateFin)
 
-            if (dates.length === 0) {
-                return {
-                    success: false,
-                    error: 'Aucune occurrence trouvée pour ce jour dans la période spécifiée'
-                }
+                const occurrences = dates.map(date => ({
+                    classe_id: classeId,
+                    module_id: moduleId,
+                    enseignant_id: enseignantId,
+                    jour: itemJour,
+                    heure_debut: heureDebut,
+                    heure_fin: heureFin,
+                    salle,
+                    semestre,
+                    annee_academique: anneeAcademique,
+                    date_debut: dateDebut,
+                    date_fin: dateFin,
+                    type_activite: typeActivite,
+                    est_recurrent: false, // On met false car date_specifique est set
+                    date_specifique: date.toISOString().split('T')[0],
+                    groupe_recurrence: groupeRecurrence
+                }))
+
+                emploisToInsert = [...emploisToInsert, ...occurrences]
             }
 
-            emploisToInsert = dates.map(date => ({
-                classe_id: classeId,
-                module_id: moduleId,
-                enseignant_id: enseignantId,
-                jour,
-                heure_debut: heureDebut,
-                heure_fin: heureFin,
-                salle,
-                semestre,
-                annee_academique: anneeAcademique,
-                date_debut: dateDebut,
-                date_fin: dateFin,
-                type_activite: typeActivite,
-                est_recurrent: false, // On met false pour passer la contrainte DB (car date_specifique est set), mais le groupe_recurrence indique la série
-                date_specifique: date.toISOString().split('T')[0],
-                groupe_recurrence: groupeRecurrence
-            }))
+            if (emploisToInsert.length === 0) {
+                return {
+                    success: false,
+                    error: 'Aucune occurrence trouvée pour les jours sélectionnés dans la période spécifiée'
+                }
+            }
         } else {
             // Devoir ponctuel : créer une seule entrée
             if (!dateSpecifique) {
                 return {
                     success: false,
-                    error: 'Une date spécifique est requise pour les devoirs ponctuels'
+                    error: 'Une date spécifique est requise pour les événements ponctuels'
                 }
+            }
+
+            // Déterminer le jour de la semaine à partir de la date spécifique si non fourni
+            let finalJour = data.jour
+            if (!finalJour) {
+                const days = ['DIMANCHE', 'LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI'];
+                finalJour = days[new Date(dateSpecifique).getDay()]
             }
 
             emploisToInsert = [{
                 classe_id: classeId,
                 module_id: moduleId,
                 enseignant_id: enseignantId,
-                jour,
+                jour: finalJour,
                 heure_debut: heureDebut,
                 heure_fin: heureFin,
                 salle,
                 semestre,
                 annee_academique: anneeAcademique,
-                date_debut: dateDebut,
-                date_fin: dateFin,
+                date_debut: dateDebut || dateSpecifique,
+                date_fin: dateFin || dateSpecifique,
                 type_activite: typeActivite,
                 est_recurrent: false,
                 date_specifique: dateSpecifique,
@@ -182,7 +208,8 @@ export const createEmploiDuTempsAvecPeriode = async (data, departementId) => {
             }]
         }
 
-        // Vérifier les conflits d'horaires pour chaque entrée
+        // Vérifier les conflits d'horaires pour chaque entrée (Optionnel mais recommandé)
+        // Note: Pour garder la performance, on pourrait limiter cette vérification ou la faire différemment en bulk
         for (const emploi of emploisToInsert) {
             const { data: conflits } = await supabaseAdmin
                 .from('emplois_du_temps')
@@ -194,7 +221,7 @@ export const createEmploiDuTempsAvecPeriode = async (data, departementId) => {
             if (conflits && conflits.length > 0) {
                 return {
                     success: false,
-                    error: `Conflit d'horaire détecté pour le ${emploi.date_specifique}`
+                    error: `Conflit d'horaire détecté pour le ${emploi.date_specifique} à ${heureDebut}`
                 }
             }
         }

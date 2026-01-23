@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faFilePdf,
   faDownload,
   faPrint,
@@ -72,177 +72,159 @@ const DocumentsView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+
+        <main className="flex-1 p-6 pt-24">
           {/* Titre */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Documents
-            </h1>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 mb-1">Documents Administratifs</h1>
+            <p className="text-slate-500">Générez et téléchargez vos attestations et relevés officiels</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Zone principale - Prévisualisation */}
             <div className="lg:col-span-2 space-y-6">
               {/* Type de fichier */}
-              <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Type de fichier
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Format de sortie
                 </label>
                 <div className="relative">
                   <select
                     value={fileType}
                     onChange={(e) => setFileType(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
+                    className="w-full px-4 py-2 border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
                   >
-                    <option value="">Sélectionner</option>
+                    <option value="">Sélectionner le format</option>
                     {fileTypes.map((type) => (
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
-                  <FontAwesomeIcon 
-                    icon={faChevronDown} 
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none"
                   />
                 </div>
               </div>
 
               {/* Zone de prévisualisation */}
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl shadow-xl p-6 sm:p-8 border-2 border-slate-200 min-h-[600px] sm:min-h-[700px] relative overflow-hidden">
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8 min-h-[600px] flex flex-col items-center justify-center relative overflow-hidden">
                 {/* Logo en haut à droite */}
-                <div className="absolute top-4 right-4 z-10">
-                  <div className="bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm border border-slate-200">
-                    <span className="text-xs text-slate-600 font-bold tracking-wider">INPTIC</span>
+                <div className="absolute top-6 right-6">
+                  <div className="px-3 py-1 border border-slate-100 rounded text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+                    Document Officiel
                   </div>
                 </div>
-                
-                {/* Effet de grille en arrière-plan */}
-                <div className="absolute inset-0 opacity-5" style={{
-                  backgroundImage: `
-                    linear-gradient(to right, #64748b 1px, transparent 1px),
-                    linear-gradient(to bottom, #64748b 1px, transparent 1px)
-                  `,
-                  backgroundSize: '20px 20px'
-                }}></div>
-                
+
                 {/* Zone de prévisualisation du document */}
-                <div className="w-full h-full flex items-center justify-center relative z-10">
-                  <div className="text-center p-8 max-w-md">
-                    {/* Icône avec effet de profondeur */}
-                    <div className="mb-6 relative">
-                      <div className="absolute inset-0 bg-blue-200 rounded-full blur-2xl opacity-30"></div>
-                      <div className="relative bg-white rounded-2xl p-8 shadow-lg border border-slate-200 inline-block">
-                        <FontAwesomeIcon 
-                          icon={faFilePdf} 
-                          className="text-5xl sm:text-6xl text-red-500"
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Message principal */}
-                    <div className="space-y-2">
-                      <h3 className="text-lg sm:text-xl font-semibold text-slate-700">
-                        Aucun document sélectionné
-                      </h3>
-                      <p className="text-slate-500 text-sm sm:text-base">
-                        Sélectionnez un document dans la liste pour le prévisualiser ici
-                      </p>
-                    </div>
-                    
-                    {/* Ligne décorative */}
-                    <div className="mt-6 flex items-center justify-center gap-3">
-                      <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
-                      <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                      <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+                <div className="text-center max-w-sm">
+                  <div className="mb-8 flex justify-center">
+                    <div className="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shadow-xs">
+                      <FontAwesomeIcon
+                        icon={faFilePdf}
+                        className="text-4xl text-slate-300"
+                      />
                     </div>
                   </div>
+
+                  <h3 className="text-xl font-bold text-slate-700 mb-2">
+                    Aperçu du document
+                  </h3>
+                  <p className="text-slate-400 text-sm leading-relaxed mb-8">
+                    Sélectionnez un document et une année académique pour générer un aperçu officiel.
+                  </p>
+
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="h-px bg-slate-100 w-12"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+                    <div className="h-px bg-slate-100 w-12"></div>
+                  </div>
                 </div>
-                
+
                 {/* Bordure décorative en bas */}
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-400"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100"></div>
               </div>
             </div>
 
             {/* Panneau latéral - Actions */}
             <div className="space-y-6">
-              {/* Liste des documents disponibles */}
-              <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Liste des documents disponibles
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedDocument}
-                    onChange={(e) => setSelectedDocument(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-                  >
-                    {availableDocuments.map((doc) => (
-                      <option key={doc} value={doc}>{doc}</option>
-                    ))}
-                  </select>
-                  <FontAwesomeIcon 
-                    icon={faChevronDown} 
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
-              </div>
+              {/* Configuration du document */}
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 pb-4 border-b border-slate-50">Options de génération</h3>
 
-              {/* Année académique */}
-              <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Année Académique
-                </label>
-                <div className="relative">
-                  <select
-                    value={academicYear}
-                    onChange={(e) => setAcademicYear(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-                  >
-                    {academicYears.map((year) => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                  <FontAwesomeIcon 
-                    icon={faChevronDown} 
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              {/* Section PDF */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-md p-4 sm:p-6 border border-blue-200">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="flex-shrink-0 w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                    PDF
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Type de document
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedDocument}
+                        onChange={(e) => setSelectedDocument(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                      >
+                        {availableDocuments.map((doc) => (
+                          <option key={doc} value={doc}>{doc}</option>
+                        ))}
+                      </select>
+                      <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-300 pointer-events-none" />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-700">Fichier PDF</p>
-                    <p className="text-xs text-slate-500">2.5 MB</p>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Année Académique
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={academicYear}
+                        onChange={(e) => setAcademicYear(e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+                      >
+                        {academicYears.map((year) => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                      <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-300 pointer-events-none" />
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={handleDownload}
-                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Télécharger
-                </button>
               </div>
 
-              {/* Section Impression */}
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-                <p className="text-sm font-medium text-slate-700 mb-4">Impression</p>
-                <button
-                  onClick={handlePrint}
-                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                >
-                  <FontAwesomeIcon icon={faPrint} />
-                  Imprimer
-                </button>
+              {/* Actions de sortie */}
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 pb-4 border-b border-slate-50">Actions</h3>
+
+                <div className="space-y-3">
+                  <button
+                    onClick={handleDownload}
+                    className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <FontAwesomeIcon icon={faDownload} />
+                    Télécharger PDF
+                  </button>
+
+                  <button
+                    onClick={handlePrint}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded font-semibold transition-all flex items-center justify-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={faPrint} />
+                    Imprimer
+                  </button>
+                </div>
+
+                <div className="mt-6 p-4 bg-slate-50 rounded border border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="text-red-500 font-bold text-xs px-1.5 py-0.5 border border-red-200 rounded">PDF</div>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-700">Prêt pour l'export</p>
+                      <p className="text-[10px] text-slate-400">Taille estimée : 2.5 MB</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

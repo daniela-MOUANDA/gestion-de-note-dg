@@ -25,8 +25,9 @@ export const authenticateUser = async (email, password, matricule = null) => {
     if (matricule) {
       console.log('🎓 Tentative de connexion étudiant avec matricule:', matricule)
 
-      // Chercher l'étudiant par matricule
-      const { data: etudiant, error: etudiantError } = await supabaseAdmin
+      // Chercher l'étudiant par matricule avec ses inscriptions
+      // On autorise les statuts INSCRIT, VALIDEE et EN_ATTENTE
+      const { data: results, error: etudiantError } = await supabaseAdmin
         .from('etudiants')
         .select(`
           *,
@@ -36,11 +37,37 @@ export const authenticateUser = async (email, password, matricule = null) => {
           )
         `)
         .eq('matricule', matricule.trim())
-        .in('inscriptions.statut', ['INSCRIT', 'EN_ATTENTE'])
-        .single()
+        .in('inscriptions.statut', ['INSCRIT', 'EN_ATTENTE', 'VALIDEE'])
+        .order('date_inscription', { foreignTable: 'inscriptions', ascending: false })
+        .limit(1)
 
-      if (etudiantError || !etudiant) {
-        console.log('❌ Étudiant non trouvé avec matricule:', matricule)
+      const etudiant = results && results.length > 0 ? results[0] : null
+
+      if (etudiantError) {
+        console.error('❌ Erreur Supabase lors du lookup étudiant:', etudiantError)
+        return {
+          success: false,
+          error: "Erreur lors de la recherche de l'étudiant"
+        }
+      }
+
+      if (!etudiant) {
+        console.log(`❌ Étudiant non trouvé ou aucune inscription valide (INSCRIT, VALIDEE, EN_ATTENTE) pour matricule: "${matricule.trim()}"`)
+        // Vérifier si l'étudiant existe SANS filtre sur l'inscription
+        const { data: etudSeul } = await supabaseAdmin
+          .from('etudiants')
+          .select('id, nom, prenom')
+          .eq('matricule', matricule.trim())
+          .single()
+
+        if (etudSeul) {
+          console.log(`💡 Note: L'étudiant ${etudSeul.prenom} ${etudSeul.nom} existe mais n'a pas d'inscription valide.`)
+          return {
+            success: false,
+            error: "Votre inscription n'est pas encore activée. Veuillez contacter la scolarité."
+          }
+        }
+
         return {
           success: false,
           error: "Cet étudiant n'existe pas ou le matricule est incorrect"
@@ -226,10 +253,18 @@ export const authenticateUser = async (email, password, matricule = null) => {
     } else {
       // Vérifier le mot de passe avec bcrypt
       console.log('🔐 Vérification du mot de passe avec bcrypt...')
+      console.log(`🔐 Longueur mot de passe fourni: ${password?.length}, Longueur hash en base: ${utilisateur.password?.length}`)
+
       const passwordValid = await bcrypt.compare(password, utilisateur.password)
 
       if (!passwordValid) {
         console.log('❌ Mot de passe incorrect pour:', utilisateur.email)
+        // Tentative de secours: si jamais il y a des espaces accidentels dans le hash ou le password fourni
+        const trimmedValid = await bcrypt.compare(password.trim(), utilisateur.password.trim())
+        if (trimmedValid) {
+          console.log('⚠️ ALERTE: Le mot de passe était valide après TRIM() !')
+        }
+
         return {
           success: false,
           error: 'Email ou mot de passe incorrect'
@@ -432,6 +467,7 @@ export const verifyToken = async (token, shouldRefresh = false) => {
 
     if (error || !utilisateur) {
       console.error('❌ Utilisateur introuvable pour ID:', decoded.id)
+      if (error) console.error('🔍 Détails erreur Supabase:', error)
       return {
         valid: false,
         error: 'Utilisateur introuvable'

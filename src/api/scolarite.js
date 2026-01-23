@@ -316,7 +316,7 @@ export const creerAttestation = async (etudiantId, promotionId, anneeAcademique)
 export const getEtudiantsInscritsParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId) => {
   const token = localStorage.getItem('token')
   if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
-  
+
   const response = await fetch(`${API_URL}/etudiants-inscrits?promotionId=${promotionId}&filiereId=${filiereId}&niveauId=${niveauId}&formationId=${formationId}`, {
     headers: {
       'Authorization': `Bearer ${token}`
@@ -357,12 +357,12 @@ export const getAttestationsArchivees = async (promotionId, filiereId, niveauId,
 export const getAttestationsArchiveesParFiliereNiveau = async (promotionId, filiereId, niveauId, formationId = null) => {
   const token = localStorage.getItem('token')
   if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
-  
+
   let url = `${API_URL}/attestations/archives?promotionId=${promotionId}&filiereId=${filiereId}&niveauId=${niveauId}`
   if (formationId) {
     url += `&formationId=${formationId}`
   }
-  
+
   const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`
@@ -427,7 +427,7 @@ export const marquerDiplomeRecupere = async (diplomeId, etudiantId, promotionId,
 export const uploadDocumentInscription = async (inscriptionId, documentType, file) => {
   const formData = new FormData()
   formData.append('document', file)
-  
+
   const token = localStorage.getItem('token')
   const response = await fetch(`${API_URL}/inscriptions/${inscriptionId}/documents/${documentType}`, {
     method: 'POST',
@@ -443,13 +443,15 @@ export const uploadDocumentInscription = async (inscriptionId, documentType, fil
   return response.json()
 }
 
-export const deleteDocumentInscription = async (inscriptionId, documentType) => {
+export const deleteDocumentInscription = async (inscriptionId, documentType, raison = null) => {
   const token = localStorage.getItem('token')
   const response = await fetch(`${API_URL}/inscriptions/${inscriptionId}/documents/${documentType}`, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${token}`
-    }
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ raison })
   })
   if (!response.ok) {
     const error = await response.json()
@@ -503,7 +505,7 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
     console.error('Token manquant dans localStorage')
     throw new Error('Token manquant. Veuillez vous reconnecter.')
   }
-  
+
   const response = await fetch(`${API_URL}/etudiants/${etudiantId}`, {
     method: 'PUT',
     headers: {
@@ -512,7 +514,7 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
     },
     body: JSON.stringify(data)
   })
-  
+
   if (!response.ok) {
     if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
@@ -526,13 +528,13 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
 export const uploadPhotoEtudiant = async (etudiantId, file) => {
   const formData = new FormData()
   formData.append('photo', file)
-  
+
   const token = localStorage.getItem('token')
   if (!token) {
     console.error('Token manquant dans localStorage')
     throw new Error('Token manquant. Veuillez vous reconnecter.')
   }
-  
+
   const response = await fetch(`${API_URL}/etudiants/${etudiantId}/photo`, {
     method: 'POST',
     headers: {
@@ -540,7 +542,7 @@ export const uploadPhotoEtudiant = async (etudiantId, file) => {
     },
     body: formData
   })
-  
+
   if (!response.ok) {
     if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
@@ -585,13 +587,13 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
     console.error('Token manquant dans localStorage')
     throw new Error('Token manquant. Veuillez vous reconnecter.')
   }
-  
+
   const response = await fetch(`${API_URL}/dossiers/${etudiantId}/${inscriptionId}`, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
   })
-  
+
   if (!response.ok) {
     if (handleAuthError(response)) {
       throw new Error('Session expirée. Veuillez vous reconnecter.')
@@ -599,7 +601,7 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
     const errorData = await response.json().catch(() => ({ error: 'Erreur lors de la récupération du dossier' }))
     throw new Error(errorData.error || `Erreur ${response.status}: ${response.statusText}`)
   }
-  
+
   return response.json()
 }
 

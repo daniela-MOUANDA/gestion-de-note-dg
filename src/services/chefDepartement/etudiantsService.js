@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { calculerMoyenneGenerale } from '../scolarite/calculationService.js'
 
 /**
  * Récupère tous les étudiants d'un département avec leurs moyennes générales pour le Chef de Département
@@ -6,12 +7,14 @@ import { supabaseAdmin } from '../../lib/supabase.js'
 export const getEtudiantsParDepartement = async (departementId, page = 1, limit = 10, filters = {}) => {
   try {
     const { filiere, niveau, semestre, search } = filters
-    
+
     // 1. Récupérer les filières du département
     const { data: filieres } = await supabaseAdmin
       .from('filieres')
-      .select('id, code, nom')
+      .select('id, code, nom, departements(code)')
       .eq('departement_id', departementId)
+
+    const departementCode = filieres && filieres.length > 0 ? filieres[0].departements?.code : ''
 
     if (!filieres || filieres.length === 0) {
       return {
@@ -78,7 +81,7 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
         .select('id')
         .eq('code', niveau)
         .single()
-      
+
       if (niveauData) {
         query = query.eq('niveau_id', niveauData.id)
       }
@@ -139,9 +142,9 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
     // Récupérer les paramètres de notation
     const { data: parametresList } = moduleIds.length > 0
       ? await supabaseAdmin
-          .from('parametres_notation')
-          .select('module_id, evaluations, semestre')
-          .in('module_id', moduleIds)
+        .from('parametres_notation')
+        .select('module_id, evaluations, semestre')
+        .in('module_id', moduleIds)
       : { data: [] }
 
     const parametresMap = {}
@@ -188,8 +191,8 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
         let totalCreditsValides = 0
 
         // Si un semestre est spécifié, calculer uniquement pour ce semestre
-        const semestresACalculer = semestre && semestre !== 'TOUS' 
-          ? [semestre] 
+        const semestresACalculer = semestre && semestre !== 'TOUS'
+          ? [semestre]
           : [...new Set(modules.map(m => m.semestre))]
 
         let meilleureMoyenne = 0
@@ -202,8 +205,8 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
 
           modulesSemestre.forEach(module => {
             const evaluationsConfig = parametresMap[`${module.id}_${semestreItem}`] || []
-            const notesModule = notesEtudiant.filter(n => 
-              n.module_id === module.id && 
+            const notesModule = notesEtudiant.filter(n =>
+              n.module_id === module.id &&
               n.semestre === semestreItem
             )
 
@@ -238,7 +241,19 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
           })
 
           if (totalCreditsSemestreItem > 0) {
-            const moyenneSemestreItem = totalPointsSemestreItem / totalCreditsSemestreItem
+            // Récupérer le code de la filière pour cet étudiant (celui de son inscription)
+            const currentInscription = inscriptionsFiltrees.find(ins => ins.etudiants?.id === etudiantId)
+            const fCode = currentInscription?.filieres?.code || ''
+
+            // Calculer la moyenne du semestre via le service centralisé
+            const moyenneSemestreItem = calculerMoyenneGenerale(
+              totalPointsSemestreItem,
+              totalCreditsSemestreItem,
+              totalCreditsSemestreItem,
+              departementCode,
+              fCode
+            )
+
             if (semestre && semestre !== 'TOUS') {
               // Pour un semestre spécifique, utiliser cette moyenne
               meilleureMoyenne = moyenneSemestreItem
@@ -256,8 +271,8 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
         }
 
         moyennesMap[etudiantId] = meilleureMoyenne
-        creditsMap[etudiantId] = semestre && semestre !== 'TOUS' 
-          ? totalCreditsValides 
+        creditsMap[etudiantId] = semestre && semestre !== 'TOUS'
+          ? totalCreditsValides
           : totalCreditsValides
       })
     }
@@ -361,7 +376,7 @@ export const getEtudiantDetailsChef = async (etudiantId, departementId, semestre
       .from('inscriptions')
       .select(`
         *,
-        filieres!inner(id, code, nom, departement_id),
+        filieres!inner(id, code, nom, departement_id, departements(code)),
         niveaux (id, code, nom),
         classes (id, code, nom)
       `)
@@ -428,8 +443,8 @@ export const getEtudiantDetailsChef = async (etudiantId, departementId, semestre
 
             modulesSemestre.forEach(module => {
               const evaluationsConfig = parametresMap[`${module.id}_${semestre}`] || []
-              const notesModule = notes.filter(n => 
-                n.module_id === module.id && 
+              const notesModule = notes.filter(n =>
+                n.module_id === module.id &&
                 n.semestre === semestre
               )
 
@@ -464,7 +479,17 @@ export const getEtudiantDetailsChef = async (etudiantId, departementId, semestre
             })
 
             if (totalCreditsSemestre > 0) {
-              moyenneGenerale = totalPointsSemestre / totalCreditsSemestre
+              const dCode = (inscriptions[0].filieres?.departements?.code || '')
+              const fCode = (inscriptions[0].filieres?.code || '')
+
+              moyenneGenerale = calculerMoyenneGenerale(
+                totalPointsSemestre,
+                totalCreditsSemestre,
+                totalCreditsSemestre,
+                dCode,
+                fCode
+              )
+
               totalCredits = totalCreditsSemestre
               creditsValides = creditsValidesSemestre
             } else {
@@ -487,8 +512,8 @@ export const getEtudiantDetailsChef = async (etudiantId, departementId, semestre
 
               modulesSemestre.forEach(module => {
                 const evaluationsConfig = parametresMap[`${module.id}_${semestreItem}`] || []
-                const notesModule = notes.filter(n => 
-                  n.module_id === module.id && 
+                const notesModule = notes.filter(n =>
+                  n.module_id === module.id &&
                   n.semestre === semestreItem
                 )
 
@@ -523,7 +548,17 @@ export const getEtudiantDetailsChef = async (etudiantId, departementId, semestre
               })
 
               if (totalCreditsSemestre > 0) {
-                const moyenneSemestre = totalPointsSemestre / totalCreditsSemestre
+                const dCode = (inscriptions[0].filieres?.departements?.code || '')
+                const fCode = (inscriptions[0].filieres?.code || '')
+
+                const moyenneSemestre = calculerMoyenneGenerale(
+                  totalPointsSemestre,
+                  totalCreditsSemestre,
+                  totalCreditsSemestre,
+                  dCode,
+                  fCode
+                )
+
                 if (moyenneSemestre > meilleureMoyenne) {
                   meilleureMoyenne = moyenneSemestre
                   meilleurSemestre = semestreItem

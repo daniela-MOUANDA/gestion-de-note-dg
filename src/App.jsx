@@ -31,6 +31,7 @@ const ProfileView = lazy(() => import('./views/student/ProfileView'))
 const NotificationsView = lazy(() => import('./views/student/NotificationsView'))
 const ReclamationsView = lazy(() => import('./views/student/ReclamationsView'))
 const AideView = lazy(() => import('./views/student/AideView'))
+const MonDossierView = lazy(() => import('./views/student/MonDossierView'))
 
 // Routes Chef de Département
 const DashboardChefView = lazy(() => import('./views/chef/DashboardChefView'))
@@ -68,6 +69,7 @@ const ProcesVerbauxView = lazy(() => import('./views/scolarite/ProcesVerbauxView
 const ArchivageView = lazy(() => import('./views/scolarite/ArchivageView'))
 const AttestationsScolariteView = lazy(() => import('./views/scolarite/AttestationsScolariteView'))
 const ArchivesAttestationsScolariteView = lazy(() => import('./views/scolarite/ArchivesAttestationsScolariteView'))
+const ValiderDocumentsView = lazy(() => import('./views/scolarite/ValiderDocumentsView'))
 
 // Routes SP-Scolarité
 const DashboardSPView = lazy(() => import('./views/sp-scolarite/DashboardSPView'))
@@ -203,6 +205,14 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
                   <AideView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mon-dossier"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="ETUDIANT">
+                  <MonDossierView />
                 </ProtectedRoute>
               }
             />
@@ -431,6 +441,14 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
                   <ArchivesAttestationsScolariteView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/scolarite/valider-documents"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <ValiderDocumentsView />
                 </ProtectedRoute>
               }
             />

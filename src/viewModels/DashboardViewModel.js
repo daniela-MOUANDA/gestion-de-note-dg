@@ -8,58 +8,7 @@ export class DashboardViewModel {
   }
 
   setCourses(courses) {
-    this.courses = courses
-  }
-
-  loadCourses() {
-    // Données simulées pour le développement
-    // TODO: Remplacer par un vrai appel API
-    this.courses = [
-      new CourseModel({
-        id: 1,
-        type: 'Cours',
-        heureDebut: '08:00',
-        heureFin: '10:00',
-        matiere: 'Programmation web',
-        professeur: 'Mr Maty',
-        salle: 'Salle INFO 2',
-        jour: 'Lundi',
-        date: '2025-11-17'
-      }),
-      new CourseModel({
-        id: 2,
-        type: 'TP',
-        heureDebut: '10:15',
-        heureFin: '12:15',
-        matiere: 'Base de données',
-        professeur: '',
-        salle: '',
-        jour: 'Lundi',
-        date: '2025-11-17'
-      }),
-      new CourseModel({
-        id: 3,
-        type: 'Cours',
-        heureDebut: '08:00',
-        heureFin: '10:00',
-        matiere: 'Réseaux',
-        professeur: 'Mr Ossene',
-        salle: 'Salle INFO 2',
-        jour: 'Mardi',
-        date: '2025-11-18'
-      }),
-      new CourseModel({
-        id: 4,
-        type: 'Cours',
-        heureDebut: '08:00',
-        heureFin: '10:00',
-        matiere: 'Réseaux',
-        professeur: 'Mr Ossene',
-        salle: 'Salle INFO 2',
-        jour: 'Mercredi',
-        date: '2025-11-19'
-      })
-    ]
+    this.courses = (courses || []).map(c => c instanceof CourseModel ? c : new CourseModel(c))
   }
 
   getWeekRange() {
@@ -67,6 +16,7 @@ export class DashboardViewModel {
     const day = startOfWeek.getDay()
     const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1)
     startOfWeek.setDate(diff)
+    startOfWeek.setHours(0, 0, 0, 0)
 
     const endOfWeek = new Date(startOfWeek)
     endOfWeek.setDate(startOfWeek.getDate() + 6)
@@ -80,8 +30,36 @@ export class DashboardViewModel {
     return `Semaine du ${start.getDate()} au ${end.getDate()} ${end.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`
   }
 
-  getCoursesForDay(dayName) {
-    return this.courses.filter(course => course.jour === dayName)
+  getCoursesForDay(day) {
+    if (!day || !day.date) return []
+
+    // Helper pour obtenir YYYY-MM-DD local
+    const toLocalISO = (d) => {
+      const date = new Date(d)
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    }
+
+    const targetDateStr = toLocalISO(day.date)
+
+    return this.courses.filter(course => {
+      // Un devoir est TOUJOURS ponctuel (même si la BD dit le contraire pour de vieilles données)
+      const isDevoir = (course.type || '').toUpperCase() === 'DEVOIR'
+      const isPonctuel = !course.isRecurrent || isDevoir
+
+      if (isPonctuel) {
+        // Pour un ponctuel (ou devoir), on exige une correspondance de DATE exacte
+        if (!course.date) return false // Un ponctuel sans date ne s'affiche pas
+
+        const courseDateStr = typeof course.date === 'string'
+          ? course.date.split('T')[0]
+          : toLocalISO(course.date)
+
+        return courseDateStr === targetDateStr
+      }
+
+      // Pour les cours récurrents normaux, on utilise le nom du jour
+      return (course.jour || '').toUpperCase() === day.name.toUpperCase()
+    })
   }
 
   previousWeek() {
@@ -98,10 +76,10 @@ export class DashboardViewModel {
 
   getDaysOfWeek() {
     const { start } = this.getWeekRange()
-    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi']
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
     const result = []
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const date = new Date(start)
       date.setDate(start.getDate() + i)
       result.push({

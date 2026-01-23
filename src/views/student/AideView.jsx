@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faQuestionCircle,
   faSearch,
   faEnvelope,
@@ -136,80 +136,78 @@ const AideView = () => {
 
   const filteredFaqs = faqCategories.map(category => ({
     ...category,
-    questions: category.questions.filter(q => 
+    questions: category.questions.filter(q =>
       q.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.answer.toLowerCase().includes(searchQuery.toLowerCase())
     )
   })).filter(category => category.questions.length > 0)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+
+        <main className="flex-1 p-6 pt-24">
           {/* Titre */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Aide
-            </h1>
-            <p className="text-sm sm:text-base text-slate-600">
-              Trouvez des réponses à vos questions fréquentes
-            </p>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 mb-1">Centre d'Aide</h1>
+            <p className="text-slate-500">Trouvez rapidement des réponses à vos questions techniques ou administratives</p>
           </div>
 
           {/* Barre de recherche */}
-          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
-            <div className="relative">
-              <FontAwesomeIcon 
-                icon={faSearch} 
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-slate-200 mb-8">
+            <div className="relative group">
+              <FontAwesomeIcon
+                icon={faSearch}
+                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors"
               />
               <input
                 type="text"
-                placeholder="Rechercher une question..."
+                placeholder="Comment pouvons-nous vous aider aujourd'hui ?"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800"
+                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-slate-700 transition-all placeholder-slate-400"
               />
             </div>
           </div>
 
           {/* FAQ par catégories */}
-          <div className="space-y-6 mb-6">
+          <div className="space-y-6 mb-10">
             {filteredFaqs.map((category) => (
-              <div key={category.id} className="bg-white rounded-xl shadow-md border border-slate-200">
-                <div className="p-4 sm:p-6 border-b border-slate-200">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white">
+              <div key={category.id} className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-6 bg-slate-50/50 border-b border-slate-100">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded bg-white shadow-xs border border-slate-100 flex items-center justify-center text-slate-400">
                       <FontAwesomeIcon icon={category.icon} />
                     </div>
-                    <h2 className="text-lg sm:text-xl font-bold text-slate-800">
+                    <h2 className="text-lg font-bold text-slate-800">
                       {category.title}
                     </h2>
                   </div>
                 </div>
-                <div className="divide-y divide-slate-200">
+                <div className="divide-y divide-slate-100">
                   {category.questions.map((faq) => (
-                    <div key={faq.id} className="p-4 sm:p-6">
+                    <div key={faq.id} className="p-0 transition-all">
                       <button
                         onClick={() => toggleFaq(faq.id)}
-                        className="w-full flex items-center justify-between text-left"
+                        className="w-full flex items-center justify-between p-6 text-left hover:bg-slate-50/50 transition-colors group"
                       >
-                        <span className="text-sm sm:text-base font-medium text-slate-800 pr-4">
+                        <span className="text-sm font-bold text-slate-700 group-hover:text-blue-600 transition-colors">
                           {faq.question}
                         </span>
-                        <FontAwesomeIcon
-                          icon={openFaq === faq.id ? faChevronUp : faChevronDown}
-                          className="text-slate-400 flex-shrink-0"
-                        />
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${openFaq === faq.id ? 'bg-blue-50 text-blue-600 rotate-180' : 'text-slate-300'}`}>
+                          <FontAwesomeIcon
+                            icon={faChevronDown}
+                            fontSize="12"
+                          />
+                        </div>
                       </button>
                       {openFaq === faq.id && (
-                        <div className="mt-4 pt-4 border-t border-slate-200">
-                          <p className="text-sm text-slate-600 leading-relaxed">
+                        <div className="px-6 pb-6 pt-0 animate-fadeIn">
+                          <div className="p-4 bg-blue-50/30 border border-blue-100/50 rounded text-sm text-slate-600 leading-relaxed">
                             {faq.answer}
-                          </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -220,37 +218,42 @@ const AideView = () => {
           </div>
 
           {/* Section contact */}
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg p-6 sm:p-8 border border-blue-500 text-white">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4">Besoin d'aide supplémentaire ?</h2>
-            <p className="text-blue-100 mb-6 text-sm sm:text-base">
-              Notre équipe est là pour vous aider. Contactez-nous par email ou téléphone.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <FontAwesomeIcon icon={faEnvelope} className="text-xl" />
+          <div className="bg-slate-900 rounded-lg p-8 shadow-sm border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="max-w-md text-center md:text-left">
+              <h2 className="text-2xl font-bold text-white mb-2">Pas encore de réponse ?</h2>
+              <p className="text-slate-400 text-sm">
+                Notre assistance technique est disponible pour vous accompagner dans toutes vos démarches sur la plateforme.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full lg:w-3/5">
+              <div className="bg-slate-800/50 p-4 rounded border border-slate-700/50 flex items-center gap-4">
+                <div className="w-10 h-10 rounded bg-blue-500/10 flex items-center justify-center text-blue-400">
+                  <FontAwesomeIcon icon={faEnvelope} />
                 </div>
                 <div>
-                  <p className="text-xs text-blue-100 mb-1">Email</p>
-                  <p className="text-sm font-medium">support@inptic.edu</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email</p>
+                  <p className="text-xs font-semibold text-white truncate">support@inptic.edu</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <FontAwesomeIcon icon={faPhone} className="text-xl" />
+
+              <div className="bg-slate-800/50 p-4 rounded border border-slate-700/50 flex items-center gap-4">
+                <div className="w-10 h-10 rounded bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <FontAwesomeIcon icon={faPhone} />
                 </div>
                 <div>
-                  <p className="text-xs text-blue-100 mb-1">Téléphone</p>
-                  <p className="text-sm font-medium">+237 XXX XXX XXX</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Téléphone</p>
+                  <p className="text-xs font-semibold text-white">+241 XX XX XX XX</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <FontAwesomeIcon icon={faClock} className="text-xl" />
+
+              <div className="bg-slate-800/50 p-4 rounded border border-slate-700/50 flex items-center gap-4">
+                <div className="w-10 h-10 rounded bg-purple-500/10 flex items-center justify-center text-purple-400">
+                  <FontAwesomeIcon icon={faClock} />
                 </div>
                 <div>
-                  <p className="text-xs text-blue-100 mb-1">Horaires</p>
-                  <p className="text-sm font-medium">Lun-Ven: 8h-17h</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Horaires</p>
+                  <p className="text-xs font-semibold text-white whitespace-nowrap">Lun-Ven: 08h - 17h</p>
                 </div>
               </div>
             </div>

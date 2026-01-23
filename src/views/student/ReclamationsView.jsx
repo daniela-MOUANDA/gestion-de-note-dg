@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faCloudArrowUp,
   faUpload,
   faPaperPlane,
@@ -53,7 +53,7 @@ const ReclamationsView = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    
+
     // Si c'est le type de réclamation et que c'est "note incorrecte", afficher le modal
     if (name === 'type' && value === 'note') {
       setPendingType(value)
@@ -129,29 +129,29 @@ const ReclamationsView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+
+        <main className="flex-1 p-6 pt-24">
           {/* Titre */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Réclamations
-            </h1>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 mb-1">Requêtes et Réclamations</h1>
+            <p className="text-slate-500">Soumettez vos demandes pédagogiques ou administratives</p>
           </div>
 
           <form onSubmit={handleSubmit}>
             {/* Section formulaire et téléversement */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Formulaire - Carte blanche */}
-              <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-                <div className="space-y-4">
+              <div className="bg-white rounded-lg shadow-sm p-6 border border-slate-200">
+                <h2 className="text-lg font-bold text-slate-800 mb-6 pb-4 border-b border-slate-50">Détails de la demande</h2>
+                <div className="space-y-6">
                   {/* Raison de la réclamation */}
                   <div>
-                    <label htmlFor="raison" className="block text-sm font-medium text-slate-700 mb-2">
-                      Raison de la réclamation
+                    <label htmlFor="raison" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Objet de la réclamation
                     </label>
                     <input
                       type="text"
@@ -159,50 +159,59 @@ const ReclamationsView = () => {
                       name="raison"
                       value={formData.raison}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800"
-                      placeholder="Entrez la raison de votre réclamation"
+                      className="w-full px-4 py-2 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 placeholder-slate-300"
+                      placeholder="Ex: Erreur de saisie de note - Module Mathématiques"
                     />
                   </div>
 
                   {/* Type de réclamation */}
                   <div>
-                    <label htmlFor="type" className="block text-sm font-medium text-slate-700 mb-2">
-                      Type de réclamation
+                    <label htmlFor="type" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Catégorie
                     </label>
-                    <select
-                      id="type"
-                      name="type"
-                      value={formData.type}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 bg-white appearance-none cursor-pointer"
-                    >
-                      <option value="">Sélectionnez un type</option>
-                      <option value="note">Note incorrecte</option>
-                      <option value="absence">Absence injustifiée</option>
-                      <option value="document">Document manquant</option>
-                      <option value="autre">Autre</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="type"
+                        name="type"
+                        value={formData.type}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white appearance-none cursor-pointer"
+                      >
+                        <option value="">Sélectionnez une catégorie</option>
+                        <option value="note">Note incorrecte</option>
+                        <option value="absence">Absence injustifiée</option>
+                        <option value="document">Document manquant</option>
+                        <option value="autre">Autre demande</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none text-slate-400">
+                        <FontAwesomeIcon icon={faChevronDown} fontSize="12" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Zone de téléversement - Carte bleu-gris */}
-              <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl shadow-md p-4 sm:p-6 border border-slate-500">
+              {/* Zone de téléversement */}
+              <div className="bg-white rounded-lg shadow-sm p-6 border border-slate-200 flex flex-col">
+                <h2 className="text-lg font-bold text-slate-800 mb-6 pb-4 border-b border-slate-50">Pièces justificatives</h2>
                 <div
-                  className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center transition-colors ${
-                    isDragging ? 'border-blue-400 bg-slate-600' : 'border-slate-400'
-                  }`}
+                  className={`flex-1 border-2 border-dashed rounded-lg p-8 text-center transition-all flex flex-col items-center justify-center ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-slate-100 bg-slate-50/50'
+                    }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  <FontAwesomeIcon 
-                    icon={faCloudArrowUp} 
-                    className="text-4xl sm:text-5xl text-slate-300 mb-4" 
-                  />
-                  <p className="text-white text-sm sm:text-base mb-4">
-                    Glisser et déposer ici ou cliquer sur téléverser
+                  <div className="w-16 h-16 bg-white rounded-full shadow-xs border border-slate-100 flex items-center justify-center mb-4">
+                    <FontAwesomeIcon
+                      icon={faCloudArrowUp}
+                      className="text-2xl text-slate-300"
+                    />
+                  </div>
+                  <p className="text-slate-600 font-medium mb-1">
+                    Déposez vos documents ici
                   </p>
+                  <p className="text-slate-400 text-xs mb-6">PDF, PNG ou JPG (max 5MB)</p>
+
                   <input
                     type="file"
                     id="file-upload"
@@ -211,32 +220,33 @@ const ReclamationsView = () => {
                   />
                   <label
                     htmlFor="file-upload"
-                    className="inline-flex items-center px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-medium cursor-pointer transition-colors duration-200"
+                    className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded font-semibold cursor-pointer transition-all text-sm shadow-sm"
                   >
-                    <FontAwesomeIcon icon={faUpload} className="mr-2" />
-                    Téléverser
+                    Parcourir les fichiers
                   </label>
+
                   {formData.fichier && (
-                    <p className="text-slate-200 text-xs mt-3">
-                      Fichier sélectionné: {formData.fichier.name}
-                    </p>
+                    <div className="mt-4 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-bold rounded-full border border-green-100 flex items-center gap-2">
+                      <FontAwesomeIcon icon={faUpload} fontSize="10" />
+                      {formData.fichier.name}
+                    </div>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Section explications détaillées */}
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">
-                Explications détaillées
+            <div className="bg-white rounded-lg shadow-sm p-6 border border-slate-200 mb-8">
+              <h2 className="text-lg font-bold text-slate-800 mb-6 pb-4 border-b border-slate-50">
+                Description détaillée
               </h2>
               <textarea
                 name="explications"
                 value={formData.explications}
                 onChange={handleInputChange}
-                rows={6}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 resize-y"
-                placeholder="Décrivez en détail votre réclamation..."
+                rows={5}
+                className="w-full px-4 py-3 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 placeholder-slate-300 resize-none"
+                placeholder="Veuillez fournir un maximum de détails pour faciliter le traitement de votre demande..."
               />
             </div>
 
@@ -244,17 +254,17 @@ const ReclamationsView = () => {
             <div className="flex gap-4">
               <button
                 type="submit"
-                className="flex items-center px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-medium transition-colors duration-200 shadow-md hover:shadow-lg"
+                className="flex items-center px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold transition-all shadow-sm"
               >
-                <FontAwesomeIcon icon={faPaperPlane} className="mr-2" />
-                Envoyer
+                <FontAwesomeIcon icon={faPaperPlane} className="mr-3" />
+                Envoyer la réclamation
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex items-center px-6 py-2.5 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200 shadow-md hover:shadow-lg"
+                className="flex items-center px-6 py-3 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded font-semibold transition-all"
               >
-                <FontAwesomeIcon icon={faRedo} className="mr-2" />
+                <FontAwesomeIcon icon={faRedo} className="mr-3" />
                 Réinitialiser
               </button>
             </div>
@@ -262,50 +272,40 @@ const ReclamationsView = () => {
 
           {/* Modal d'information pour note incorrecte */}
           {showModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
-                {/* Bouton de fermeture */}
-                <button
-                  onClick={handleModalClose}
-                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <FontAwesomeIcon icon={faTimes} className="text-xl" />
-                </button>
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+                <div className="p-8">
+                  <div className="flex items-center justify-center w-16 h-16 mx-auto mb-6 bg-amber-50 rounded-full border border-amber-100">
+                    <FontAwesomeIcon icon={faExclamationTriangle} className="text-amber-600 text-2xl" />
+                  </div>
 
-                {/* Icône d'alerte */}
-                <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-orange-100 rounded-full">
-                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-orange-600 text-2xl" />
+                  <h3 className="text-xl font-bold text-slate-800 text-center mb-6">
+                    Note importante
+                  </h3>
+
+                  <div className="space-y-4 text-center">
+                    <p className="text-slate-600 text-sm leading-relaxed px-2">
+                      Pour toute réclamation concernant une <span className="font-bold text-slate-800">note incorrecte</span>, l'envoi des copies de vos feuilles d'examen est <span className="font-bold">obligatoire</span>.
+                    </p>
+                    <div className="p-4 bg-slate-50 rounded border border-slate-100 text-left">
+                      <p className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">Instructions</p>
+                      <p className="text-slate-600 text-xs leading-relaxed">
+                        Si vous avez plusieurs feuilles, merci de les scanner et de créer <span className="font-bold">un seul document PDF unique</span>. Toute réclamation sans justificatif sera classée sans suite.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Titre */}
-                <h3 className="text-xl font-bold text-slate-800 text-center mb-4">
-                  Information importante
-                </h3>
-
-                {/* Message */}
-                <div className="mb-6">
-                  <p className="text-slate-700 text-sm leading-relaxed">
-                    Pour une réclamation concernant une <strong>note incorrecte</strong>, vous devez obligatoirement joindre les <strong>feuilles de devoirs</strong> si l'évaluation a été effectuée sur table.
-                  </p>
-                  <p className="text-slate-700 text-sm leading-relaxed mt-3">
-                    <strong>Important :</strong> Si vous avez plusieurs évaluations pour un seul module, vous devez créer <strong>un seul document PDF</strong> contenant toutes vos évaluations.
-                  </p>
-                  <p className="text-slate-700 text-sm leading-relaxed mt-3 font-semibold text-orange-600">
-                    Sans ces documents, votre réclamation ne sera pas prise en compte.
-                  </p>
-                </div>
-
-                {/* Boutons */}
-                <div className="flex gap-3">
+                <div className="flex bg-slate-50 p-6 gap-3">
                   <button
                     onClick={handleModalClose}
-                    className="flex-1 px-4 py-2.5 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200"
+                    className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 rounded font-bold transition-all"
                   >
                     Annuler
                   </button>
                   <button
                     onClick={handleModalConfirm}
-                    className="flex-1 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-medium transition-colors duration-200"
+                    className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold transition-all shadow-sm"
                   >
                     J'ai compris
                   </button>

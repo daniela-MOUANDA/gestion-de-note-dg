@@ -10,6 +10,7 @@ export class CourseModel {
     this.salle = data.salle || ''
     this.jour = data.jour || ''
     this.date = data.date || ''
+    this.isRecurrent = data.isRecurrent === undefined ? true : data.isRecurrent
   }
 
   get horaire() {

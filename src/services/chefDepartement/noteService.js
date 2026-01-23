@@ -11,7 +11,7 @@ export const getParametresNotation = async (moduleId, semestre) => {
       .single()
 
     if (error && error.code !== 'PGRST116') throw error
-    
+
     return {
       success: true,
       parametres: data || null
@@ -71,6 +71,9 @@ export const saveParametresNotation = async (data) => {
 
     if (result.error) throw result.error
 
+    // Notification facultative : on pourrait ici notifier les classes qui suivent ce module.
+    // Pour l'instant, priorité aux emplois du temps.
+
     return {
       success: true,
       parametres: result.data
@@ -113,7 +116,7 @@ export const getNotesByModuleClasse = async (moduleId, classeId, semestre) => {
 export const saveNotesBulk = async (notes, departementId) => {
   try {
     console.log('📝 saveNotesBulk appelé avec:', { notes, departementId })
-    
+
     if (!notes || notes.length === 0) {
       console.error('❌ Erreur: Aucune note à enregistrer')
       return {
@@ -150,7 +153,7 @@ export const saveNotesBulk = async (notes, departementId) => {
     }
 
     const semestresAutorises = correspondanceNiveauSemestre[niveauCode] || []
-    
+
     if (!semestresAutorises.includes(semestre)) {
       return {
         success: false,
@@ -223,6 +226,14 @@ export const saveNotesBulk = async (notes, departementId) => {
       if (error) throw error
       data = insertedData
       console.log('✅ Notes insérées:', data.length)
+
+      // Notifier chaque étudiant individuellement
+      import('./notificationService.js').then(({ notifyNouvelleNote }) => {
+        const moduleNom = module?.nom || 'Inconnu'
+        notesAvecValeur.forEach(note => {
+          notifyNouvelleNote(note.etudiant_id, moduleNom, note.valeur)
+        })
+      }).catch(err => console.error('Erreur notifications notes:', err))
     } else {
       console.log('ℹ️ Aucune note à insérer (toutes les notes ont été supprimées)')
     }

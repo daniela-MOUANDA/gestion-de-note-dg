@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { 
+import {
   faBell,
   faCheck,
   faTrash,
@@ -9,81 +9,94 @@ import {
   faClock,
   faGraduationCap,
   faCog,
-  faUser
+  faUser,
+  faCheckCircle,
+  faTimesCircle,
+  faExclamationCircle
 } from '@fortawesome/free-solid-svg-icons'
 import Sidebar from '../../components/common/Sidebar'
 import Header from '../../components/common/Header'
-import { StudentModel } from '../../models/StudentModel'
+import { useAuth } from '../../contexts/AuthContext'
+import * as notificationAPI from '../../api/notifications'
 
 const NotificationsView = () => {
-  // Données par défaut pour l'affichage sans connexion
-  const defaultStudentData = {
-    id: 1,
-    email: 'lidvigembo@mail.com',
-    matricule: 'INPTIC2025',
-    nom: 'MBO',
-    prenom: 'Lidvige',
-    programme: 'GI 2025 Génie Informatique',
-    niveau: 'L3',
-    moyenneGenerale: 14.5,
-    credits: 24,
-    totalModules: 15,
-    rangClasse: 5,
-    estActif: true,
-    estBoursier: true,
-    semestre: 'Semestre 6',
-    derniereConnexion: new Date().toISOString()
+  const { user } = useAuth()
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  // Charger les notifications au montage du composant
+  useEffect(() => {
+    loadNotifications()
+  }, [])
+
+  const loadNotifications = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await notificationAPI.getNotifications()
+      setNotifications(data || [])
+    } catch (err) {
+      console.error('Erreur chargement notifications:', err)
+      setError('Impossible de charger les notifications')
+      setNotifications([])
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const [student] = useState(() => {
-    const studentData = localStorage.getItem('student')
-    if (studentData) {
-      return new StudentModel(JSON.parse(studentData))
+  const handleMarkAsRead = async () => {
+    try {
+      await notificationAPI.markAllAsRead()
+      await loadNotifications()
+    } catch (err) {
+      console.error('Erreur marquage comme lu:', err)
     }
-    return new StudentModel(defaultStudentData)
-  })
+  }
 
-  // Données simulées des notifications
-  const notificationsData = [
-    {
-      id: 1,
-      type: 'Académiques',
-      icon: faFileAlt,
-      message: 'Nouvelle note disponible : "Programmation web"',
-      date: new Date(),
-      isNew: true,
-      action: 'Voir la note'
-    },
-    {
-      id: 2,
-      type: 'Personnelles',
-      icon: faClock,
-      message: 'Rappel : Conférence sur l\'IA à "16h00"',
-      date: new Date(),
-      isNew: true
-    },
-    {
-      id: 3,
-      type: 'Système',
-      icon: faCog,
-      message: 'Mise à jour du système disponible',
-      date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // Il y a 3 jours
-      isNew: false
+  const handleDelete = async () => {
+    if (!confirm('Voulez-vous vraiment supprimer toutes les notifications ?')) {
+      return
     }
-  ]
+    try {
+      await notificationAPI.deleteAllNotifications()
+      await loadNotifications()
+    } catch (err) {
+      console.error('Erreur suppression:', err)
+    }
+  }
 
-  const [notifications] = useState(notificationsData)
+  const handleDeleteOne = async (id) => {
+    try {
+      await notificationAPI.deleteNotification(id)
+      await loadNotifications()
+    } catch (err) {
+      console.error('Erreur suppression notification:', err)
+    }
+  }
 
+  const handleMarkOneAsRead = async (id) => {
+    try {
+      await notificationAPI.markAsRead(id)
+      await loadNotifications()
+    } catch (err) {
+      console.error('Erreur marquage notification:', err)
+    }
+  }
+
+  // Calculer les statistiques
   const stats = {
-    academique: 1, // 1 notification académique
-    systeme: 1, // 1 notification système
-    personnelles: 1
+    academique: notifications.filter(n => n.type === 'ACADEMIQUE').length,
+    systeme: notifications.filter(n => n.type === 'SYSTEME').length,
+    personnelles: notifications.filter(n => n.type === 'PERSONNEL').length,
+    inscription: notifications.filter(n => n.type === 'INSCRIPTION').length
   }
 
+  // Filtrer par date
   const todayNotifications = notifications.filter(n => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const notifDate = new Date(n.date)
+    const notifDate = new Date(n.date_creation)
     notifDate.setHours(0, 0, 0, 0)
     return notifDate.getTime() === today.getTime()
   })
@@ -91,126 +104,234 @@ const NotificationsView = () => {
   const weekNotifications = notifications.filter(n => {
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
-    const notifDate = new Date(n.date)
+    const notifDate = new Date(n.date_creation)
     return notifDate >= weekAgo && !todayNotifications.includes(n)
   })
 
-  const getColorClasses = (type, isOld = false) => {
-    // Si c'est une ancienne notification académique, utiliser orange
-    if (type === 'Académiques' && isOld) {
-      return {
-        border: 'border-orange-500',
-        tag: 'bg-orange-100 text-orange-700',
-        iconBg: 'bg-orange-100',
-        icon: 'text-orange-600'
-      }
+  const olderNotifications = notifications.filter(n => {
+    return !todayNotifications.includes(n) && !weekNotifications.includes(n)
+  })
+
+  const getIcon = (type) => {
+    switch (type) {
+      case 'ACADEMIQUE':
+        return faGraduationCap
+      case 'INSCRIPTION':
+        return faFileAlt
+      case 'SYSTEME':
+        return faCog
+      case 'PERSONNEL':
+        return faUser
+      default:
+        return faBell
     }
-    
-    const colors = {
-      'Académiques': {
+  }
+
+  const getColorClasses = (type, isRead = false) => {
+    const baseColors = {
+      'ACADEMIQUE': {
         border: 'border-blue-500',
         tag: 'bg-blue-100 text-blue-700',
         iconBg: 'bg-blue-100',
         icon: 'text-blue-600'
       },
-      'Personnelles': {
-        border: 'border-emerald-500',
-        tag: 'bg-emerald-100 text-emerald-700',
-        iconBg: 'bg-emerald-100',
-        icon: 'text-emerald-600'
+      'INSCRIPTION': {
+        border: 'border-green-500',
+        tag: 'bg-green-100 text-green-700',
+        iconBg: 'bg-green-100',
+        icon: 'text-green-600'
       },
-      'Système': {
+      'PERSONNEL': {
+        border: 'border-purple-500',
+        tag: 'bg-purple-100 text-purple-700',
+        iconBg: 'bg-purple-100',
+        icon: 'text-purple-600'
+      },
+      'SYSTEME': {
         border: 'border-orange-500',
         tag: 'bg-orange-100 text-orange-700',
         iconBg: 'bg-orange-100',
         icon: 'text-orange-600'
       }
     }
-    return colors[type] || colors['Académiques']
+
+    if (isRead) {
+      return {
+        border: 'border-slate-200',
+        tag: 'bg-slate-100 text-slate-600',
+        iconBg: 'bg-slate-100',
+        icon: 'text-slate-400'
+      }
+    }
+
+    return baseColors[type] || baseColors['SYSTEME']
   }
 
-  const handleMarkAsRead = () => {
-    // TODO: Implémenter la fonctionnalité
-    console.log('Marquer comme lu')
+  const formatDate = (dateString) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'À l\'instant'
+    if (diffMins < 60) return `Il y a ${diffMins} min`
+    if (diffHours < 24) return `Il y a ${diffHours}h`
+    if (diffDays === 1) return 'Hier'
+    if (diffDays < 7) return `Il y a ${diffDays} jours`
+    return date.toLocaleDateString('fr-FR')
   }
 
-  const handleDelete = () => {
-    // TODO: Implémenter la fonctionnalité
-    console.log('Supprimer')
+  const renderNotification = (notification, isOld = false) => {
+    const colors = getColorClasses(notification.type, notification.lu)
+    const icon = getIcon(notification.type)
+
+    return (
+      <div
+        key={notification.id}
+        className={`bg-white rounded-lg shadow-sm border ${notification.lu ? 'border-slate-200 opacity-75' : 'border-slate-300'} p-5 hover:border-blue-200 transition-all group`}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4 flex-1">
+            <div className={`w-12 h-12 rounded flex items-center justify-center ${colors.iconBg} flex-shrink-0 transition-transform group-hover:scale-105`}>
+              <FontAwesomeIcon icon={icon} className={`${colors.icon} text-lg`} />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${colors.tag}`}>
+                  {notification.type}
+                </span>
+                <span className="w-1 h-1 rounded-full bg-slate-200"></span>
+                <span className="text-[11px] font-medium text-slate-400">{formatDate(notification.date_creation)}</span>
+                {!notification.lu && (
+                  <span className="ml-auto w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
+                )}
+              </div>
+              <h4 className="font-semibold text-slate-800 mb-1">{notification.titre}</h4>
+              <p className="text-slate-600 text-sm leading-relaxed">{notification.message}</p>
+
+              {notification.lien && (
+                <a
+                  href={notification.lien}
+                  className="inline-flex items-center gap-2 mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <FontAwesomeIcon icon={faEye} />
+                  Voir plus
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            {!notification.lu && (
+              <button
+                onClick={() => handleMarkOneAsRead(notification.id)}
+                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                title="Marquer comme lu"
+              >
+                <FontAwesomeIcon icon={faCheck} />
+              </button>
+            )}
+            <button
+              onClick={() => handleDeleteOne(notification.id)}
+              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+              title="Supprimer"
+            >
+              <FontAwesomeIcon icon={faTrash} />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <Header studentName={user?.nom || 'Étudiant'} />
+          <main className="flex-1 p-6 pt-24">
+            <div className="text-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-slate-600 mt-4">Chargement des notifications...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName} />
-        
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+        <Header studentName={user?.nom || 'Étudiant'} />
+
+        <main className="flex-1 p-6 pt-24">
           {/* Titre */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              Notifications
-            </h1>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-800 mb-1">Centre de Notifications</h1>
+            <p className="text-slate-500">Restez informé de vos notes, événements et mises à jour système</p>
           </div>
 
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
           {/* Statistiques et actions */}
-          <div className="bg-white rounded-lg shadow-sm p-5 sm:p-6 border border-slate-200 mb-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-              {/* Indicateurs circulaires */}
-              <div className="flex gap-6 sm:gap-8">
-                <div className="text-center">
-                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-2">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-blue-700 bg-white flex flex-col items-center justify-center relative p-2">
-                      <FontAwesomeIcon icon={faGraduationCap} className="text-blue-700 text-sm sm:text-base mb-0.5" />
-                      <span className="text-blue-700 font-bold text-xs sm:text-sm mb-0.5">{stats.academique}</span>
-                      <span className="text-blue-700 text-[8px] sm:text-[10px] font-medium">Académique</span>
-                    </div>
-                    {stats.academique > 0 && (
-                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>
-                    )}
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-slate-200 mb-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+              {/* Indicateurs */}
+              <div className="flex gap-12">
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-2">
+                    <FontAwesomeIcon icon={faGraduationCap} />
                   </div>
+                  <span className="text-xl font-bold text-slate-800">{stats.academique}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Académique</span>
                 </div>
-                <div className="text-center">
-                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-2">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-yellow-600 bg-white flex flex-col items-center justify-center relative p-2">
-                      <FontAwesomeIcon icon={faCog} className="text-yellow-600 text-sm sm:text-base mb-0.5" />
-                      <span className="text-yellow-600 font-bold text-xs sm:text-sm mb-0.5">{stats.systeme}</span>
-                      <span className="text-yellow-600 text-[8px] sm:text-[10px] font-medium">Système</span>
-                    </div>
-                    {stats.systeme > 0 && (
-                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white"></div>
-                    )}
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-green-50 border border-green-100 flex items-center justify-center text-green-600 mb-2">
+                    <FontAwesomeIcon icon={faFileAlt} />
                   </div>
+                  <span className="text-xl font-bold text-slate-800">{stats.inscription}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inscription</span>
                 </div>
-                <div className="text-center">
-                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-2">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-green-700 bg-white flex flex-col items-center justify-center relative p-2">
-                      <FontAwesomeIcon icon={faUser} className="text-green-700 text-sm sm:text-base mb-0.5" />
-                      <span className="text-green-700 font-bold text-xs sm:text-sm mb-0.5">{stats.personnelles}</span>
-                      <span className="text-green-700 text-[8px] sm:text-[10px] font-medium">Personnelles</span>
-                    </div>
-                    {stats.personnelles > 0 && (
-                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                    )}
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 mb-2">
+                    <FontAwesomeIcon icon={faCog} />
                   </div>
+                  <span className="text-xl font-bold text-slate-800">{stats.systeme}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Système</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 mb-2">
+                    <FontAwesomeIcon icon={faUser} />
+                  </div>
+                  <span className="text-xl font-bold text-slate-800">{stats.personnelles}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personnel</span>
                 </div>
               </div>
 
               {/* Boutons d'action */}
-              <div className="flex gap-3">
+              <div className="flex gap-3 w-full md:w-auto">
                 <button
                   onClick={handleMarkAsRead}
-                  className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 text-sm"
+                  className="flex-1 md:flex-none flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold transition-all shadow-sm text-sm"
                 >
-                  <FontAwesomeIcon icon={faBell} className="mr-2" />
-                  Marquer comme lu
+                  <FontAwesomeIcon icon={faCheck} className="mr-2" />
+                  Tout marquer comme lu
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex items-center px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors duration-200 text-sm"
+                  className="flex-1 md:flex-none flex items-center justify-center px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded font-semibold transition-all text-sm"
                 >
                   <FontAwesomeIcon icon={faTrash} className="mr-2" />
-                  Supprimer
+                  Vider
                 </button>
               </div>
             </div>
@@ -218,95 +339,54 @@ const NotificationsView = () => {
 
           {/* Section Aujourd'hui */}
           {todayNotifications.length > 0 && (
-            <div className="mb-6">
-              <div className="mb-4">
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1">Aujourd'hui</h2>
-                <p className="text-sm text-slate-600">{todayNotifications.length} nouvelle{todayNotifications.length > 1 ? 's' : ''}</p>
+            <div className="mb-10">
+              <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-lg font-bold text-slate-800">Aujourd'hui</h2>
+                <div className="h-px bg-slate-200 flex-1"></div>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">
+                  {todayNotifications.length} Nouveau{todayNotifications.length > 1 ? 'x' : ''}
+                </span>
               </div>
-              <div className="space-y-3">
-                {todayNotifications.map((notification) => {
-                  const colors = getColorClasses(notification.type, false)
-                  return (
-                    <div
-                      key={notification.id}
-                      className={`bg-white rounded-lg shadow-sm p-4 sm:p-5 border-l-4 ${colors.border} border border-slate-200`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors.iconBg} flex-shrink-0`}>
-                            <FontAwesomeIcon icon={notification.icon} className={`${colors.icon} text-sm`} />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors.tag}`}>
-                                {notification.type}
-                              </span>
-                            </div>
-                            <p className="text-sm sm:text-base text-slate-800 leading-relaxed">{notification.message}</p>
-                          </div>
-                        </div>
-                        {notification.action && (
-                          <button className="flex items-center px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors duration-200 flex-shrink-0">
-                            <FontAwesomeIcon icon={faEye} className="mr-1.5 text-xs" />
-                            {notification.action}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="space-y-4">
+                {todayNotifications.map(notification => renderNotification(notification, false))}
               </div>
             </div>
           )}
 
           {/* Section Cette semaine */}
           {weekNotifications.length > 0 && (
-            <div>
-              <div className="mb-4">
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1">Cette semaine</h2>
+            <div className="mb-10">
+              <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-lg font-bold text-slate-600">Cette semaine</h2>
+                <div className="h-px bg-slate-100 flex-1"></div>
               </div>
-              <div className="space-y-3">
-                {weekNotifications.map((notification) => {
-                  // Pour les notifications de la semaine, utiliser orange si académique (ancienne)
-                  const colors = getColorClasses(notification.type, notification.type === 'Académiques')
-                  return (
-                    <div
-                      key={notification.id}
-                      className={`bg-white rounded-lg shadow-sm p-4 sm:p-5 border-l-4 ${colors.border} border border-slate-200`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors.iconBg} flex-shrink-0`}>
-                            <FontAwesomeIcon icon={notification.icon} className={`${colors.icon} text-sm`} />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors.tag}`}>
-                                {notification.type}
-                              </span>
-                            </div>
-                            <p className="text-sm sm:text-base text-slate-800 leading-relaxed">{notification.message}</p>
-                          </div>
-                        </div>
-                        {notification.action && (
-                          <button className="flex items-center px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors duration-200 flex-shrink-0">
-                            <FontAwesomeIcon icon={faEye} className="mr-1.5 text-xs" />
-                            {notification.action}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="space-y-4">
+                {weekNotifications.map(notification => renderNotification(notification, false))}
+              </div>
+            </div>
+          )}
+
+          {/* Section Plus anciennes */}
+          {olderNotifications.length > 0 && (
+            <div>
+              <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-lg font-bold text-slate-500">Plus anciennes</h2>
+                <div className="h-px bg-slate-100 flex-1"></div>
+              </div>
+              <div className="space-y-4">
+                {olderNotifications.map(notification => renderNotification(notification, true))}
               </div>
             </div>
           )}
 
           {/* Message si aucune notification */}
           {notifications.length === 0 && (
-            <div className="bg-white rounded-xl shadow-md p-8 text-center">
-              <FontAwesomeIcon icon={faBell} className="text-4xl text-slate-300 mb-4" />
-              <p className="text-slate-600">Aucune notification</p>
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center border border-slate-200">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FontAwesomeIcon icon={faBell} className="text-3xl text-slate-200" />
+              </div>
+              <h3 className="text-slate-700 font-bold mb-1">Aucune notification</h3>
+              <p className="text-slate-400 text-sm">Votre centre de notifications est vide pour le moment.</p>
             </div>
           )}
         </main>
@@ -316,4 +396,3 @@ const NotificationsView = () => {
 }
 
 export default NotificationsView
-

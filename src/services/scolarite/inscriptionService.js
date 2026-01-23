@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
 import bcrypt from 'bcrypt'
+import { notifyInscriptionFinalisee } from '../notificationService.js'
 
 // Récupérer toutes les formations
 export const getFormations = async () => {
@@ -8,7 +9,7 @@ export const getFormations = async () => {
       .from('formations')
       .select('*')
       .order('code', { ascending: true })
-    
+
     if (error) throw error
     return data
   } catch (error) {
@@ -24,7 +25,7 @@ export const getFilieres = async () => {
       .from('filieres')
       .select('*')
       .order('code', { ascending: true })
-    
+
     if (error) throw error
     return data
   } catch (error) {
@@ -42,9 +43,9 @@ export const getNiveauxDisponibles = async (formationId, filiereId) => {
       .select('*')
       .eq('id', formationId)
       .single()
-    
+
     if (formError) throw formError
-    
+
     if (formation?.code === 'INITIAL_2') {
       // Récupérer la filière
       const { data: filiere, error: filError } = await supabaseAdmin
@@ -52,9 +53,9 @@ export const getNiveauxDisponibles = async (formationId, filiereId) => {
         .select('*')
         .eq('id', filiereId)
         .single()
-      
+
       if (filError) throw filError
-      
+
       if (filiere?.code === 'MTIC') {
         // MTIC Initial 2 a tous les niveaux
         const { data, error } = await supabaseAdmin
@@ -100,9 +101,9 @@ export const getClasses = async (filiereId, niveauId) => {
       .eq('filiere_id', filiereId)
       .eq('niveau_id', niveauId)
       .order('code', { ascending: true })
-    
+
     if (error) throw error
-    
+
     // Mapper les noms de colonnes pour la compatibilité
     return data.map(c => ({
       id: c.id,
@@ -128,7 +129,7 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
     if (!formationId) {
       throw new Error('Formation ID est requis')
     }
-    
+
     const { data: inscriptions, error } = await supabaseAdmin
       .from('inscriptions')
       .select(`
@@ -144,9 +145,9 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
       .eq('formation_id', formationId) // Filtrer UNIQUEMENT par la formation sélectionnée
       .eq('type_inscription', typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION')
       .order('etudiants(nom)', { ascending: true })
-    
+
     if (error) throw error
-    
+
     return inscriptions.map(inscription => ({
       id: inscription.etudiants.id,
       inscriptionId: inscription.id,
@@ -156,7 +157,7 @@ export const getEtudiantsParFiliereNiveau = async (filiereId, niveauId, promotio
       email: inscription.etudiants.email,
       telephone: inscription.etudiants.telephone,
       photo: inscription.etudiants.photo || null,
-      dateNaissance: inscription.etudiants.date_naissance ? 
+      dateNaissance: inscription.etudiants.date_naissance ?
         inscription.etudiants.date_naissance.split('T')[0] : null,
       lieuNaissance: inscription.etudiants.lieu_naissance || null,
       adresse: inscription.etudiants.adresse || null,
@@ -197,9 +198,9 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
       .eq('promotion_id', promotionId)
       .eq('type_inscription', typeInscription === 'inscription' ? 'INSCRIPTION' : 'REINSCRIPTION')
       .order('etudiants(nom)', { ascending: true })
-    
+
     if (error) throw error
-    
+
     return inscriptions.map(inscription => ({
       id: inscription.etudiants.id,
       inscriptionId: inscription.id,
@@ -209,7 +210,7 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
       email: inscription.etudiants.email,
       telephone: inscription.etudiants.telephone,
       photo: inscription.etudiants.photo || null,
-      dateNaissance: inscription.etudiants.date_naissance ? 
+      dateNaissance: inscription.etudiants.date_naissance ?
         inscription.etudiants.date_naissance.split('T')[0] : null,
       lieuNaissance: inscription.etudiants.lieu_naissance || null,
       adresse: inscription.etudiants.adresse || null,
@@ -247,7 +248,7 @@ export const validerInscription = async (inscriptionId, agentId) => {
       .eq('id', inscriptionId)
       .select()
       .single()
-    
+
     if (error) throw error
     return data
   } catch (error) {
@@ -261,18 +262,18 @@ const generatePassword = () => {
   const length = 12
   const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*'
   let password = ''
-  
+
   // S'assurer qu'il y a au moins une majuscule, une minuscule, un chiffre et un caractère spécial
   password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]
   password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]
   password += '0123456789'[Math.floor(Math.random() * 10)]
   password += '!@#$%&*'[Math.floor(Math.random() * 7)]
-  
+
   // Remplir le reste avec des caractères aléatoires
   for (let i = password.length; i < length; i++) {
     password += charset[Math.floor(Math.random() * charset.length)]
   }
-  
+
   // Mélanger les caractères
   return password.split('').sort(() => Math.random() - 0.5).join('')
 }
@@ -347,7 +348,7 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
         .eq('id', utilisateur.id)
         .select()
         .single()
-      
+
       if (updateError) throw updateError
       utilisateur = updatedUser
       console.log('✅ Compte Utilisateur mis à jour pour l\'étudiant:', utilisateur.email)
@@ -369,7 +370,7 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
         })
         .select()
         .single()
-      
+
       if (createError) throw createError
       utilisateur = newUser
       console.log('✅ Compte Utilisateur créé pour l\'étudiant:', utilisateur.email)
@@ -401,6 +402,15 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
     console.log('💡 IMPORTANT: Notez ces identifiants et communiquez-les à l\'étudiant')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
+    // Créer une notification pour informer l'étudiant
+    try {
+      await notifyInscriptionFinalisee(etudiant.id, etudiant.matricule)
+      console.log(`📧 Notification d'inscription envoyée à l'étudiant ${etudiant.matricule}`)
+    } catch (notifError) {
+      console.error('⚠️ Erreur lors de la création de la notification:', notifError)
+      // Ne pas bloquer la finalisation si la notification échoue
+    }
+
     return {
       ...inscriptionUpdated,
       password: generatedPassword,
@@ -421,7 +431,7 @@ export const getPromotions = async () => {
       .from('promotions')
       .select('*')
       .order('annee', { ascending: false })
-    
+
     if (error) throw error
     return data
   } catch (error) {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faChevronLeft,
@@ -7,43 +7,56 @@ import {
   faMapMarkerAlt,
   faDownload,
   faPrint,
-  faFilePdf
+  faFilePdf,
+  faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import { DashboardController } from '../../controllers/DashboardController'
 import Sidebar from '../../components/common/Sidebar'
 import Header from '../../components/common/Header'
 import { StudentModel } from '../../models/StudentModel'
+import { getMyInfo } from '../../api/student'
 
 const EmploiDuTempsView = () => {
-  // Données par défaut pour l'affichage sans connexion
-  const defaultStudentData = {
-    id: 1,
-    email: 'lidvige.mbo@example.com',
-    matricule: '1045937',
-    nom: 'MBO',
-    prenom: 'Lidvige',
-    programme: 'GI 2025 Génie Informatique',
-    niveau: 'L3',
-    moyenneGenerale: 14.5,
-    credits: 24,
-    totalModules: 15,
-    rangClasse: 5,
-    estActif: true,
-    estBoursier: true,
-    semestre: 'Semestre 5',
-    derniereConnexion: new Date().toISOString()
-  }
-
-  const [student] = useState(() => {
-    const studentData = localStorage.getItem('student')
-    if (studentData) {
-      return new StudentModel(JSON.parse(studentData))
-    }
-    return new StudentModel(defaultStudentData)
-  })
-
-  const [controller] = useState(() => new DashboardController(student.timetable || []))
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [student, setStudent] = useState(null)
+  const [controller] = useState(() => new DashboardController([]))
   const [viewModel, setViewModel] = useState(controller.viewModel)
+
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      try {
+        setLoading(true)
+        const result = await getMyInfo()
+
+        if (result.success && result.data) {
+          const studentModel = new StudentModel({
+            ...result.data,
+            moyenneGenerale: result.data.moyenneGenerale || 0,
+            credits: result.data.nbrCredits || result.data.credits || 0,
+            semestre: result.data.semestreActuel || result.data.semestre || '',
+            timetable: result.data.timetable || []
+          })
+
+          setStudent(studentModel)
+
+          // Mettre à jour le contrôleur avec l'emploi du temps réel
+          controller.setCourses(studentModel.timetable || [])
+          setViewModel({ ...controller.viewModel })
+        } else {
+          setError(result.error || "Impossible de charger les données")
+        }
+
+        setLoading(false)
+      } catch (err) {
+        console.error("Erreur lors du chargement de l'emploi du temps:", err)
+        setError("Impossible de charger l'emploi du temps. Veuillez réessayer plus tard.")
+        setLoading(false)
+      }
+    }
+
+    fetchStudentData()
+  }, [controller])
 
   const handlePreviousWeek = () => {
     const updated = controller.previousWeek()
@@ -56,7 +69,6 @@ const EmploiDuTempsView = () => {
   }
 
   const handleDownloadPDF = () => {
-    // TODO: Implémenter le téléchargement PDF
     window.print()
   }
 
@@ -66,52 +78,93 @@ const EmploiDuTempsView = () => {
 
   const daysOfWeek = controller.getDaysOfWeek()
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen items-center justify-center">
+          <div className="text-center">
+            <FontAwesomeIcon icon={faSpinner} spin size="3x" className="text-blue-500 mb-4" />
+            <p className="text-slate-600 font-medium">Chargement de votre emploi du temps...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Sidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen p-6 pt-24">
+          <Header studentName="Étudiant" />
+          <div className="bg-white rounded-lg shadow-sm border border-red-100 p-8 text-center">
+            <div className="text-red-500 text-5xl mb-4">⚠️</div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Oups !</h2>
+            <p className="text-slate-500 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName} />
+        <Header studentName={student?.fullName || "Étudiant"} />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-24">
+        <main className="flex-1 p-6 pt-24">
           {/* Titre et boutons d'action */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Emploi du temps</h1>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800 mb-1">Emploi du temps</h1>
+              <p className="text-slate-500">Consultez votre planning hebdomadaire et vos salles de cours</p>
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={handleDownloadPDF}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+                className="flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm transition-all"
               >
-                <FontAwesomeIcon icon={faFilePdf} className="mr-2" />
-                <FontAwesomeIcon icon={faDownload} className="mr-2" />
-                <span className="hidden sm:inline">2.5 MB</span>
+                <FontAwesomeIcon icon={faFilePdf} className="mr-2 text-red-500" />
+                <span className="hidden sm:inline">Télécharger PDF</span>
+                <span className="sm:hidden">PDF</span>
               </button>
               <button
                 onClick={handlePrint}
-                className="flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
+                className="flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm transition-all"
               >
-                <FontAwesomeIcon icon={faPrint} className="mr-2" />
+                <FontAwesomeIcon icon={faPrint} className="mr-2 text-slate-500" />
                 <span className="hidden sm:inline">Imprimer</span>
               </button>
             </div>
           </div>
 
           {/* Emploi du temps */}
-          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-slate-200">
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
             {/* Navigation semaine */}
-            <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4 pb-4 border-b border-slate-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-8 pb-6 border-b border-slate-100 gap-4">
               <button
                 onClick={handlePreviousWeek}
-                className="flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors duration-200 w-full sm:w-auto justify-center"
+                className="flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-all w-full sm:w-auto justify-center"
               >
                 <FontAwesomeIcon icon={faChevronLeft} className="mr-2" />
                 Semaine précédente
               </button>
-              <h3 className="text-base sm:text-lg font-semibold text-slate-800 text-center">
-                {controller.getWeekLabel()}
-              </h3>
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-800">
+                  {controller.getWeekLabel()}
+                </h3>
+              </div>
               <button
                 onClick={handleNextWeek}
-                className="flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors duration-200 w-full sm:w-auto justify-center"
+                className="flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-all w-full sm:w-auto justify-center"
               >
                 Semaine suivante
                 <FontAwesomeIcon icon={faChevronRight} className="ml-2" />
@@ -119,53 +172,74 @@ const EmploiDuTempsView = () => {
             </div>
 
             {/* Grille des jours */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
               {daysOfWeek.map((day) => {
-                const courses = controller.getCoursesForDay(day.name)
+                const courses = controller.getCoursesForDay(day)
                 return (
                   <div
                     key={day.name}
-                    className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200 shadow-sm min-h-[200px] sm:min-h-[250px]"
+                    className="flex flex-col bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[300px]"
                   >
-                    <h4 className="font-semibold text-sm sm:text-base text-slate-800 mb-3 pb-2 border-b border-slate-200">
-                      {day.name} {day.dateStr}
-                    </h4>
+                    <div className="mb-4">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{day.name}</div>
+                      <div className="text-lg font-bold text-slate-700">{day.dateStr}</div>
+                    </div>
+
                     {courses.length > 0 ? (
-                      <div className="space-y-3">
-                        {courses.map((course) => (
-                          <div
-                            key={course.id}
-                            className="bg-slate-50 rounded-lg p-3 border border-slate-200 hover:shadow-md transition-shadow"
-                          >
-                            <span className={`inline-block text-white text-xs px-2 py-1 rounded mb-2 font-medium ${course.type === 'Cours'
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-700'
-                                : 'bg-gradient-to-r from-cyan-500 to-cyan-600'
-                              }`}>
-                              {course.type}
-                            </span>
-                            <p className="text-xs sm:text-sm font-medium text-slate-700 mb-1">
-                              {course.horaire}
-                            </p>
-                            <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-2">
-                              {course.matiere}
-                            </p>
-                            {course.professeur && (
-                              <div className="flex items-center text-xs text-slate-600 mb-1">
-                                <FontAwesomeIcon icon={faChalkboardTeacher} className="mr-1.5 text-blue-600" />
-                                {course.professeur}
+                      <div className="space-y-4">
+                        {courses.map((course) => {
+                          const isEvaluation = course.type?.toUpperCase() !== 'COURS'
+
+                          return (
+                            <div
+                              key={course.id}
+                              className={`rounded border p-3 shadow-xs transition-colors ${isEvaluation
+                                ? 'bg-red-50 border-red-200 hover:border-red-300'
+                                : 'bg-white border-slate-200 hover:border-blue-300'
+                                }`}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <span className={`text-[10px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded ${isEvaluation ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                                  }`}>
+                                  {course.type}
+                                </span>
+                                <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${isEvaluation ? 'text-red-600 bg-red-100' : 'text-blue-600 bg-blue-50'
+                                  }`}>
+                                  {course.horaire}
+                                </span>
                               </div>
-                            )}
-                            {course.salle && (
-                              <div className="flex items-center text-xs text-slate-600">
-                                <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1.5 text-red-500" />
-                                {course.salle}
+
+                              <p className={`text-sm font-bold leading-tight mb-3 ${isEvaluation ? 'text-red-900' : 'text-slate-800'
+                                }`}>
+                                {course.matiere}
+                              </p>
+
+                              <div className="space-y-1.5">
+                                {course.professeur && (
+                                  <div className={`flex items-center text-[11px] ${isEvaluation ? 'text-red-700/70' : 'text-slate-500'
+                                    }`}>
+                                    <FontAwesomeIcon icon={faChalkboardTeacher} className={`mr-2 w-3 ${isEvaluation ? 'text-red-400' : 'text-slate-400'
+                                      }`} />
+                                    {course.professeur}
+                                  </div>
+                                )}
+                                {course.salle && (
+                                  <div className={`flex items-center text-[11px] ${isEvaluation ? 'text-red-700/70' : 'text-slate-500'
+                                    }`}>
+                                    <FontAwesomeIcon icon={faMapMarkerAlt} className={`mr-2 w-3 ${isEvaluation ? 'text-red-400' : 'text-slate-400'
+                                      }`} />
+                                    <span className="font-semibold">{course.salle}</span>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        ))}
+                            </div>
+                          )
+                        })}
                       </div>
                     ) : (
-                      <p className="text-slate-400 text-sm text-center py-8">Aucun</p>
+                      <div className="flex-1 flex items-center justify-center border-2 border-dashed border-slate-100 rounded-lg">
+                        <p className="text-slate-300 text-xs font-medium italic">Aucun cours</p>
+                      </div>
                     )}
                   </div>
                 )

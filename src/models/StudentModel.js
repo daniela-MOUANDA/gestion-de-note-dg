@@ -34,6 +34,7 @@ export class StudentModel {
     this.contactParent = data.contactParent || (data.parents && data.parents.length > 0 ? data.parents[0] : null)
     this.parents = data.parents || []
     this.grades = data.grades || []
+    this.timetable = data.timetable || []
   }
 
   get fullName() {

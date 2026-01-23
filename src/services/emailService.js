@@ -38,6 +38,103 @@ const createTransporter = () => {
   })
 }
 
+/**
+ * Envoyer un email de notification de rejet de document à l'étudiant
+ */
+export const sendDocumentRejectionNotification = async (etudiant, documentsRejetes, matricule) => {
+  try {
+    if (!etudiant.email) {
+      console.log('❌ Impossible d\'envoyer l\'email: Pas d\'email pour l\'étudiant')
+      return { success: false, error: 'Pas d\'email fourni' }
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+
+    // Créer la liste HTML des documents rejetés
+    const documentsList = documentsRejetes.map(doc => `
+      <li style="margin-bottom: 10px;">
+        <strong>${doc.label}</strong>
+        ${doc.commentaire ? `<br><span style="color: #dc2626; font-size: 13px;">Raison: ${doc.commentaire}</span>` : ''}
+      </li>
+    `).join('')
+
+    const mailOptions = {
+      from: `"INPTIC - Service Scolarité" <${process.env.SMTP_USER}>`,
+      to: etudiant.email,
+      subject: '⚠️ Documents à re-téléverser - INPTIC',
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f8fafc; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+    .content { padding: 30px; }
+    .alert-box { background-color: #fef2f2; border-left: 4px solid #dc2626; border-radius: 6px; padding: 20px; margin: 25px 0; }
+    .cta-button { display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white !important; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 25px 0; transition: transform 0.2s; }
+    .cta-button:hover { transform: translateY(-2px); }
+    .footer { background-color: #f1f5f9; color: #64748b; text-align: center; padding: 20px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚠️ Documents à re-téléverser</h1>
+    </div>
+    
+    <div class="content">
+      <p style="font-size: 16px;">Bonjour <strong>${etudiant.prenom} ${etudiant.nom}</strong>,</p>
+      
+      <p style="font-size: 15px; line-height: 1.7;">
+        Après vérification de votre dossier d'inscription, notre service de scolarité a identifié que 
+        <strong>${documentsRejetes.length} document${documentsRejetes.length > 1 ? 's ne sont' : ' n\'est'} pas conforme${documentsRejetes.length > 1 ? 's' : ''}</strong> 
+        et doi${documentsRejetes.length > 1 ? 'vent' : 't'} être re-téléversé${documentsRejetes.length > 1 ? 's' : ''}.
+      </p>
+      
+      <div class="alert-box">
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #991b1b; font-size: 18px;">Documents concernés :</h3>
+        <ul style="color: #7f1d1d; font-size: 14px; line-height: 1.8; margin: 0; padding-left: 20px;">
+          ${documentsList}
+        </ul>
+      </div>
+      
+      <p style="font-size: 14px; line-height: 1.7;">
+        Veuillez vous connecter à votre espace étudiant et téléverser à nouveau les documents demandés. 
+        Assurez-vous que les documents sont <strong>lisibles, complets et légalisés</strong> si nécessaire.
+      </p>
+      
+      <a href="${frontendUrl}/login-etudiant" class="cta-button">Accéder à mon Espace Étudiant</a>
+      
+      <p style="font-size: 13px; color: #64748b; margin-top: 30px;">
+        Pour toute question concernant cette notification, n'hésitez pas à contacter le service de scolarité.
+      </p>
+    </div>
+    
+    <div class="footer">
+      <p><strong>INPTIC</strong> - Institut National de la Poste, des Technologies de l'Information et de la Communication</p>
+      <p>Ceci est un message automatique, merci de ne pas y répondre directement.</p>
+    </div>
+  </div>
+</body>
+</html>
+      `
+    }
+
+    const transporter = createTransporter()
+
+    const info = await transporter.sendMail(mailOptions)
+    console.log(`✅ Email de notification de rejet envoyé à ${etudiant.email}`)
+    return { success: true, messageId: info.messageId }
+
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'envoi de l\'email de notification de rejet:', error)
+    return { success: false, error: error.message }
+  }
+}
+
 // Envoyer un email avec les identifiants de connexion à un étudiant
 export const sendStudentCredentials = async (etudiant, password, matricule) => {
   try {
@@ -257,6 +354,24 @@ export const sendStudentCredentials = async (etudiant, password, matricule) => {
         </div>
       </div>
       
+      <!-- IMPORTANT: Documents Required -->
+      <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 20px; margin: 25px 0;">
+        <h3 style="margin-top: 0; margin-bottom: 15px; color: #92400e; font-size: 18px;">⚠️ Étapes obligatoires à compléter</h3>
+        <p style="color: #78350f; font-size: 15px; line-height: 1.6; margin-bottom: 15px;">
+          Pour finaliser votre inscription, vous devez <strong>obligatoirement téléverser les documents suivants</strong> depuis votre espace étudiant :
+        </p>
+        <ol style="color: #78350f; font-size: 14px; line-height: 1.8; margin: 0 0 15px 20px; padding-left: 0;">
+          <li><strong>Photo d'identité</strong> (qui servira aussi pour votre profil)</li>
+          <li><strong>Acte de naissance légalisé</strong></li>
+          <li><strong>Attestation et relevé légalisé de réussite au BAC</strong></li>
+          <li><strong>Pièce d'identité</strong> (CNI, passeport ou autre)</li>
+          <li><strong>Quittance de paiement</strong> des frais d'inscription</li>
+        </ol>
+        <p style="color: #78350f; font-size: 14px; line-height: 1.6; margin: 0;">
+          Vous devez également <strong>renseigner les informations de votre tuteur</strong> (nom, prénom, téléphone, email, profession et adresse).
+        </p>
+      </div>
+      
       <div class="security-notice">
         <span class="security-icon">⚠️</span>
         <div>
@@ -334,3 +449,66 @@ Service de Scolarité - INPTIC
   }
 }
 
+/**
+ * Envoyer une notification générique par email
+ */
+export const sendNotificationEmail = async (email, titre, message, lien = null) => {
+  try {
+    if (!email) return { success: false, error: 'Pas d\'email fourni' }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const fullLink = lien ? (lien.startsWith('http') ? lien : `${frontendUrl}${lien}`) : frontendUrl
+
+    const mailOptions = {
+      from: `"INPTIC - Notifications" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: titre,
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f8fafc; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 25px; text-align: center; }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    .content { padding: 30px; }
+    .message-box { background-color: #f1f5f9; border-radius: 8px; padding: 20px; margin: 20px 0; color: #334155; }
+    .cta-button { display: inline-block; background: #3b82f6; color: white !important; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
+    .footer { background-color: #f1f5f9; color: #64748b; text-align: center; padding: 15px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${titre}</h1>
+    </div>
+    
+    <div class="content">
+      <div class="message-box">
+        <p style="margin: 0; font-size: 15px;">${message}</p>
+      </div>
+      
+      <a href="${fullLink}" class="cta-button">Consulter sur la plateforme</a>
+    </div>
+    
+    <div class="footer">
+      <p><strong>INPTIC</strong> - Institut National de la Poste, des Technologies de l'Information et de la Communication</p>
+      <p>Ceci est un message automatique, merci de ne pas y répondre directement.</p>
+    </div>
+  </div>
+</body>
+</html>
+      `
+    }
+
+    const transporter = createTransporter()
+    await transporter.sendMail(mailOptions)
+    console.log(`✅ Email de notification envoyé à ${email}: ${titre}`)
+    return { success: true }
+  } catch (error) {
+    console.error('❌ Erreur envoi email notification:', error)
+    return { success: false, error: error.message }
+  }
+}

@@ -18,8 +18,8 @@ export class DashboardController {
     return this.viewModel.getDaysOfWeek()
   }
 
-  getCoursesForDay(dayName) {
-    return this.viewModel.getCoursesForDay(dayName)
+  getCoursesForDay(day) {
+    return this.viewModel.getCoursesForDay(day)
   }
 
   previousWeek() {

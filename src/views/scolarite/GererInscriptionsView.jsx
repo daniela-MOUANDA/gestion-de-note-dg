@@ -333,15 +333,15 @@ const GererInscriptionsView = () => {
       return
     }
 
-    // Confirmation avant suppression
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce document ? Vous pourrez ensuite uploader un nouveau document.')) {
-      return
-    }
+    // Demander le motif du rejet/suppression
+    const raison = window.prompt('Veuillez indiquer le motif de la suppression (ce motif sera visible par l\'étudiant) :', 'Document illisible ou non conforme')
+
+    if (raison === null) return // Annulé par l'utilisateur
 
     try {
       setUploading({ ...uploading, [documentType]: true })
-      await deleteDocumentInscription(selectedInscription.id, documentType)
-      success('Document supprimé avec succès!')
+      await deleteDocumentInscription(selectedInscription.id, documentType, raison)
+      success('Document supprimé et marqué comme rejeté avec succès!')
 
       // Recharger le dossier
       const dossier = await getDossierEtudiant(selectedEtudiant.id, selectedInscription.id)
@@ -740,10 +740,10 @@ const GererInscriptionsView = () => {
                   </p>
                 </div>
                 <span className={`px-4 py-2 text-sm font-semibold rounded-lg ${isAlreadyFinalized
-                    ? 'bg-blue-100 text-blue-700'
-                    : documentsComplete
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-amber-100 text-amber-700'
+                  ? 'bg-blue-100 text-blue-700'
+                  : documentsComplete
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-amber-100 text-amber-700'
                   }`}>
                   {isAlreadyFinalized
                     ? '✓ Déjà inscrit'
@@ -1084,8 +1084,8 @@ const GererInscriptionsView = () => {
                     onClick={handleFinaliserInscription}
                     disabled={!canFinalize || loading}
                     className={`w-full py-3 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 ${canFinalize && !loading
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                       }`}
                     title={!canFinalize && !isAlreadyFinalized ? validation.reason : ''}
                   >
@@ -1178,8 +1178,8 @@ const GererInscriptionsView = () => {
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${viewMode === 'grid'
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   title="Vue grille"
                 >
@@ -1188,8 +1188,8 @@ const GererInscriptionsView = () => {
                 <button
                   onClick={() => setViewMode('list')}
                   className={`px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${viewMode === 'list'
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   title="Vue liste"
                 >

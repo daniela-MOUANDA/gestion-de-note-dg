@@ -407,3 +407,283 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
     throw error
   }
 }
+
+const PLACEHOLDER_STUB_SUBDIR = '_stubs'
+const PLACEHOLDER_PDF_FILE = 'document-modele-scolarite.pdf'
+const PLACEHOLDER_IMG_FILE = 'photo-modele-scolarite.png'
+
+const isBlank = (v) => v == null || String(v).trim() === ''
+
+const slugifyEmailPart = (str) => {
+  const s = String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase()
+  return s || 'x'
+}
+
+const buildStubEmail = (prenom, nom, matricule, etudiantId) => {
+  const p = slugifyEmailPart(prenom)
+  const n = slugifyEmailPart(nom)
+  const m =
+    String(matricule || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() ||
+    String(etudiantId || '').replace(/-/g, '')
+  const local =
+    `${p}.${n}.${m}`.replace(/\.+/g, '.').replace(/^\.|\.$/g, '') || `etu${m}`
+  return `${local}@stub.inptic.local`.slice(0, 255)
+}
+
+const buildStubPhone = (matricule, etudiantId) => {
+  const digits =
+    String(matricule || '').replace(/\D/g, '').slice(-6).padStart(4, '0') ||
+    String(etudiantId || '').replace(/\D/g, '').slice(-6).padStart(4, '0')
+  return `+241770${digits}`.slice(0, 20)
+}
+
+async function patchEtudiantStubs (et) {
+  const patch = {}
+  if (isBlank(et.email)) {
+    let email = buildStubEmail(et.prenom, et.nom, et.matricule, et.id)
+    const { data: clash } = await supabaseAdmin
+      .from('etudiants')
+      .select('id')
+      .eq('email', email)
+      .neq('id', et.id)
+      .maybeSingle()
+    if (clash) {
+      const suffix = String(et.id).replace(/-/g, '').slice(0, 12)
+      email = `etu.${suffix}@stub.inptic.local`.slice(0, 255)
+    }
+    patch.email = email
+  }
+  if (isBlank(et.telephone)) {
+    patch.telephone = buildStubPhone(et.matricule, et.id)
+  }
+  if (isBlank(et.adresse)) patch.adresse = 'À compléter'
+  if (et.date_naissance == null || String(et.date_naissance).trim() === '') {
+    patch.date_naissance = '2000-01-01'
+  }
+  if (isBlank(et.lieu_naissance)) patch.lieu_naissance = 'À compléter'
+  if (isBlank(et.nationalite)) patch.nationalite = 'Gabonaise'
+
+  if (Object.keys(patch).length === 0) return false
+
+  const { error } = await supabaseAdmin
+    .from('etudiants')
+    .update(patch)
+    .eq('id', et.id)
+
+  if (error) throw error
+  return true
+}
+
+async function ensureParentTuteurStub (et) {
+  const { data: parentsList, error: pErr } = await supabaseAdmin
+    .from('parents')
+    .select('nom, prenom, telephone')
+    .eq('etudiant_id', et.id)
+
+  if (pErr) throw pErr
+
+  const hasComplete = (parentsList || []).some(
+    (p) => !isBlank(p.nom) && !isBlank(p.prenom) && !isBlank(p.telephone)
+  )
+  if (hasComplete) return false
+
+  const slugP = slugifyEmailPart(et.prenom)
+  const slugN = slugifyEmailPart(et.nom)
+  const pPrenom = 'Parent'
+  const pNom = `parent${slugP}${slugN}`.slice(0, 100)
+  const telephone = buildStubPhone(et.matricule, et.id)
+
+  const { data: existingTuteur } = await supabaseAdmin
+    .from('parents')
+    .select('id')
+    .eq('etudiant_id', et.id)
+    .eq('type', 'TUTEUR')
+    .maybeSingle()
+
+  const payload = {
+    nom: pNom,
+    prenom: pPrenom,
+    telephone,
+    email: null,
+    profession: null,
+    adresse: null
+  }
+
+  if (existingTuteur?.id) {
+    const { error } = await supabaseAdmin
+      .from('parents')
+      .update(payload)
+      .eq('id', existingTuteur.id)
+
+    if (error) throw error
+  } else {
+    const { error } = await supabaseAdmin.from('parents').insert({
+      etudiant_id: et.id,
+      type: 'TUTEUR',
+      ...payload
+    })
+
+    if (error) throw error
+  }
+
+  return true
+}
+
+export function getPlaceholderDocumentUrls() {
+  return {
+    pdf: `/uploads/inscriptions/${PLACEHOLDER_STUB_SUBDIR}/${PLACEHOLDER_PDF_FILE}`,
+    image: `/uploads/inscriptions/${PLACEHOLDER_STUB_SUBDIR}/${PLACEHOLDER_IMG_FILE}`
+  }
+}
+
+/** Crée sur disque des fichiers modèles minuscules (PDF + PNG) réutilisés pour combler les pièces manquantes. */
+export function ensurePlaceholderStubFiles() {
+  const stubDir = path.join(UPLOAD_DIR, PLACEHOLDER_STUB_SUBDIR)
+  if (!fs.existsSync(stubDir)) {
+    fs.mkdirSync(stubDir, { recursive: true })
+  }
+
+  const pdfPath = path.join(stubDir, PLACEHOLDER_PDF_FILE)
+  if (!fs.existsSync(pdfPath)) {
+    const minimalPdf = `%PDF-1.1
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/MediaBox[0 0 200 200]/Parent 2 0 R>>endobj
+trailer<</Size 4/Root 1 0 R>>
+%%EOF
+`
+    fs.writeFileSync(pdfPath, minimalPdf, 'utf8')
+  }
+
+  const imgPath = path.join(stubDir, PLACEHOLDER_IMG_FILE)
+  if (!fs.existsSync(imgPath)) {
+    const png1x1 = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    fs.writeFileSync(imgPath, png1x1)
+  }
+}
+
+/**
+ * Remplit les URL des documents manquants, les champs étudiant vides (e-mail dérivé prénom+nom+matricule, etc.)
+ * et un parent TUTEUR factice si aucun parent complet — même périmètre que la liste « candidats ».
+ * Ne remplace pas les pièces ni les données déjà renseignées.
+ */
+export async function bulkFillPlaceholderInscriptionDocuments({
+  filiereId,
+  niveauId,
+  promotionId,
+  formationId,
+  typeInscription
+}) {
+  if (!filiereId || !niveauId || !promotionId || !formationId) {
+    throw new Error('filiereId, niveauId, promotionId et formationId sont requis')
+  }
+
+  const typeInsc =
+    typeInscription === 'reinscription' ? 'REINSCRIPTION' : 'INSCRIPTION'
+
+  ensurePlaceholderStubFiles()
+  const { pdf: pdfUrl, image: imageUrl } = getPlaceholderDocumentUrls()
+
+  const { data: rows, error: fetchError } = await supabaseAdmin
+    .from('inscriptions')
+    .select(
+      `
+      id,
+      etudiant_id,
+      copie_acte_naissance,
+      photo_identite,
+      quittance,
+      piece_identite,
+      copie_releve,
+      copie_diplome,
+      etudiants (
+        id,
+        nom,
+        prenom,
+        matricule,
+        email,
+        telephone,
+        adresse,
+        date_naissance,
+        lieu_naissance,
+        nationalite,
+        photo
+      )
+    `
+    )
+    .eq('filiere_id', filiereId)
+    .eq('niveau_id', niveauId)
+    .eq('promotion_id', promotionId)
+    .eq('formation_id', formationId)
+    .eq('type_inscription', typeInsc)
+
+  if (fetchError) throw fetchError
+
+  let updatedDocs = 0
+  let alreadyCompleteDocuments = 0
+  let updatedEtudiants = 0
+  let updatedParents = 0
+
+  for (const row of rows || []) {
+    const etu = Array.isArray(row.etudiants)
+      ? row.etudiants[0]
+      : row.etudiants
+    if (!etu?.id) {
+      console.warn('[bulkFill] Inscription sans étudiant lié:', row.id)
+      continue
+    }
+
+    const patch = {}
+    if (isBlank(row.copie_acte_naissance)) patch.copie_acte_naissance = pdfUrl
+    if (isBlank(row.photo_identite)) patch.photo_identite = imageUrl
+    if (isBlank(row.quittance)) patch.quittance = pdfUrl
+    if (isBlank(row.piece_identite)) patch.piece_identite = pdfUrl
+    if (isBlank(row.copie_releve)) patch.copie_releve = pdfUrl
+    if (isBlank(row.copie_diplome)) patch.copie_diplome = pdfUrl
+
+    if (Object.keys(patch).length === 0) {
+      alreadyCompleteDocuments++
+    } else {
+      const { error: upError } = await supabaseAdmin
+        .from('inscriptions')
+        .update(patch)
+        .eq('id', row.id)
+
+      if (upError) throw upError
+      updatedDocs++
+
+      if (patch.photo_identite) {
+        const { data: etuPhoto } = await supabaseAdmin
+          .from('etudiants')
+          .select('photo')
+          .eq('id', row.etudiant_id)
+          .single()
+
+        if (etuPhoto && isBlank(etuPhoto.photo)) {
+          await supabaseAdmin
+            .from('etudiants')
+            .update({ photo: imageUrl })
+            .eq('id', row.etudiant_id)
+        }
+      }
+    }
+
+    if (await patchEtudiantStubs(etu)) updatedEtudiants++
+    if (await ensureParentTuteurStub(etu)) updatedParents++
+  }
+
+  return {
+    totalInscriptions: (rows || []).length,
+    updatedInscriptions: updatedDocs,
+    alreadyComplete: alreadyCompleteDocuments,
+    updatedEtudiants,
+    updatedParents
+  }
+}

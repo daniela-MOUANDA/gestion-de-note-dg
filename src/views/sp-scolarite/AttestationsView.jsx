@@ -10,6 +10,7 @@ import { getPromotions, getFilieres, getNiveauxDisponibles, getFormations } from
 import { getEtudiantsInscritsParFiliereNiveau, creerAttestation } from '../../api/scolarite'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { useAlert } from '../../contexts/AlertContext'
+import { pickPromotionForCurrentAcademicYear } from '../../utils/academicYear.js'
 
 const AttestationsView = () => {
   const { success, error: alertError } = useAlert()
@@ -56,15 +57,14 @@ const AttestationsView = () => {
         const [promotionsData, formationsData, filieresData] = await Promise.all([
           getPromotions(),
           getFormations(),
-          getFilieres()
+          getFilieres({ sansGroupes: true })
         ])
         setPromotions(promotionsData)
         setFormations(formationsData)
         setFilieres(filieresData)
-        // Sélectionner la promotion en cours par défaut
-        const promoEnCours = promotionsData.find(p => p.statut === 'EN_COURS')
-        if (promoEnCours) {
-          setSelectedPromotion(promoEnCours.id)
+        const promoDefaut = pickPromotionForCurrentAcademicYear(promotionsData)
+        if (promoDefaut) {
+          setSelectedPromotion(promoDefaut.id)
         }
         // Sélectionner la première formation par défaut
         if (formationsData.length > 0) {

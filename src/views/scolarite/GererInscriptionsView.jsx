@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faUserCheck, faSearch, faCheckCircle, faTimes, faEye, faFileAlt,
   faIdCard, faMoneyBillWave, faImage, faUpload, faUser, faCalendar,
   faEnvelope, faPhone, faArrowLeft, faDownload, faGraduationCap, faMapMarkerAlt, faBook, faTrash,
-  faTh, faList, faCopy, faKey
+  faTh, faList, faCopy, faKey, faSpinner
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
@@ -24,10 +24,13 @@ import {
   upsertParent,
   getParents,
   getDossierEtudiant,
-  deleteEtudiant
+  deleteEtudiant,
+  bulkFillPlaceholderDocuments,
+  bulkFinaliserComplets
 } from '../../api/scolarite'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { pickPromotionForCurrentAcademicYear } from '../../utils/academicYear.js'
 
 const GererInscriptionsView = () => {
   const location = useLocation()
@@ -41,6 +44,8 @@ const GererInscriptionsView = () => {
   const [selectedFormation, setSelectedFormation] = useState('')
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
+  // Option/parcours (utile surtout en L3 quand la filière a des options)
+  const [selectedOptionFiliereId, setSelectedOptionFiliereId] = useState('')
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [selectedInscription, setSelectedInscription] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -56,6 +61,20 @@ const GererInscriptionsView = () => {
   const [promotions, setPromotions] = useState([])
   const [etudiants, setEtudiants] = useState([])
   const [loading, setLoading] = useState(false)
+  const [fillingPlaceholders, setFillingPlaceholders] = useState(false)
+  const [bulkFinalizing, setBulkFinalizing] = useState(false)
+  const niveauxFetchIdRef = useRef(0)
+
+  const getChildFilieresForParent = (parentId) => {
+    const list = filieres.filter((f) => f.parent_filiere_id === parentId)
+    return [...list].sort((a, b) => (a.code || '').localeCompare(b.code || ''))
+  }
+
+  const rootFilieres = useMemo(() => {
+    return filieres
+      .filter((f) => !f.parent_filiere_id)
+      .sort((a, b) => (a.code || '').localeCompare(b.code || ''))
+  }, [filieres])
 
   // États pour l'édition
   const [editingInfo, setEditingInfo] = useState(false)
@@ -82,10 +101,10 @@ const GererInscriptionsView = () => {
         setFormations(formationsData)
         setFilieres(filieresData)
         setPromotions(promotionsData)
-        // Sélectionner la promotion en cours par défaut
-        const promoEnCours = promotionsData.find(p => p.statut === 'EN_COURS')
-        if (promoEnCours) {
-          setSelectedPromotion(promoEnCours.id)
+        // Année académique « calendrier » (ex. 2025-2026) : priorité sur EN_COURS
+        const promoDefaut = pickPromotionForCurrentAcademicYear(promotionsData)
+        if (promoDefaut) {
+          setSelectedPromotion(promoDefaut.id)
         }
       } catch (error) {
         console.error('Erreur lors du chargement:', error)
@@ -100,28 +119,33 @@ const GererInscriptionsView = () => {
   // Charger les niveaux quand formation et filière sont sélectionnés
   useEffect(() => {
     if (selectedFormation && selectedFiliere) {
+      const fetchId = ++niveauxFetchIdRef.current
       const loadNiveaux = async () => {
         try {
           const niveauxData = await getNiveauxDisponibles(selectedFormation, selectedFiliere)
-          setNiveaux(niveauxData)
+          if (fetchId !== niveauxFetchIdRef.current) return
+          setNiveaux(niveauxData || [])
         } catch (error) {
+          if (fetchId !== niveauxFetchIdRef.current) return
           console.error('Erreur lors du chargement des niveaux:', error)
         }
       }
       loadNiveaux()
     } else {
+      niveauxFetchIdRef.current += 1
       setNiveaux([])
     }
   }, [selectedFormation, selectedFiliere])
 
   // Charger les étudiants quand filière, niveau, formation et promotion sont sélectionnés
   useEffect(() => {
-    if (selectedFiliere && selectedNiveau && selectedFormation && selectedPromotion) {
+    const effectiveFiliereId = selectedOptionFiliereId || selectedFiliere
+    if (effectiveFiliereId && selectedNiveau && selectedFormation && selectedPromotion) {
       const loadEtudiants = async () => {
         try {
           setLoading(true)
           const etudiantsData = await getEtudiantsParFiliereNiveau(
-            selectedFiliere,
+            effectiveFiliereId,
             selectedNiveau,
             selectedPromotion,
             selectedFormation,
@@ -140,7 +164,7 @@ const GererInscriptionsView = () => {
     } else {
       setEtudiants([])
     }
-  }, [selectedFiliere, selectedNiveau, selectedFormation, selectedPromotion, typeInscription])
+  }, [selectedFiliere, selectedOptionFiliereId, selectedNiveau, selectedFormation, selectedPromotion, typeInscription])
 
   const handleBack = () => {
     if (selectedEtudiant) {
@@ -148,6 +172,7 @@ const GererInscriptionsView = () => {
       setSelectedInscription(null)
       setDossierComplet(null)
     }
+    else if (selectedOptionFiliereId) setSelectedOptionFiliereId('')
     else if (selectedNiveau) setSelectedNiveau('')
     else if (selectedFiliere) setSelectedFiliere('')
     else if (selectedFormation) setSelectedFormation('')
@@ -284,6 +309,107 @@ const GererInscriptionsView = () => {
     }
 
     return { valid: true }
+  }
+
+  const handleBulkPlaceholderDocuments = async () => {
+    const effectiveFiliereId = selectedOptionFiliereId || selectedFiliere
+    if (!effectiveFiliereId || !selectedNiveau || !selectedFormation || !selectedPromotion) {
+      alertError('Sélectionnez formation, filière, niveau et promotion.')
+      return
+    }
+
+    const ok = window.confirm(
+      'Compléter automatiquement ce périmètre (filière, niveau, formation, promotion) ?\n\n' +
+        '• Documents : fichiers modèles pour les pièces manquantes uniquement.\n' +
+        '• E-mail : prénom.nom.matricule@stub.inptic.local (si vide).\n' +
+        '• Parent : tuteur factice « Parent / parent{prénom}{nom} » + téléphone si aucun parent complet.\n' +
+        '• Autres champs vides : valeurs minimales pour débloquer le dossier.\n\n' +
+        'Rien n\'est écrasé si déjà renseigné. Usage provisoire : à corriger ensuite avec les vraies données.'
+    )
+    if (!ok) return
+
+    try {
+      setFillingPlaceholders(true)
+      const result = await bulkFillPlaceholderDocuments({
+        filiereId: effectiveFiliereId,
+        niveauId: selectedNiveau,
+        promotionId: selectedPromotion,
+        formationId: selectedFormation,
+        typeInscription
+      })
+      const u = result.updatedInscriptions ?? 0
+      const c = result.alreadyComplete ?? 0
+      const eu = result.updatedEtudiants ?? 0
+      const pa = result.updatedParents ?? 0
+      const tot = result.totalInscriptions ?? 0
+      success(
+        `Pièces modèles : ${u} dossier(s) complété(s), ${c} avaient déjà toutes les pièces (${tot} au total). ` +
+          `Étudiants mis à jour : ${eu}. Parents (tuteur) : ${pa}.`
+      )
+      const etudiantsData = await getEtudiantsParFiliereNiveau(
+        effectiveFiliereId,
+        selectedNiveau,
+        selectedPromotion,
+        selectedFormation,
+        typeInscription
+      )
+      setEtudiants(etudiantsData || [])
+    } catch (err) {
+      console.error(err)
+      alertError(err.message || 'Erreur lors du remplissage des documents')
+    } finally {
+      setFillingPlaceholders(false)
+    }
+  }
+
+  const handleBulkFinaliserComplets = async () => {
+    const effectiveFiliereId = selectedOptionFiliereId || selectedFiliere
+    if (!effectiveFiliereId || !selectedNiveau || !selectedFormation || !selectedPromotion) {
+      alertError('Sélectionnez formation, filière, niveau et promotion.')
+      return
+    }
+
+    const ok = window.confirm(
+      'Finaliser toutes les inscriptions « dossier complet » de ce périmètre ?\n\n' +
+        'Seuls les candidats ayant : toutes les pièces, les informations personnelles complètes, et au moins un parent renseigné — et qui ne sont pas déjà inscrits — recevront le statut INSCRIT et un compte étudiant.\n\n' +
+        'Les autres seront ignorés.'
+    )
+    if (!ok) return
+
+    try {
+      setBulkFinalizing(true)
+      const result = await bulkFinaliserComplets({
+        filiereId: effectiveFiliereId,
+        niveauId: selectedNiveau,
+        promotionId: selectedPromotion,
+        formationId: selectedFormation,
+        typeInscription
+      })
+      const fin = result.finalized ?? 0
+      const skip = result.skippedIncomplete ?? 0
+      const deja = result.alreadyInscrit ?? 0
+      const errs = result.errors || []
+      let msg =
+        `Inscriptions finalisées : ${fin}. Déjà inscrits : ${deja}. Dossiers incomplets (ignorés) : ${skip}.`
+      if (errs.length > 0) {
+        msg += ` Échecs : ${errs.length} (voir la console).`
+        console.warn('Finalisation groupée — erreurs détail:', errs)
+      }
+      success(msg)
+      const etudiantsData = await getEtudiantsParFiliereNiveau(
+        effectiveFiliereId,
+        selectedNiveau,
+        selectedPromotion,
+        selectedFormation,
+        typeInscription
+      )
+      setEtudiants(etudiantsData || [])
+    } catch (err) {
+      console.error(err)
+      alertError(err.message || 'Erreur lors de la finalisation groupée')
+    } finally {
+      setBulkFinalizing(false)
+    }
   }
 
   const handleFileUpload = async (documentType) => {
@@ -629,9 +755,12 @@ const GererInscriptionsView = () => {
                 Formation: <span className="font-medium text-blue-600">{formations.find(f => f.id === selectedFormation)?.nom}</span>
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-                {filieres.map((filiere) => (
-                  <button key={filiere.id} onClick={() => setSelectedFiliere(filiere.id)}
-                    className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group">
+                {rootFilieres.map((filiere) => (
+                  <button
+                    key={filiere.id}
+                    onClick={() => setSelectedFiliere(filiere.id)}
+                    className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+                  >
                     <div className="text-center">
                       <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200">
                         <FontAwesomeIcon icon={faGraduationCap} className="text-3xl text-blue-600" />
@@ -674,7 +803,12 @@ const GererInscriptionsView = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
                 {niveaux.map((niveau) => {
                   return (
-                    <button key={niveau.id || niveau.code} onClick={() => setSelectedNiveau(niveau.id)}
+                    <button
+                      key={niveau.id || niveau.code}
+                      onClick={() => {
+                        setSelectedNiveau(niveau.id)
+                        setSelectedOptionFiliereId('')
+                      }}
                       className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group">
                       <div className="text-center">
                         <div className="text-3xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{niveau.code}</div>
@@ -685,6 +819,57 @@ const GererInscriptionsView = () => {
                     </button>
                   )
                 })}
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  // Vue 2bis : Choix d'option pour L3 (si la filière a des sous-parcours)
+  const selectedNiveauObj = niveaux.find(n => n.id === selectedNiveau) || null
+  const niveauCode = selectedNiveauObj?.code || ''
+  const optionsPourFiliere = selectedFiliere ? getChildFilieresForParent(selectedFiliere) : []
+  const requiresOption = niveauCode === 'L3' && optionsPourFiliere.length > 0
+
+  if (requiresOption && !selectedOptionFiliereId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <AdminSidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+            <div className="mb-6">
+              <button onClick={handleBack} className="flex items-center text-slate-600 hover:text-slate-800 mb-4">
+                <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
+              </button>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
+                {typeInscription === 'inscription' ? 'Inscriptions' : 'Réinscriptions'} - {filieres.find(f => f.id === selectedFiliere)?.code || filieres.find(f => f.id === selectedFiliere)?.nom}
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600">Niveau: {selectedNiveauObj?.nom || niveauCode} — sélectionnez l'option</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+              <h2 className="text-xl font-bold text-slate-800 mb-2 text-center">Choisissez l'option (L3)</h2>
+              <p className="text-slate-600 text-center mb-6">
+                Filière: <span className="font-medium text-blue-600">{filieres.find(f => f.id === selectedFiliere)?.nom}</span>
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                {optionsPourFiliere.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setSelectedOptionFiliereId(opt.id)}
+                    className="p-6 border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
+                  >
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200">
+                        <FontAwesomeIcon icon={faGraduationCap} className="text-3xl text-blue-600" />
+                      </div>
+                      <div className="text-xl font-bold text-slate-800 group-hover:text-blue-600 mb-2">{opt.code || opt.nom}</div>
+                      <div className="text-sm text-slate-600">{opt.nom}</div>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           </main>
@@ -1143,7 +1328,7 @@ const GererInscriptionsView = () => {
               <FontAwesomeIcon icon={faArrowLeft} className="mr-2" />Retour
             </button>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">
-              {typeInscription === 'inscription' ? 'Candidats' : 'Étudiants à réinscrire'} - {filieres.find(f => f.id === selectedFiliere)?.nom} - {niveaux.find(n => n.id === selectedNiveau)?.nom || niveaux.find(n => n.id === selectedNiveau)?.code}
+              {typeInscription === 'inscription' ? 'Candidats' : 'Étudiants à réinscrire'} - {filieres.find(f => f.id === (selectedOptionFiliereId || selectedFiliere))?.nom} - {niveaux.find(n => n.id === selectedNiveau)?.nom || niveaux.find(n => n.id === selectedNiveau)?.code}
             </h1>
             <p className="text-sm sm:text-base text-slate-600">
               {etudiantsFiltres.length} {typeInscription === 'inscription' ? 'candidat' : 'étudiant'}{etudiantsFiltres.length > 1 ? 's' : ''} trouvé{etudiantsFiltres.length > 1 ? 's' : ''}
@@ -1174,6 +1359,28 @@ const GererInscriptionsView = () => {
                   <option value="non-inscrits">Non inscrits uniquement</option>
                 </select>
               </div>
+              <button
+                type="button"
+                onClick={handleBulkPlaceholderDocuments}
+                disabled={loading || fillingPlaceholders || bulkFinalizing}
+                title="Ajoute des fichiers modèles pour toutes les pièces manquantes de cette filière / niveau (sans écraser les fichiers existants)."
+                className="shrink-0 px-4 py-3 rounded-lg font-medium text-amber-900 bg-amber-100 border border-amber-300 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <FontAwesomeIcon icon={faUpload} className={fillingPlaceholders ? 'animate-pulse' : ''} />
+                <span className="hidden sm:inline">Documents modèles (tous)</span>
+                <span className="sm:hidden">Modèles</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkFinaliserComplets}
+                disabled={loading || bulkFinalizing || fillingPlaceholders}
+                title="Passe en INSCRIT toutes les inscriptions du périmètre dont le dossier est complet (pièces + infos perso + parent), sauf celles déjà inscrites."
+                className="shrink-0 px-4 py-3 rounded-lg font-medium text-white bg-green-600 border border-green-700 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <FontAwesomeIcon icon={faCheckCircle} className={bulkFinalizing ? 'animate-pulse' : ''} />
+                <span className="hidden sm:inline">Tout finaliser (complets)</span>
+                <span className="sm:hidden">Finaliser</span>
+              </button>
               <div className="flex gap-2">
                 <button
                   onClick={() => setViewMode('grid')}
@@ -1553,6 +1760,49 @@ const GererInscriptionsView = () => {
                 >
                   Fermer
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(fillingPlaceholders || bulkFinalizing) && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4"
+          role="alertdialog"
+          aria-busy="true"
+          aria-live="polite"
+          aria-label={fillingPlaceholders ? 'Traitement des documents en cours' : 'Finalisation des inscriptions en cours'}
+        >
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl ring-1 ring-slate-200/80">
+            <div className="flex flex-col items-center gap-6">
+              <div className="relative flex h-24 w-24 items-center justify-center">
+                <div
+                  className="absolute inset-0 rounded-full border-[3px] border-blue-100 border-t-blue-600 border-r-blue-500 animate-spin"
+                  style={{ animationDuration: '0.95s' }}
+                />
+                <div
+                  className="absolute inset-2 rounded-full border-[3px] border-emerald-100/80 border-b-emerald-600 border-l-emerald-500 animate-spin-reverse"
+                />
+                <div className="absolute inset-5 rounded-full border border-slate-200/90 bg-gradient-to-br from-blue-50 to-white shadow-inner" />
+                <FontAwesomeIcon
+                  icon={faSpinner}
+                  className="relative text-2xl text-blue-600 animate-spin"
+                  style={{ animationDuration: '0.65s' }}
+                />
+              </div>
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold text-slate-800">
+                  {fillingPlaceholders
+                    ? 'Remplissage des dossiers'
+                    : 'Finalisation des inscriptions'}
+                </p>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {fillingPlaceholders
+                    ? 'Génération des pièces modèles et mise à jour des fiches…'
+                    : 'Création des comptes étudiants et passage au statut inscrit…'}
+                </p>
+                <p className="text-xs text-slate-500 pt-1 animate-pulse">Veuillez patienter</p>
               </div>
             </div>
           </div>

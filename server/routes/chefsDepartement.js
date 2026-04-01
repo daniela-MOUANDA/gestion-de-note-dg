@@ -1,6 +1,8 @@
 import express from 'express'
 import path from 'path'
 import fs from 'fs'
+import XLSX from 'xlsx'
+import multer from 'multer'
 import { authenticate } from '../middleware/auth.js'
 import {
   createChefDepartement,
@@ -23,7 +25,8 @@ import {
   getModulesByDepartement,
   createModule,
   updateModule as updateModuleService,
-  deleteModule as deleteModuleService
+  deleteModule as deleteModuleService,
+  importModulesFromExcelBuffer
 } from '../../src/services/chefDepartement/moduleService.js'
 import {
   getClassesByDepartement,
@@ -64,6 +67,7 @@ import { getBulletinData } from '../../src/services/chefDepartement/relevesServi
 import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartementService.js'
 import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
 import { supabaseAdmin } from '../../src/lib/supabase.js'
+import { fetchPromotionForCurrentAcademicYear, getCurrentAcademicYearLabel } from '../../src/utils/academicYear.js'
 import { getMention } from '../utils/mentions.js'
 // Imports des générateurs PDF
 import { generateBulletinPDF } from '../services/bulletinPDFGenerator.js'
@@ -75,6 +79,21 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+const uploadModulesExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /xlsx|xls/
+    const extname = allowedTypes.test(file.originalname.toLowerCase().split('.').pop())
+    const mimetype =
+      allowedTypes.test(file.mimetype) ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.mimetype === 'application/vnd.ms-excel'
+    if (mimetype && extname) return cb(null, true)
+    cb(new Error('Seuls les fichiers Excel (.xlsx, .xls) sont autorisés'))
+  }
+})
 
 const router = express.Router()
 
@@ -203,6 +222,71 @@ router.post('/enseignants/:id/affecter-modules', async (req, res) => {
 // ROUTES MODULES
 // ============================================
 
+// Modèle Excel pour import groupé (en-têtes + lignes d'exemple + feuille d'aide)
+router.get('/modules/import-template', async (req, res) => {
+  try {
+    if (!req.user.departementId) {
+      return res.status(403).json({ success: false, error: 'Aucun département associé' })
+    }
+
+    const anneeEx = getCurrentAcademicYearLabel()
+
+    const headers = [
+      'filiere_code',
+      'nom',
+      'credit',
+      'semestre',
+      'ue',
+      'nom_ue',
+      'annee_academique',
+      'actif'
+    ]
+
+    const exampleRows = [
+      ['MMI-WM', 'Exemple : Base de données', 4, 'S5', 'UE1', 'Fondamentaux informatiques', anneeEx, 'Oui'],
+      ['MMI-CD', 'Exemple : Programmation web', 5, 'S5', 'UE1', '', anneeEx, 'Oui']
+    ]
+
+    const aide = [
+      ['Import groupé des modules (Chef de département)'],
+      [''],
+      [`• filiere_code : code exact du parcours (ex. MMI-WM), parmi les filières de votre département.`],
+      [`• Si vous laissez filiere_code vide, choisissez une filière par défaut dans la fenêtre d'import.`],
+      [`• Obligatoires : nom, credit, semestre, ue, annee_academique (même libellé qu'une promotion en base, ex. ${anneeEx}).`],
+      [`• Le code module est généré automatiquement à l'import, comme depuis le formulaire.`],
+      [`• actif : Oui ou Non (vide = Oui).`],
+      [`• semestre : S1, S2, … S6. Supprimez les lignes « Exemple » avant d'importer.`]
+    ]
+
+    const wsData = XLSX.utils.aoa_to_sheet([headers, ...exampleRows])
+    wsData['!cols'] = [
+      { wch: 14 },
+      { wch: 34 },
+      { wch: 8 },
+      { wch: 10 },
+      { wch: 8 },
+      { wch: 30 },
+      { wch: 18 },
+      { wch: 8 }
+    ]
+
+    const wsAide = XLSX.utils.aoa_to_sheet(aide)
+    wsAide['!cols'] = [{ wch: 92 }]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, wsData, 'Modules')
+    XLSX.utils.book_append_sheet(wb, wsAide, 'Aide')
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    res.setHeader('Content-Disposition', 'attachment; filename="modele_import_modules.xlsx"')
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.end(Buffer.from(buf))
+  } catch (error) {
+    console.error('Erreur modèle import modules:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
 // Obtenir tous les modules du département
 router.get('/modules', async (req, res) => {
   try {
@@ -233,6 +317,51 @@ router.post('/modules', async (req, res) => {
     res.status(201).json(result)
   } catch (error) {
     console.error('Erreur création module:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.post('/modules/import', (req, res, next) => {
+  uploadModulesExcel.single('file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: err.message || 'Fichier invalide' })
+    }
+    next()
+  })
+}, async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Aucun département associé' })
+    }
+    if (!req.file?.buffer) {
+      return res.status(400).json({ success: false, error: 'Fichier manquant', created: 0, errors: [] })
+    }
+    const rawDefault = req.body?.defaultFiliereId
+    const defaultFiliereId =
+      rawDefault != null && String(rawDefault).trim() !== '' ? String(rawDefault).trim() : null
+    const result = await importModulesFromExcelBuffer(req.file.buffer, departementId, defaultFiliereId)
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error,
+        created: result.created,
+        errors: result.errors
+      })
+    }
+
+    const failed = result.errors?.length > 0
+    const ok = result.created > 0 && !failed
+    const status = result.created === 0 ? 400 : 200
+    res.status(status).json({
+      success: ok,
+      partial: result.created > 0 && failed,
+      created: result.created,
+      errors: result.errors || []
+    })
+  } catch (error) {
+    console.error('Erreur import modules Excel:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -362,6 +491,21 @@ router.get('/filieres', async (req, res) => {
     const result = await getDepartementFilieres(departementId)
     if (!result.success) return res.status(400).json(result)
     res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/** Liste des promotions (années académiques) pour les modules, bulletins, etc. */
+router.get('/promotions', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('promotions')
+      .select('id, annee, statut')
+      .order('annee', { ascending: false })
+
+    if (error) throw error
+    res.json({ success: true, promotions: data || [] })
   } catch (error) {
     res.status(500).json({ success: false, error: error.message })
   }
@@ -1016,26 +1160,10 @@ router.get('/bulletins/classe/:classeId', async (req, res) => {
       return res.status(400).json({ success: false, error: "Le paramètre semestre est requis" })
     }
 
-    // Récupérer la promotion active
-    let { data: promotion } = await supabaseAdmin
-      .from('promotions')
-      .select('id')
-      .eq('statut', 'EN_COURS')
-      .single()
+    const promotion = await fetchPromotionForCurrentAcademicYear(supabaseAdmin)
 
     if (!promotion) {
-      // Essayer de récupérer la dernière promotion
-      const { data: dernierePromotion } = await supabaseAdmin
-        .from('promotions')
-        .select('id')
-        .order('annee', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (!dernierePromotion) {
-        return res.status(404).json({ success: false, error: 'Aucune promotion trouvée' })
-      }
-      promotion = dernierePromotion
+      return res.status(404).json({ success: false, error: 'Aucune promotion trouvée' })
     }
 
     // Récupérer les inscrits actifs de la classe

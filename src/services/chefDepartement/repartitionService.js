@@ -1,15 +1,10 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { getScopedFiliereIdsForDepartement } from './filiereScopeService.js'
 
 // Obtenir les étudiants non répartis d'un département
 export const getEtudiantsNonRepartis = async (departementId) => {
   try {
-    // Récupérer les filières du département
-    const { data: filieres } = await supabaseAdmin
-      .from('filieres')
-      .select('id')
-      .eq('departement_id', departementId)
-
-    const filiereIds = (filieres || []).map(f => f.id)
+    const filiereIds = await getScopedFiliereIdsForDepartement(departementId)
 
     if (filiereIds.length === 0) {
       return { success: true, etudiants: [] }

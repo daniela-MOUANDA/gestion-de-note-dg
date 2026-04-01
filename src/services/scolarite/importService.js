@@ -3,34 +3,102 @@ import bcrypt from 'bcrypt'
 import { supabaseAdmin } from '../../lib/supabase.js'
 import { sendStudentCredentials } from '../emailService.js'
 
-// Mapper les noms de filières depuis Excel vers les codes de la base de données
+// Mapping Excel -> codes filière/options en base
 const mapFiliereNameToCode = (filiereName) => {
-  const name = filiereName.trim().toLowerCase()
+  const raw = (filiereName || '').trim()
+  if (!raw) return 'XX'
+
+  const norm = raw.replace(/\s+/g, ' ').trim()
+  const compact = norm.replace(/\s/g, '').toUpperCase()
+  const knownCompact = {
+    GI: 'GI',
+    RT: 'RT',
+    TC: 'TC',
+    MTIC: 'MTIC',
+    AV: 'AV',
+    'MMI-WEB-MASTERING': 'MMI-WM',
+    'MMI-COMMUNICATION-DIGITALE': 'MMI-CD',
+    'MMI-WEBMASTERING': 'MMI-WM',
+    'MMI-COMMUNICATIONDIGITALE': 'MMI-CD',
+    'MMI-WM': 'MMI-WM',
+    'MMI-CD': 'MMI-CD',
+    'MMI-ED': 'MMI-CD',
+    'MTIC-EMCD': 'MTIC-EMCD',
+    'MTIC-TC': 'MTIC-TC',
+    'GI-DAR': 'GI-DAR',
+    'GI-ASDB': 'GI-ASDB',
+    'RT-RT': 'RT-RT',
+    'RT-AZUR': 'RT-AZUR'
+  }
+  if (knownCompact[compact]) return knownCompact[compact]
+
+  const name = norm.toLowerCase()
+
+  if (name.includes('web mastering') || name.includes('webmastering') || name.includes('mmi-wm') ||
+    name.includes('mmi-web')) {
+    return 'MMI-WM'
+  }
+  if (
+    name.includes('communication digitale') ||
+    name.includes('comm digital') ||
+    name.includes('mmi-cd') ||
+    name.includes('mmi-ed') ||
+    name.match(/mmi\s*[-–]\s*(communication|ecommerce)/)
+  ) {
+    return 'MMI-CD'
+  }
+
+  if (name.includes('emarketing') || name.includes('e-marketing') || name.includes('mtic-emcd')) {
+    return 'MTIC-EMCD'
+  }
+  if (name.includes('mtic-tc') || (name.includes('mtic') && name.includes('technico'))) {
+    return 'MTIC-TC'
+  }
+  if (name.includes('dar') || name.includes('application repart')) {
+    return 'GI-DAR'
+  }
+  if (name.includes('asdb') || name.includes('bases de donnees')) {
+    return 'GI-ASDB'
+  }
+  if (name.includes('azur') || name.includes('rt-azur')) {
+    return 'RT-AZUR'
+  }
 
   // Génie Informatique
   if (name.includes('génie info') || name.includes('genie info') ||
     name.includes('génie informatique') || name.includes('genie informatique') ||
-    name.includes('gi') || name === 'génie info' || name === 'genie info') {
+    (name.includes('gi') && name.length <= 12)) {
     return 'GI'
   }
 
   // Réseaux et Télécoms
   if (name.includes('réseaux') || name.includes('reseau') ||
     name.includes('télécom') || name.includes('telecom') ||
-    name.includes('rt') || name.includes('réseau et télécom') ||
-    name.includes('reseau et telecom')) {
+    name.includes('réseau et télécom') || name.includes('reseau et telecom')) {
     return 'RT'
   }
 
-  // Management des TIC / Multimédias
-  if (name.includes('management') || name.includes('multimédia') ||
-    name.includes('multimedia') || name.includes('mtic') || name.includes('techniques') ||
-    name.includes('tic')) {
+  if ((name.includes('technico') || name.includes('technicaux')) && name.includes('commercial')) {
+    return 'TC'
+  }
+
+  if (name.includes('audiovisuel') || /^av\b/.test(name)) {
+    return 'AV'
+  }
+
+  // « MMI » ou multimédia sans option : refusé à l’import (voir boucle importEtudiants)
+  if (name === 'mmi' || (name.includes('mmi') && !name.includes('web') && !name.includes('master') &&
+    !name.includes('ecom') && !name.includes('commerce') && !name.includes('communication')) ||
+    (name.includes('multimédia') || name.includes('multimedia'))) {
+    return 'MMI'
+  }
+
+  if (name.includes('management') || name.includes('mtic') ||
+    (name.includes('techniques') && name.includes('information'))) {
     return 'MTIC'
   }
 
-  // Par défaut, utiliser les 2 premières lettres en majuscules
-  return filiereName.substring(0, 2).toUpperCase()
+  return norm.substring(0, 2).toUpperCase()
 }
 
 // Parser la date de naissance depuis le format "Le DD/MM/YYYY à [Lieu]"
@@ -58,6 +126,14 @@ const parseDateNaissance = (dateString) => {
 
   return { date: null, lieu: null }
 }
+
+/** Libellé d'en-tête Excel normalisé (accents retirés, minuscules) pour matcher Nom / Prénom etc. */
+const normalizeHeaderLabel = (h) =>
+  String(h ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
 
 // Générer un matricule unique au format: {anneeFin}{3chiffres}
 export const generateMatricule = async (anneeAcademique) => {
@@ -111,6 +187,68 @@ const generateRandomPassword = () => {
   return password
 }
 
+// Résout la filière d'inscription finale selon le niveau et l'option choisie.
+// - L1/L2: filière parent (tronc commun)
+// - L3 avec options: option obligatoire (filière enfant)
+const resolveInscriptionFiliere = async ({ filiereId, niveauCode, optionFiliereId = null }) => {
+  const { data: filiere, error: filiereError } = await supabaseAdmin
+    .from('filieres')
+    .select('*')
+    .eq('id', filiereId)
+    .single()
+
+  if (filiereError || !filiere) {
+    throw new Error('Filière introuvable')
+  }
+
+  // Si l'utilisateur a déjà choisi une option en tant que filière principale, on remonte au parent pour appliquer la règle L3.
+  const parentFiliereId = filiere.parent_filiere_id || filiere.id
+  let parentFiliere = filiere
+  if (filiere.parent_filiere_id) {
+    const { data: parent, error: parentError } = await supabaseAdmin
+      .from('filieres')
+      .select('*')
+      .eq('id', filiere.parent_filiere_id)
+      .single()
+    if (parentError || !parent) {
+      throw new Error('Filière parent introuvable')
+    }
+    parentFiliere = parent
+  }
+
+  const { data: options } = await supabaseAdmin
+    .from('filieres')
+    .select('id, code, nom')
+    .eq('parent_filiere_id', parentFiliereId)
+
+  const hasOptions = Array.isArray(options) && options.length > 0
+  const isL3 = String(niveauCode || '').toUpperCase() === 'L3'
+
+  if (isL3 && hasOptions) {
+    // Cas import Excel: la feuille peut déjà correspondre à une option (ex: GI-DAR).
+    if (!optionFiliereId && filiere.parent_filiere_id) {
+      const selectedAsOption = (options || []).find(o => o.id === filiere.id)
+      if (selectedAsOption) {
+        return { filiereFinaleId: selectedAsOption.id, filiereParent: parentFiliere, hasOptions }
+      }
+    }
+    if (!optionFiliereId) {
+      throw new Error(`En L3, l'option est obligatoire pour la filière ${parentFiliere.code || parentFiliere.nom}.`)
+    }
+    const option = (options || []).find(o => o.id === optionFiliereId)
+    if (!option) {
+      throw new Error('Option L3 invalide pour la filière sélectionnée.')
+    }
+    return { filiereFinaleId: option.id, filiereParent: parentFiliere, hasOptions }
+  }
+
+  if (!isL3 && optionFiliereId) {
+    throw new Error('Une option ne peut être sélectionnée qu’en L3.')
+  }
+
+  return { filiereFinaleId: parentFiliereId, filiereParent: parentFiliere, hasOptions }
+}
+
 // Créer un étudiant manuellement avec son inscription
 export const creerEtudiantManuel = async (data, agentId) => {
   try {
@@ -128,6 +266,7 @@ export const creerEtudiantManuel = async (data, agentId) => {
       promotionId,
       formationId,
       filiereId,
+      optionFiliereId,
       niveauId,
       classeId,
       typeInscription,
@@ -143,17 +282,6 @@ export const creerEtudiantManuel = async (data, agentId) => {
       throw new Error('Tous les champs d\'inscription sont obligatoires')
     }
 
-    // Récupérer la filière et le niveau pour créer/trouver la classe
-    const { data: filiere } = await supabaseAdmin
-      .from('filieres')
-      .select('*')
-      .eq('id', filiereId)
-      .single()
-
-    if (!filiere) {
-      throw new Error('Filière introuvable')
-    }
-
     const { data: niveau } = await supabaseAdmin
       .from('niveaux')
       .select('*')
@@ -163,6 +291,12 @@ export const creerEtudiantManuel = async (data, agentId) => {
     if (!niveau) {
       throw new Error('Niveau introuvable')
     }
+
+    const { filiereFinaleId } = await resolveInscriptionFiliere({
+      filiereId,
+      niveauCode: niveau.code,
+      optionFiliereId
+    })
 
     // Pour la création manuelle, on ne crée pas de classe automatiquement
     // L'étudiant sera affecté à une classe via la répartition des classes
@@ -263,7 +397,7 @@ export const creerEtudiantManuel = async (data, agentId) => {
         etudiant_id: etudiant.id,
         promotion_id: promotionId,
         formation_id: formationId,
-        filiere_id: filiereId,
+        filiere_id: filiereFinaleId,
         niveau_id: niveauId,
         classe_id: null, // Pas de classe assignée automatiquement
         type_inscription: typeInscription || 'INSCRIPTION',
@@ -373,15 +507,46 @@ export const parseExcelFile = async (fileBuffer) => {
       }
 
       const headers = data[0].map(h => String(h).trim())
+      const hNorm = headers.map(normalizeHeaderLabel)
 
       const colIndices = {
-        numero: headers.findIndex(h => h.toLowerCase().includes('n°') || h.toLowerCase().includes('numero')),
-        nom: headers.findIndex(h => h.toLowerCase().includes('nom')),
-        prenom: headers.findIndex(h => h.toLowerCase().includes('prénom') || h.toLowerCase().includes('prenom')),
-        dateNaissance: headers.findIndex(h => h.toLowerCase().includes('date') && h.toLowerCase().includes('naissance')),
-        serieBac: headers.findIndex(h => h.toLowerCase().includes('série') || h.toLowerCase().includes('serie') || h.toLowerCase().includes('bac')),
-        anneeObtention: headers.findIndex(h => h.toLowerCase().includes('année') && h.toLowerCase().includes('obtention') || h.toLowerCase().includes('annee') && h.toLowerCase().includes('obtention')),
-        sexe: headers.findIndex(h => h.toLowerCase().includes('sexe'))
+        numero: hNorm.findIndex(
+          (h) => h.includes('numero') || h.includes('n°') || h.includes('nº')
+        ),
+        nom: hNorm.findIndex((h) => h.includes('nom') && !h.includes('prenom')),
+        prenom: hNorm.findIndex((h) => h.includes('prenom')),
+        // Champ unique ancien format : "Date et lieu de naissance"
+        dateNaissanceCombine: hNorm.findIndex((h) => h.includes('date') && h.includes('lieu')),
+        // Nouveaux champs séparés
+        dateNaissance: hNorm.findIndex(
+          (h) => h.includes('date') && h.includes('naissance') && !h.includes('lieu')
+        ),
+        lieuNaissance: hNorm.findIndex(
+          (h) => h.includes('lieu') && h.includes('naissance') && !h.includes('date')
+        ),
+        nationalite: hNorm.findIndex((h) => h.includes('nationalit')),
+        serieBac: hNorm.findIndex(
+          (h) =>
+            (h.includes('serie') && h.includes('bac')) ||
+            h.includes('serie du bac') ||
+            (h.includes('bac') && h.includes('serie'))
+        ),
+        anneeObtention: hNorm.findIndex(
+          (h) => h.includes('annee') && h.includes('obtention')
+        ),
+        sexe: hNorm.findIndex((h) => h.includes('sexe')),
+        email: hNorm.findIndex((h) => h.includes('email') || h.includes('e-mail') || h.includes('courriel')),
+        telephone: hNorm.findIndex(
+          (h) => h.includes('tel') || h.includes('telephone') || h.includes('phone') || h.includes('portable')
+        ),
+        adresse: hNorm.findIndex((h) => h.includes('adresse'))
+      }
+
+      if (colIndices.nom < 0 || colIndices.prenom < 0) {
+        console.warn(
+          `Import Excel : feuille « ${sheetName} » ignorée (colonnes « Nom » et « Prénom » obligatoires, introuvables dans la première ligne).`
+        )
+        return
       }
 
       const etudiants = []
@@ -399,21 +564,58 @@ export const parseExcelFile = async (fileBuffer) => {
           continue
         }
 
-        const dateNaissanceStr = colIndices.dateNaissance >= 0 ? String(row[colIndices.dateNaissance] || '').trim() : ''
-        const { date, lieu } = parseDateNaissance(dateNaissanceStr)
 
+        // Gestion Date + Lieu de naissance (ancien format combiné OU nouveaux champs séparés)
+        let date = null
+        let lieu = null
+        if (colIndices.dateNaissanceCombine >= 0) {
+          // Ancien format : "Le 24/12/2001 à Moanda"
+          const raw = colIndices.dateNaissanceCombine >= 0 ? String(row[colIndices.dateNaissanceCombine] || '').trim() : ''
+          const parsed = parseDateNaissance(raw)
+          date = parsed.date
+          lieu = parsed.lieu
+        } else {
+          // Nouveau format : deux colonnes séparées
+          if (colIndices.dateNaissance >= 0) {
+            const rawDate = String(row[colIndices.dateNaissance] || '').trim()
+            // Supporter DD/MM/YYYY ou YYYY-MM-DD ou date Excel numérique
+            const matchDMY = rawDate.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+            const matchYMD = rawDate.match(/(\d{4})-(\d{2})-(\d{2})/)
+            if (matchDMY) {
+              const [, d, m, y] = matchDMY
+              date = new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`)
+            } else if (matchYMD) {
+              date = new Date(rawDate)
+            } else if (!isNaN(Number(rawDate)) && rawDate !== '') {
+              // Numéro série Excel
+              date = new Date(Math.round((Number(rawDate) - 25569) * 86400 * 1000))
+            }
+          }
+          if (colIndices.lieuNaissance >= 0) {
+            lieu = String(row[colIndices.lieuNaissance] || '').trim() || null
+          }
+        }
+
+        const nationalite = colIndices.nationalite >= 0 ? String(row[colIndices.nationalite] || '').trim() || null : null
         const serieBac = colIndices.serieBac >= 0 ? String(row[colIndices.serieBac] || '').trim() : null
         const anneeObtention = colIndices.anneeObtention >= 0 ? String(row[colIndices.anneeObtention] || '').trim() : null
         const sexe = colIndices.sexe >= 0 ? String(row[colIndices.sexe] || '').trim().toUpperCase() : null
+        const email = colIndices.email >= 0 ? String(row[colIndices.email] || '').trim() || null : null
+        const telephone = colIndices.telephone >= 0 ? String(row[colIndices.telephone] || '').trim() || null : null
+        const adresse = colIndices.adresse >= 0 ? String(row[colIndices.adresse] || '').trim() || null : null
 
         etudiants.push({
           nom,
           prenom,
           dateNaissance: date,
           lieuNaissance: lieu,
+          nationalite,
           serieBac,
           anneeObtention,
-          sexe: sexe === 'M' || sexe === 'F' ? sexe : null
+          sexe: sexe === 'M' || sexe === 'F' ? sexe : null,
+          email,
+          telephone,
+          adresse
         })
       }
 
@@ -439,8 +641,10 @@ const formatAnneeAcademique = (annee) => {
 }
 
 // Importer les étudiants depuis les données parsées
-export const importEtudiants = async (dataBySheet, anneeAcademique, agentId) => {
+// options.forcedFiliereId : si défini, toutes les feuilles sont fusionnées et affectées à cette filière (parcours/sous-parcours)
+export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, formationId, niveauId, options = {}) => {
   try {
+    const { forcedFiliereId } = options
     const anneeFormatee = formatAnneeAcademique(anneeAcademique)
 
     const results = {
@@ -474,46 +678,29 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId) => 
       promotion = newPromo
     }
 
-    // Récupérer la formation par défaut
-    let { data: formation } = await supabaseAdmin
+    // Récupérer la formation fournie
+    const { data: formation, error: formationError } = await supabaseAdmin
       .from('formations')
       .select('*')
-      .eq('code', 'INITIAL_1')
+      .eq('id', formationId)
       .single()
 
-    if (!formation) {
-      const { data: newForm, error } = await supabaseAdmin
-        .from('formations')
-        .insert({
-          code: 'INITIAL_1',
-          nom: 'Formation Initiale 1'
-        })
-        .select()
-        .single()
-      if (error) throw error
-      formation = newForm
+    if (formationError || !formation) {
+      throw new Error('Formation introuvable. Vérifiez le paramètre de formation.')
     }
 
-    // Récupérer le niveau L1
-    let { data: niveau } = await supabaseAdmin
+    // Récupérer le niveau fourni
+    const { data: niveau, error: niveauError } = await supabaseAdmin
       .from('niveaux')
       .select('*')
-      .eq('code', 'L1')
+      .eq('id', niveauId)
       .single()
 
-    if (!niveau) {
-      const { data: newNiv, error } = await supabaseAdmin
-        .from('niveaux')
-        .insert({
-          code: 'L1',
-          nom: '1ère année',
-          ordinal: '1ère'
-        })
-        .select()
-        .single()
-      if (error) throw error
-      niveau = newNiv
+    if (niveauError || !niveau) {
+      throw new Error('Niveau introuvable. Vérifiez le paramètre de niveau.')
     }
+
+    const niveauCodeUpper = String(niveau.code || '').toUpperCase()
 
     // Récupérer le rôle ETUDIANT pour la création des comptes
     const { data: roleEtudiant } = await supabaseAdmin
@@ -522,48 +709,142 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId) => 
       .eq('code', 'ETUDIANT')
       .single()
 
-    // Traiter chaque feuille (filière)
-    for (const [sheetName, etudiants] of Object.entries(dataBySheet)) {
-      const filiereName = sheetName.trim()
-      const filiereCode = mapFiliereNameToCode(filiereName)
+    /** @type {{ sheetLabel: string, etudiants: any[], filierePref?: any }[]} */
+    let sheetJobs = []
 
-      // Récupérer ou créer la filière
-      let { data: filiere } = await supabaseAdmin
+    if (forcedFiliereId) {
+      const { data: forcedFiliere, error: ffError } = await supabaseAdmin
         .from('filieres')
         .select('*')
-        .eq('code', filiereCode)
+        .eq('id', forcedFiliereId)
         .single()
 
-      if (!filiere) {
-        const { data: newFil, error } = await supabaseAdmin
-          .from('filieres')
-          .insert({
-            code: filiereCode,
-            nom: filiereName
-          })
-          .select()
-          .single()
-        if (error) throw error
-        filiere = newFil
+      if (ffError || !forcedFiliere) {
+        throw new Error('Filière sélectionnée introuvable.')
+      }
+      if (forcedFiliere.type_filiere === 'groupe') {
+        throw new Error(
+          'Choisissez un parcours précis (MMI-Web Mastering, MMI-Ecommerce Digital, TC, etc.), pas un regroupement.'
+        )
       }
 
-      // Récupérer ou créer la classe L1 pour cette filière
+      const merged = []
+      for (const etus of Object.values(dataBySheet)) {
+        merged.push(...etus)
+      }
+      if (merged.length === 0) {
+        throw new Error('Aucune ligne étudiant valide dans le fichier (vérifiez les en-têtes et les feuilles).')
+      }
+
+      sheetJobs = [{
+        sheetLabel: `${forcedFiliere.code} — ${forcedFiliere.nom} (filière imposée, toutes feuilles)`,
+        etudiants: merged,
+        filierePref: forcedFiliere
+      }]
+    } else {
+      sheetJobs = Object.entries(dataBySheet).map(([sheetName, etudiants]) => ({
+        sheetLabel: sheetName.trim(),
+        etudiants,
+        filierePref: null
+      }))
+    }
+
+    // Traiter chaque feuille (filière) ou le lot unique en mode filière imposée
+    for (const { sheetLabel, etudiants, filierePref } of sheetJobs) {
+      const filiereName = sheetLabel
+
+      let filiere = filierePref
+
+      if (!filiere) {
+        const filiereCode = mapFiliereNameToCode(filiereName)
+
+        // En L3, « MMI » seul est ambigu (il faut une option). En L1/L2, tronc commun = feuille « MMI » OK.
+        if (filiereCode === 'MMI' && niveauCodeUpper === 'L3') {
+          const msg =
+            `Feuille « ${filiereName} » : en L3, précisez l'option dans le nom de l'onglet (ex. codes MMI-WM, MMI-CD ou libellés « Web Mastering », « Communication digitale »). En L1/L2, l'onglet « MMI » reste valable pour le tronc commun.`
+          results.details[filiereName] = {
+            filiere: filiereName,
+            etudiantsCrees: 0,
+            etudiantsExistant: 0,
+            erreurs: [msg]
+          }
+          results.erreurs.push(msg)
+          continue
+        }
+
+        const { data: filFound } = await supabaseAdmin
+          .from('filieres')
+          .select('*')
+          .eq('code', filiereCode)
+          .maybeSingle()
+
+        if (filFound) {
+          filiere = filFound
+        } else {
+          const { data: newFil, error } = await supabaseAdmin
+            .from('filieres')
+            .insert({
+              code: filiereCode,
+              nom: filiereName
+            })
+            .select()
+            .single()
+          if (error) throw error
+          filiere = newFil
+        }
+      }
+
+      if (filiere.type_filiere === 'groupe') {
+        const msg =
+          `Feuille « ${filiereName} » : « ${filiere.nom} » est un regroupement. Utilisez MMI-Web Mastering / MMI-Ecommerce Digital ou le mode « une filière ».`
+        results.details[filiereName] = {
+          filiere: filiere.nom,
+          etudiantsCrees: 0,
+          etudiantsExistant: 0,
+          erreurs: [msg]
+        }
+        results.erreurs.push(msg)
+        continue
+      }
+
+      let filiereFinaleId
+      try {
+        const resolved = await resolveInscriptionFiliere({
+          filiereId: filiere.id,
+          niveauCode: niveau.code
+        })
+        filiereFinaleId = resolved.filiereFinaleId
+      } catch (resolveError) {
+        const msg = `Feuille « ${filiereName} » : ${resolveError.message}`
+        results.details[filiereName] = {
+          filiere: filiere.nom,
+          etudiantsCrees: 0,
+          etudiantsExistant: 0,
+          erreurs: [msg]
+        }
+        results.erreurs.push(msg)
+        continue
+      }
+      const filiereCode = filiere.code
+
       let { data: classe } = await supabaseAdmin
         .from('classes')
         .select('*')
-        .eq('filiere_id', filiere.id)
+        .eq('filiere_id', filiereFinaleId)
         .eq('niveau_id', niveau.id)
-        .single()
+        .eq('formation_id', formation.id)
+        .maybeSingle()
 
       if (!classe) {
-        const classeCode = `${filiereCode}-1A`
+        const classeCode = `${filiereCode}-${niveau.code}-${formation.code}`
         const { data: newClasse, error } = await supabaseAdmin
           .from('classes')
           .insert({
             code: classeCode,
-            nom: `${filiere.nom} - 1ère année`,
-            filiere_id: filiere.id,
+            nom: `${filiere.nom} - ${niveau.nom}`,
+            filiere_id: filiereFinaleId,
             niveau_id: niveau.id,
+            formation_id: formation.id,
             effectif: 0
           })
           .select()
@@ -590,7 +871,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId) => 
             .select('id')
             .eq('nom', etudiantData.nom)
             .eq('prenom', etudiantData.prenom)
-            .single()
+            .maybeSingle()
 
           if (etudiantExistant) {
             detailsFiliere.etudiantsExistant++
@@ -606,10 +887,11 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId) => 
               nom: etudiantData.nom,
               prenom: etudiantData.prenom,
               date_naissance: etudiantData.dateNaissance?.toISOString() || null,
-              lieu_naissance: etudiantData.lieuNaissance,
-              email: null,
-              telephone: null,
-              adresse: null,
+              lieu_naissance: etudiantData.lieuNaissance || null,
+              nationalite: etudiantData.nationalite || null,
+              email: etudiantData.email || null,
+              telephone: etudiantData.telephone || null,
+              adresse: etudiantData.adresse || null,
               photo: null
             })
             .select()
@@ -624,7 +906,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId) => 
               etudiant_id: etudiant.id,
               promotion_id: promotion.id,
               formation_id: formation.id,
-              filiere_id: filiere.id,
+              filiere_id: filiereFinaleId,
               niveau_id: niveau.id,
               classe_id: classe.id,
               type_inscription: 'INSCRIPTION',

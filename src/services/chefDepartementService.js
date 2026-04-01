@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt'
 import { supabaseAdmin } from '../lib/supabase.js'
+import { getScopedFilieresForDepartement, getScopedFiliereIdsForDepartement } from './chefDepartement/filiereScopeService.js'
 
 // Créer un nouveau chef de département
 export const createChefDepartement = async (data, createdBy) => {
@@ -500,19 +501,10 @@ export const getDepartementClasses = async (departementId) => {
       return { success: false, error: 'ID de département manquant' }
     }
 
-    // 1. Récupérer les filières du département
-    const { data: filieres, error: filieresError } = await supabaseAdmin
-      .from('filieres')
-      .select('id, nom')
-      .eq('departement_id', departementId)
-
-    if (filieresError) throw filieresError
-
-    if (!filieres || filieres.length === 0) {
+    const filiereIds = await getScopedFiliereIdsForDepartement(departementId)
+    if (!filiereIds.length) {
       return { success: true, classes: [] }
     }
-
-    const filiereIds = filieres.map(f => f.id)
 
     // 2. Récupérer les classes liées à ces filières
     const { data: classes, error: classesError } = await supabaseAdmin
@@ -545,15 +537,49 @@ export const getDepartementFilieres = async (departementId) => {
       return { success: false, error: 'ID de département manquant' }
     }
 
+    // Récupération principale par departement_id
     const { data: filieres, error } = await supabaseAdmin
       .from('filieres')
-      .select('*')
+      .select('*, departements(code)')
       .eq('departement_id', departementId)
-      .order('nom')
+      .order('code', { ascending: true })
 
     if (error) throw error
 
-    return { success: true, filieres }
+    let filieresFinales = Array.isArray(filieres) ? [...filieres] : []
+
+    // Fallback MTIC: certaines anciennes données peuvent avoir un departement_id incohérent
+    // pour les parcours MMI/MTIC. On les rattache visuellement au dashboard MTIC.
+    const depCode = filieresFinales[0]?.departements?.code
+    if (depCode === 'MTIC') {
+      const codesMTIC = [
+        'MTIC',
+        'TC',
+        'MMI',
+        'MMI-WM',
+        'MMI-ED',
+        'MMI-Web-Mastering',
+        'MMI-Ecommerce-Digital',
+        'MTIC-TC',
+        'MTIC-EMCD'
+      ]
+
+      const { data: filieresLegacy, error: legacyError } = await supabaseAdmin
+        .from('filieres')
+        .select('*, departements(code)')
+        .in('code', codesMTIC)
+        .order('code', { ascending: true })
+
+      if (!legacyError && Array.isArray(filieresLegacy) && filieresLegacy.length > 0) {
+        const byId = new Map()
+        for (const f of filieresFinales) byId.set(f.id, f)
+        for (const f of filieresLegacy) byId.set(f.id, f)
+        filieresFinales = Array.from(byId.values())
+          .sort((a, b) => (a.code || '').localeCompare(b.code || ''))
+      }
+    }
+
+    return { success: true, filieres: filieresFinales }
   } catch (error) {
     console.error('Erreur getDepartementFilieres:', error)
     return { success: false, error: 'Erreur lors de la récupération des filières' }
@@ -582,11 +608,9 @@ export const getDepartementStatsGlobales = async (departementId) => {
       return { success: false, error: 'ID de département manquant' }
     }
 
-    // 1. Récupérer les filières du département
-    const { data: filieres } = await supabaseAdmin
-      .from('filieres')
-      .select('id, code, nom')
-      .eq('departement_id', departementId)
+    // 1. Récupérer les filières du département (scope robuste MTIC)
+    const filieres = (await getScopedFilieresForDepartement(departementId))
+      .filter((f) => f.type_filiere !== 'groupe')
 
     if (!filieres || filieres.length === 0) {
       return {
@@ -660,7 +684,7 @@ export const getDepartementStatsGlobales = async (departementId) => {
         value: count,
         color: f.code === 'GI' ? '#3b82f6' :
           f.code === 'RT' ? '#8b5cf6' :
-            f.code === 'MTIC' ? '#10b981' :
+            (f.code === 'MTIC' || f.code === 'TC' || (f.code && String(f.code).startsWith('MMI-'))) ? '#10b981' :
               f.code === 'AV' ? '#f59e0b' : '#6366f1'
       }
     }).filter(item => item.value > 0) // Ne garder que les filières avec des étudiants
@@ -902,11 +926,8 @@ export const getMeilleursEtudiantsParFiliere = async (departementId) => {
       return { success: false, error: 'ID de département manquant' }
     }
 
-    // 1. Récupérer les filières du département
-    const { data: filieres } = await supabaseAdmin
-      .from('filieres')
-      .select('id, code, nom')
-      .eq('departement_id', departementId)
+    const filieres = (await getScopedFilieresForDepartement(departementId))
+      .filter((f) => f.type_filiere !== 'groupe')
 
     if (!filieres || filieres.length === 0) {
       return { success: true, data: {} }
@@ -1101,7 +1122,7 @@ export const getEtudiantsPourRepartition = async (departementId, filiereId, nive
     // Vérifier que la filière appartient au département
     const { data: filiere, error: filiereError } = await supabaseAdmin
       .from('filieres')
-      .select('id, departement_id')
+      .select('id, departement_id, type_filiere')
       .eq('id', filiereId)
       .single()
 
@@ -1111,6 +1132,10 @@ export const getEtudiantsPourRepartition = async (departementId, filiereId, nive
 
     if (filiere.departement_id !== departementId) {
       return { success: false, error: 'Cette filière n\'appartient pas à votre département' }
+    }
+
+    if (filiere.type_filiere === 'groupe') {
+      return { success: false, error: 'Choisissez un parcours (sous-filière), pas la filière parente seule.' }
     }
 
     let formationIds = []
@@ -1350,7 +1375,7 @@ export const getClassesExistantes = async (departementId, filiereId, niveauId, f
     // Vérifier que la filière appartient au département
     const { data: filiere, error: filiereError } = await supabaseAdmin
       .from('filieres')
-      .select('id, departement_id')
+      .select('id, departement_id, type_filiere')
       .eq('id', filiereId)
       .single()
 
@@ -1360,6 +1385,10 @@ export const getClassesExistantes = async (departementId, filiereId, niveauId, f
 
     if (filiere.departement_id !== departementId) {
       return { success: false, error: 'Cette filière n\'appartient pas à votre département' }
+    }
+
+    if (filiere.type_filiere === 'groupe') {
+      return { success: false, error: 'Choisissez un parcours (sous-filière), pas la filière parente seule.' }
     }
 
     // Récupérer l'ID de la formation si spécifiée
@@ -1566,7 +1595,7 @@ export const getEtudiantsPourRepartitionManuelle = async (departementId, filiere
     // Vérifier que la filière appartient au département
     const { data: filiere, error: filiereError } = await supabaseAdmin
       .from('filieres')
-      .select('id, departement_id')
+      .select('id, departement_id, type_filiere')
       .eq('id', filiereId)
       .single()
 
@@ -1576,6 +1605,10 @@ export const getEtudiantsPourRepartitionManuelle = async (departementId, filiere
 
     if (filiere.departement_id !== departementId) {
       return { success: false, error: 'Cette filière n\'appartient pas à votre département' }
+    }
+
+    if (filiere.type_filiere === 'groupe') {
+      return { success: false, error: 'Choisissez un parcours (sous-filière), pas la filière parente seule.' }
     }
 
     let formationIds = []

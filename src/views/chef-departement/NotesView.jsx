@@ -235,11 +235,19 @@ const NotesView = () => {
     })
   }
 
+  const parseCoefficientInput = (rawValue) => {
+    const normalized = String(rawValue ?? '').trim().replace(',', '.')
+    if (!normalized) return null
+    const value = Number.parseFloat(normalized)
+    return Number.isFinite(value) ? value : null
+  }
+
   const handleSaveParametres = async () => {
-    // Vérifier que toutes les évaluations ont une note max et un coefficient
-    const hasInvalidEvaluation = formParametres.evaluations.some(e =>
-      !e.noteMax || !e.coefficient || e.nombreEvaluations < 1
-    )
+    // Vérifier que toutes les évaluations ont une note max et un coefficient décimal valide
+    const hasInvalidEvaluation = formParametres.evaluations.some((e) => {
+      const coefficient = parseCoefficientInput(e.coefficient)
+      return !e.noteMax || coefficient === null || coefficient <= 0 || e.nombreEvaluations < 1
+    })
 
     if (hasInvalidEvaluation) {
       showAlert('Veuillez remplir tous les champs pour chaque évaluation', 'error')
@@ -258,10 +266,15 @@ const NotesView = () => {
 
     try {
       setSaving(true)
+      const normalizedEvaluations = formParametres.evaluations.map((e) => ({
+        ...e,
+        coefficient: parseCoefficientInput(e.coefficient)
+      }))
+
       const result = await saveParametresNotation({
         moduleId: selectedModule,
         semestre: selectedSemestre,
-        evaluations: formParametres.evaluations
+        evaluations: normalizedEvaluations
       })
 
       if (result.success) {
@@ -487,7 +500,12 @@ const NotesView = () => {
   }
 
   const getTotalCoefficients = () => {
-    return formParametres.evaluations.reduce((sum, e) => sum + (parseFloat(e.coefficient || 0) * e.nombreEvaluations), 0)
+    return formParametres.evaluations
+      .reduce((sum, e) => {
+        const coefficient = parseCoefficientInput(e.coefficient) || 0
+        return sum + (coefficient * e.nombreEvaluations)
+      }, 0)
+      .toFixed(2)
   }
 
   // Obtenir les semestres autorisés pour la classe sélectionnée
@@ -1220,10 +1238,17 @@ const NotesView = () => {
                             <input
                               type="number"
                               value={evaluation.coefficient}
-                              onChange={(e) => modifierEvaluation(evaluation.id, 'coefficient', parseFloat(e.target.value) || 1)}
-                              min="0.5"
+                              onChange={(e) => {
+                                const parsed = parseCoefficientInput(e.target.value)
+                                modifierEvaluation(
+                                  evaluation.id,
+                                  'coefficient',
+                                  parsed === null ? '' : parsed
+                                )
+                              }}
+                              min="0.1"
                               max="10"
-                              step="0.5"
+                              step="0.1"
                               className="w-full px-3 py-1.5 text-sm text-center border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </td>

@@ -59,6 +59,10 @@ export const getFilieres = async () => {
   return request('/filieres')
 }
 
+export const getPromotionsList = async () => {
+  return request('/promotions')
+}
+
 export const getDashboardStats = async () => {
   return request('/stats')
 }
@@ -243,6 +247,55 @@ export const deleteModule = async (id) => {
   return request(`/modules/${id}`, {
     method: 'DELETE'
   })
+}
+
+export const downloadModulesImportTemplate = async () => {
+  const token = localStorage.getItem('token')
+  const url = `${API_BASE_URL}/modules/import-template`
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  if (!response.ok) {
+    let msg = 'Impossible de télécharger le modèle'
+    try {
+      const data = await response.json()
+      if (data?.error) msg = data.error
+    } catch {
+      const text = await response.text()
+      if (text) msg = text.slice(0, 200)
+    }
+    throw new Error(msg)
+  }
+  return response.blob()
+}
+
+export const importModulesExcel = async (file, defaultFiliereId = '') => {
+  const token = localStorage.getItem('token')
+  const fd = new FormData()
+  fd.append('file', file)
+  if (defaultFiliereId) fd.append('defaultFiliereId', defaultFiliereId)
+  const response = await fetch(`${API_BASE_URL}/modules/import`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return {
+      success: false,
+      error: data.error || 'Import impossible',
+      created: data.created ?? 0,
+      errors: data.errors || [],
+      partial: false
+    }
+  }
+  return {
+    success: data.success !== false,
+    created: data.created ?? 0,
+    errors: data.errors || [],
+    partial: !!data.partial,
+    error: data.error
+  }
 }
 
 // ============================================

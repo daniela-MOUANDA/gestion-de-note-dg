@@ -19,12 +19,19 @@ export const getFormations = async () => {
 }
 
 // Récupérer toutes les filières
-export const getFilieres = async () => {
+// excludeGroupes: masque les filières « groupe » (ex. MMI parent) pour listes d'inscription / filtres
+export const getFilieres = async ({ excludeGroupes = false } = {}) => {
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('filieres')
       .select('*')
       .order('code', { ascending: true })
+
+    if (excludeGroupes) {
+      query = query.neq('type_filiere', 'groupe')
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
     return data
@@ -32,6 +39,38 @@ export const getFilieres = async () => {
     console.error('Erreur lors de la récupération des filières:', error)
     throw error
   }
+}
+
+/** Parcours en Initiale 2 avec L1–L3 (tronc + options en L3) : code racine ou sous-parcours GI-*, RT-*, MTIC-*, ou tout parcours département MTIC. */
+const isFiliereInitial2TriennaleComplete = (filiereRow) => {
+  if (!filiereRow) return false
+  const dept = filiereRow.departements
+  const deptCode = Array.isArray(dept) ? dept[0]?.code : dept?.code
+  if (deptCode === 'MTIC') return true
+  const c = String(filiereRow.code || '').trim().toUpperCase()
+  if (['MTIC', 'GI', 'RT'].includes(c)) return true
+  if (c.startsWith('GI-') || c.startsWith('RT-') || c.startsWith('MTIC-')) return true
+  return false
+}
+
+// Remonte à la filière racine (tronc commun) pour appliquer les règles même si l’ID pointe vers une option ou une entrée mal rattachée.
+const resolveFilierePourRegleNiveaux = async (filiereId) => {
+  let row = null
+  let currentId = filiereId
+  const seen = new Set()
+  while (currentId && !seen.has(currentId)) {
+    seen.add(currentId)
+    const { data, error } = await supabaseAdmin
+      .from('filieres')
+      .select('id, code, parent_filiere_id, departements(code)')
+      .eq('id', currentId)
+      .single()
+    if (error || !data) break
+    row = data
+    if (!data.parent_filiere_id) break
+    currentId = data.parent_filiere_id
+  }
+  return row
 }
 
 // Récupérer les niveaux disponibles selon la formation et la filière
@@ -47,17 +86,17 @@ export const getNiveauxDisponibles = async (formationId, filiereId) => {
     if (formError) throw formError
 
     if (formation?.code === 'INITIAL_2') {
-      // Récupérer la filière
-      const { data: filiere, error: filError } = await supabaseAdmin
-        .from('filieres')
-        .select('*')
-        .eq('id', filiereId)
-        .single()
+      const filierePourRegle = await resolveFilierePourRegleNiveaux(filiereId)
+      if (!filierePourRegle) {
+        const { data, error } = await supabaseAdmin
+          .from('niveaux')
+          .select('*')
+          .eq('code', 'L1')
+        if (error) throw error
+        return data
+      }
 
-      if (filError) throw filError
-
-      if (filiere?.code === 'MTIC') {
-        // MTIC Initial 2 a tous les niveaux
+      if (isFiliereInitial2TriennaleComplete(filierePourRegle)) {
         const { data, error } = await supabaseAdmin
           .from('niveaux')
           .select('*')
@@ -421,6 +460,144 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
   } catch (error) {
     console.error('Erreur lors de la finalisation de l\'inscription:', error)
     throw error
+  }
+}
+
+const _fieldBlank = (v) => v == null || String(v).trim() === ''
+
+/** Même règle que l’écran dossier : les 6 pièces présentes sur l’inscription. */
+const inscriptionDocumentsComplete = (insc) =>
+  !_fieldBlank(insc.copie_acte_naissance) &&
+  !_fieldBlank(insc.photo_identite) &&
+  !_fieldBlank(insc.quittance) &&
+  !_fieldBlank(insc.piece_identite) &&
+  !_fieldBlank(insc.copie_releve) &&
+  !_fieldBlank(insc.copie_diplome)
+
+const etudiantInfosComplete = (e) =>
+  !!(
+    e &&
+    e.nom &&
+    e.prenom &&
+    e.date_naissance &&
+    e.lieu_naissance &&
+    e.nationalite &&
+    e.email &&
+    e.telephone &&
+    e.adresse
+  )
+
+const auMoinsUnParentComplet = (parents) =>
+  (parents || []).some(
+    (p) => p && p.nom && p.prenom && p.telephone
+  )
+
+/**
+ * Finalise toutes les inscriptions du périmètre dont le dossier est complet au sens « Finaliser »
+ * (documents + infos perso + parent), et qui ne sont pas déjà INSCRIT.
+ */
+export const bulkFinaliserInscriptionsCompletes = async ({
+  filiereId,
+  niveauId,
+  promotionId,
+  formationId,
+  typeInscription,
+  agentId
+}) => {
+  if (!agentId) {
+    throw new Error('Agent (identifiant) requis pour la finalisation')
+  }
+  if (!filiereId || !niveauId || !promotionId || !formationId) {
+    throw new Error('filiereId, niveauId, promotionId et formationId sont requis')
+  }
+
+  const typeInsc =
+    typeInscription === 'reinscription' ? 'REINSCRIPTION' : 'INSCRIPTION'
+
+  const { data: rows, error: fetchError } = await supabaseAdmin
+    .from('inscriptions')
+    .select(
+      `
+      id,
+      statut,
+      copie_acte_naissance,
+      photo_identite,
+      quittance,
+      piece_identite,
+      copie_releve,
+      copie_diplome,
+      etudiants (
+        id,
+        nom,
+        prenom,
+        date_naissance,
+        lieu_naissance,
+        nationalite,
+        email,
+        telephone,
+        adresse,
+        matricule,
+        photo,
+        parents ( nom, prenom, telephone, type )
+      )
+    `
+    )
+    .eq('filiere_id', filiereId)
+    .eq('niveau_id', niveauId)
+    .eq('promotion_id', promotionId)
+    .eq('formation_id', formationId)
+    .eq('type_inscription', typeInsc)
+
+  if (fetchError) throw fetchError
+
+  let finalized = 0
+  let alreadyInscrit = 0
+  let skippedIncomplete = 0
+  const errors = []
+
+  for (const insc of rows || []) {
+    if (insc.statut === 'INSCRIT') {
+      alreadyInscrit++
+      continue
+    }
+
+    const etu = Array.isArray(insc.etudiants) ? insc.etudiants[0] : insc.etudiants
+    if (!etu?.id) {
+      skippedIncomplete++
+      continue
+    }
+
+    if (!inscriptionDocumentsComplete(insc)) {
+      skippedIncomplete++
+      continue
+    }
+    if (!etudiantInfosComplete(etu)) {
+      skippedIncomplete++
+      continue
+    }
+    if (!auMoinsUnParentComplet(etu.parents)) {
+      skippedIncomplete++
+      continue
+    }
+
+    try {
+      await finaliserInscription(insc.id, agentId)
+      finalized++
+    } catch (err) {
+      errors.push({
+        inscriptionId: insc.id,
+        matricule: etu.matricule,
+        message: err.message || 'Erreur inconnue'
+      })
+    }
+  }
+
+  return {
+    totalInscriptions: (rows || []).length,
+    finalized,
+    alreadyInscrit,
+    skippedIncomplete,
+    errors
   }
 }
 

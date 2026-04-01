@@ -38,7 +38,7 @@ const ArchivesAttestationsView = () => {
         const [promotionsData, formationsData, filieresData] = await Promise.all([
           getPromotions(),
           getFormations(),
-          getFilieres()
+          getFilieres({ sansGroupes: true })
         ])
         setPromotions(promotionsData)
         setFormations(formationsData)

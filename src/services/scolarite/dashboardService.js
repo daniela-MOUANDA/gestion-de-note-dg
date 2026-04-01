@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { getCurrentAcademicYearLabel } from '../../utils/academicYear.js'
 
 const MONTHS_WINDOW = 4
 
@@ -10,15 +11,6 @@ const capitalize = (value = '') => {
 const formatMonthLabel = (date) => {
   const formatter = new Intl.DateTimeFormat('fr-FR', { month: 'short' })
   return capitalize(formatter.format(date).replace('.', ''))
-}
-
-const getAcademicYear = (referenceDate = new Date()) => {
-  const year = referenceDate.getFullYear()
-  const month = referenceDate.getMonth() // 0 = janvier
-  if (month >= 7) {
-    return `${year}-${year + 1}`
-  }
-  return `${year - 1}-${year}`
 }
 
 // Statistiques pour le Chef de Service de la Scolarité
@@ -76,17 +68,16 @@ export const getChefDashboardStats = async () => {
     // Compter les attestations générées ce mois
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const academicYear = getAcademicYear(now)
-    
-    const { data: activePromotions } = await supabaseAdmin
+    const academicYear = getCurrentAcademicYearLabel(now)
+
+    const { data: promoAnnees } = await supabaseAdmin
       .from('promotions')
       .select('annee')
       .eq('statut', 'EN_COURS')
-    
-    const possibleAcademicYears = (activePromotions || []).map(p => p.annee)
-    if (!possibleAcademicYears.includes(academicYear)) {
-      possibleAcademicYears.push(academicYear)
-    }
+
+    const possibleAcademicYears = [
+      ...new Set([academicYear, ...(promoAnnees || []).map((p) => p.annee)])
+    ]
 
     let attestationsCeMois = 0
     if (possibleAcademicYears.length > 0) {
@@ -137,23 +128,7 @@ export const getChefDashboardStats = async () => {
       })
     }
 
-    // Calculer l'année académique
-    const currentYear = now.getFullYear()
-    let anneeAcademique
-    
-    if (currentYear === 2025) {
-      anneeAcademique = '2025-2026'
-    } else {
-      const { data: currentPromotion } = await supabaseAdmin
-        .from('promotions')
-        .select('annee')
-        .eq('statut', 'EN_COURS')
-        .order('annee', { ascending: false })
-        .limit(1)
-        .single()
-      
-      anneeAcademique = currentPromotion?.annee || getAcademicYear(now)
-    }
+    const anneeAcademique = getCurrentAcademicYearLabel(now)
 
     // Calculer le taux d'activité
     const sevenDaysAgo = new Date(now)
@@ -272,20 +247,18 @@ export const getChefStatistiques = async () => {
 
 export const getSPDashboardStats = async () => {
   const now = new Date()
-  const academicYear = getAcademicYear(now)
+  const academicYear = getCurrentAcademicYearLabel(now)
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const periodStart = new Date(now.getFullYear(), now.getMonth() - (MONTHS_WINDOW - 1), 1)
 
-  // Récupérer les promotions actives
-  const { data: activePromotions } = await supabaseAdmin
+  const { data: promoAnnees } = await supabaseAdmin
     .from('promotions')
     .select('annee')
     .eq('statut', 'EN_COURS')
-  
-  const possibleAcademicYears = (activePromotions || []).map(p => p.annee)
-  if (!possibleAcademicYears.includes(academicYear)) {
-    possibleAcademicYears.push(academicYear)
-  }
+
+  const possibleAcademicYears = [
+    ...new Set([academicYear, ...(promoAnnees || []).map((p) => p.annee)])
+  ]
 
   // Compter les attestations
   let generated = 0, thisMonth = 0

@@ -169,6 +169,16 @@ app.post('/api/inscriptions/:id/finaliser', (req, res, next) => {
   scolariteRoutes(req, res, next)
 })
 
+app.post('/api/inscriptions/bulk-documents-placeholder', (req, res, next) => {
+  req.url = '/api/scolarite/inscriptions/bulk-documents-placeholder'
+  scolariteRoutes(req, res, next)
+})
+
+app.post('/api/inscriptions/bulk-finaliser-complets', (req, res, next) => {
+  req.url = '/api/scolarite/inscriptions/bulk-finaliser-complets'
+  scolariteRoutes(req, res, next)
+})
+
 // Routes alias pour les dashboards
 app.get('/api/dashboard/sp', (req, res, next) => {
   req.url = '/api/scolarite/dashboard/sp'

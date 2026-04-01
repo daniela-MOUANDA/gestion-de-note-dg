@@ -51,7 +51,7 @@ const EtudiantsInscritsView = () => {
   useEffect(() => {
     const loadFilieres = async () => {
       try {
-        const filieresData = await getFilieres()
+        const filieresData = await getFilieres({ sansGroupes: true })
         setFilieres(filieresData || [])
       } catch (error) {
         console.error('Erreur lors du chargement des filières:', error)

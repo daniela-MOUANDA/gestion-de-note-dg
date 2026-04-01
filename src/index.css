@@ -27,6 +27,16 @@ body {
   animation: slide-in-right 0.3s ease-out;
 }
 
+@keyframes spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 0.9s linear infinite;
+}
+
 /* Animation fade in pour la sélection en cascade */
 @keyframes fadeIn {
   from {

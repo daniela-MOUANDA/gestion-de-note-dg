@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faEdit, faTrash, faBook, faSearch, faUpload, faFileExcel, faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faEdit, faTrash, faBook, faSearch, faUpload, faFileExcel, faSpinner, faDownload } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import Modal from '../../components/common/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
-import { getModules, createModule, updateModule, deleteModule, getFilieres } from '../../api/chefDepartement.js'
+import { getModules, createModule, updateModule, deleteModule, getFilieres, getPromotionsList, downloadModulesImportTemplate, importModulesExcel } from '../../api/chefDepartement.js'
+import { pickPromotionForCurrentAcademicYear } from '../../utils/academicYear.js'
 
 const ModulesView = () => {
   const { user } = useAuth()
@@ -14,6 +15,7 @@ const ModulesView = () => {
   const [departementChef, setDepartementChef] = useState('')
   const [modules, setModules] = useState([])
   const [filieres, setFilieres] = useState([])
+  const [promotions, setPromotions] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [editingModule, setEditingModule] = useState(null)
@@ -23,8 +25,11 @@ const ModulesView = () => {
   const [filterSemestre, setFilterSemestre] = useState('')
   const [filterUE, setFilterUE] = useState('')
   const [filterFiliere, setFilterFiliere] = useState('')
+  const [filterAnnee, setFilterAnnee] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [formData, setFormData] = useState({
     code: '',
     nom: '',
@@ -33,6 +38,7 @@ const ModulesView = () => {
     filiereId: '',
     ue: 'UE1',
     nom_ue: '',
+    promotionId: '',
     actif: true
   })
 
@@ -41,7 +47,10 @@ const ModulesView = () => {
   }, [])
 
   // Générer le code du module automatiquement
-  const generateModuleCode = (nom, semestre, excludeId = null) => {
+  const defaultPromotionId = () =>
+    pickPromotionForCurrentAcademicYear(promotions)?.id || promotions[0]?.id || ''
+
+  const generateModuleCode = (nom, semestre, excludeId = null, promotionIdForCollision = '') => {
     if (!nom || !semestre) return ''
 
     // 1. Génération du préfixe intelligent
@@ -90,7 +99,14 @@ const ModulesView = () => {
     // Vérifier les collisions avec les modules existants
     // On exclut le module en cours d'édition (si applicable)
     // On cherche si ce code existe déjà
-    while (modules.some(m => m.code === candidateCode && m.id !== excludeId)) {
+    while (
+      modules.some(
+        m =>
+          m.code === candidateCode &&
+          m.id !== excludeId &&
+          (m.promotionId || '') === (promotionIdForCollision || '')
+      )
+    ) {
       suffix++
       candidateCode = generateFullCode(prefix, semestreNum, suffix)
     }
@@ -116,6 +132,11 @@ const ModulesView = () => {
         setFilieres(filieresResult.filieres)
       }
 
+      const promosResult = await getPromotionsList()
+      if (promosResult.success) {
+        setPromotions(promosResult.promotions || [])
+      }
+
       // Récupérer le nom du département
       if (user?.departement) {
         setDepartementChef(user.departement.nom)
@@ -138,6 +159,7 @@ const ModulesView = () => {
       filiereId: '',
       ue: 'UE1',
       nom_ue: '',
+      promotionId: defaultPromotionId(),
       actif: true
     })
     setShowModal(true)
@@ -153,6 +175,7 @@ const ModulesView = () => {
       filiereId: module.filiereId,
       ue: module.ue || 'UE1',
       nom_ue: module.nom_ue || '',
+      promotionId: module.promotionId || defaultPromotionId(),
       actif: module.actif
     })
     setShowModal(true)
@@ -178,8 +201,8 @@ const ModulesView = () => {
   }
 
   const handleSave = async () => {
-    if (!formData.nom || !formData.credit || !formData.semestre || !formData.filiereId || !formData.ue) {
-      showAlert('Veuillez remplir tous les champs obligatoires', 'error')
+    if (!formData.nom || !formData.credit || !formData.semestre || !formData.filiereId || !formData.ue || !formData.promotionId) {
+      showAlert('Veuillez remplir tous les champs obligatoires (y compris l\'année académique)', 'error')
       return
     }
 
@@ -187,7 +210,12 @@ const ModulesView = () => {
       setSaving(true)
 
       // Générer le code automatiquement
-      const code = generateModuleCode(formData.nom, formData.semestre, editingModule?.id)
+      const code = generateModuleCode(
+        formData.nom,
+        formData.semestre,
+        editingModule?.id,
+        formData.promotionId
+      )
       const dataToSend = { ...formData, code }
 
       let result
@@ -213,21 +241,63 @@ const ModulesView = () => {
     }
   }
 
-  const handleFileUpload = () => {
-    if (!selectedFile || !selectedFiliere) {
-      showAlert('Veuillez sélectionner un fichier et une filière', 'error')
+  const handleFileUpload = async () => {
+    if (!selectedFile) {
+      showAlert('Veuillez sélectionner un fichier Excel', 'error')
       return
     }
-    // TODO: Implémenter l'upload Excel
-    showAlert(`Fichier Excel "${selectedFile.name}" sera importé pour la filière ${selectedFiliere}`, 'info')
-    setShowUploadModal(false)
-    setSelectedFile(null)
-    setSelectedFiliere('')
+    try {
+      setImporting(true)
+      const result = await importModulesExcel(selectedFile, selectedFiliere)
+      if ((result.created ?? 0) === 0) {
+        const detail = result.errors?.length
+          ? result.errors.slice(0, 6).map((e) => `Ligne ${e.line}: ${e.message}`).join(' — ')
+          : (result.error || 'Aucun module créé. Vérifiez filiere_code et annee_academique.')
+        showAlert(detail, 'error')
+        return
+      }
+      if (result.partial || (result.errors?.length > 0)) {
+        const brief = result.errors.slice(0, 4).map((e) => `L.${e.line}: ${e.message}`).join(' ; ')
+        showAlert(`${result.created} module(s) importé(s). Autres lignes en erreur : ${brief}`, 'warning')
+      } else {
+        showAlert(`${result.created} module(s) importé(s) avec succès`, 'success')
+      }
+      setShowUploadModal(false)
+      setSelectedFile(null)
+      setSelectedFiliere('')
+      loadData()
+    } catch (err) {
+      console.error(err)
+      showAlert(err?.message || 'Erreur lors de l\'import', 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true)
+      const blob = await downloadModulesImportTemplate()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'modele_import_modules.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      showAlert(err?.message || 'Erreur lors du téléchargement du modèle', 'error')
+    } finally {
+      setDownloadingTemplate(false)
+    }
   }
 
   // Extraire les valeurs uniques pour les filtres
   const semestresUniques = [...new Set(modules.map(m => m.semestre).filter(Boolean))].sort()
   const ueUniques = [...new Set(modules.map(m => m.ue || 'UE1').filter(Boolean))].sort()
+  const anneesUniques = [...new Set(modules.map(m => m.anneeAcademique).filter(Boolean))].sort()
 
   // Extraire les filières uniques (peut être un code ou un ID)
   const filieresUniques = [...new Set(
@@ -252,6 +322,8 @@ const ModulesView = () => {
     const moduleUE = module.ue || 'UE1'
     const matchesUE = !filterUE || moduleUE === filterUE
 
+    const matchesAnnee = !filterAnnee || (module.anneeAcademique || '') === filterAnnee
+
     // Filtre par filière
     let matchesFiliere = true
     if (filterFiliere) {
@@ -275,7 +347,7 @@ const ModulesView = () => {
       }
     }
 
-    return matchesSearch && matchesSemestre && matchesUE && matchesFiliere
+    return matchesSearch && matchesSemestre && matchesUE && matchesFiliere && matchesAnnee
   })
 
   if (loading) {
@@ -363,6 +435,21 @@ const ModulesView = () => {
                   </select>
                 </div>
 
+                {/* Filtre année académique */}
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Année académique</label>
+                  <select
+                    value={filterAnnee}
+                    onChange={(e) => setFilterAnnee(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  >
+                    <option value="">Toutes les années</option>
+                    {anneesUniques.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Filtre UE */}
                 <div className="flex-1 min-w-[150px]">
                   <label className="block text-xs font-medium text-slate-600 mb-1">Unité d'Enseignement</label>
@@ -394,13 +481,14 @@ const ModulesView = () => {
                 </div>
 
                 {/* Bouton réinitialiser les filtres */}
-                {(filterSemestre || filterUE || filterFiliere) && (
+                {(filterSemestre || filterUE || filterFiliere || filterAnnee) && (
                   <div className="flex items-end">
                     <button
                       onClick={() => {
                         setFilterSemestre('')
                         setFilterUE('')
                         setFilterFiliere('')
+                        setFilterAnnee('')
                       }}
                       className="px-4 py-2 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors whitespace-nowrap"
                     >
@@ -413,7 +501,7 @@ const ModulesView = () => {
           </div>
 
           {/* Indicateur de résultats */}
-          {(filterSemestre || filterUE || filterFiliere || searchQuery) && (
+          {(filterSemestre || filterUE || filterFiliere || filterAnnee || searchQuery) && (
             <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-blue-800">
@@ -429,6 +517,7 @@ const ModulesView = () => {
                   setFilterSemestre('')
                   setFilterUE('')
                   setFilterFiliere('')
+                  setFilterAnnee('')
                 }}
                 className="text-xs text-blue-600 hover:text-blue-800 underline"
               >
@@ -447,6 +536,7 @@ const ModulesView = () => {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Nom</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Crédits</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Semestre</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Année acad.</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">UE</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Filière</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Statut</th>
@@ -456,7 +546,7 @@ const ModulesView = () => {
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {filteredModules.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-6 py-16 text-center">
+                      <td colSpan="9" className="px-6 py-16 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <FontAwesomeIcon icon={faBook} className="text-6xl text-slate-300 mb-4" />
                           <p className="text-lg font-medium text-slate-500 mb-2">Aucun module trouvé</p>
@@ -486,6 +576,9 @@ const ModulesView = () => {
                           <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             {module.semestre}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-700 text-sm">
+                          {module.anneeAcademique || '—'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${module.ue === 'UE1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
@@ -585,6 +678,27 @@ const ModulesView = () => {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Année académique *</label>
+                <select
+                  value={formData.promotionId}
+                  onChange={(e) => setFormData({ ...formData, promotionId: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sélectionner la promotion (année)</option>
+                  {promotions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.annee}
+                      {pickPromotionForCurrentAcademicYear(promotions)?.id === p.id
+                        ? ' (année acad. calendrier)'
+                        : p.statut === 'EN_COURS'
+                          ? ' (EN_COURS)'
+                          : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">Un même module peut être redéfini pour une autre année (code identique autorisé si l&apos;année diffère).</p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Unité d'Enseignement (Code) *</label>
@@ -657,17 +771,34 @@ const ModulesView = () => {
           >
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Sélectionner une filière</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Filière par défaut (optionnel)</label>
                 <select
                   value={selectedFiliere}
                   onChange={(e) => setSelectedFiliere(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Sélectionner une filière</option>
+                  <option value="">— Utiliser uniquement la colonne filiere_code du fichier —</option>
                   {filieres.map((filiere) => (
                     <option key={filiere.id} value={filiere.id}>{filiere.code} - {filiere.nom}</option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Si une ligne n’a pas de <span className="font-medium">filiere_code</span>, cette filière sera appliquée à cette ligne.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  disabled={downloadingTemplate}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FontAwesomeIcon icon={faDownload} className={downloadingTemplate ? 'animate-pulse' : ''} />
+                  {downloadingTemplate ? 'Téléchargement…' : 'Télécharger le modèle Excel'}
+                </button>
+                <p className="text-xs text-slate-500 max-w-md">
+                  Colonne <span className="font-medium">filiere_code</span> obligatoire sur chaque ligne (sauf si vous choisissez une filière par défaut ci-dessus). Voir la feuille <span className="font-medium">Aide</span>.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fichier Excel</label>
@@ -704,11 +835,11 @@ const ModulesView = () => {
                 </button>
                 <button
                   onClick={handleFileUpload}
-                  disabled={!selectedFile || !selectedFiliere}
+                  disabled={!selectedFile || importing}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  <FontAwesomeIcon icon={faUpload} />
-                  Importer
+                  <FontAwesomeIcon icon={importing ? faSpinner : faUpload} className={importing ? 'animate-spin' : ''} />
+                  {importing ? 'Import…' : 'Importer'}
                 </button>
               </div>
             </div>

@@ -310,20 +310,24 @@ const RelevesNotesView = () => {
                                                             <>
                                                                 {ueGroup.modules.map(m => {
                                                                     const modNote = row.modules.find(rm => rm.id === m.id)
-                                                                    const val = modNote?.moyenne
+                                                                    const val = typeof modNote?.moyenne === 'number' ? modNote.moyenne : null
                                                                     return (
                                                                         <td
                                                                             key={m.id}
-                                                                            className={`border border-slate-200 p-1 text-center font-medium ${val < 10 ? 'bg-red-50 text-red-700' : 'text-slate-700'}`}
+                                                                            className={`border border-slate-200 p-1 text-center font-medium ${val != null && val < 10 ? 'bg-red-50 text-red-700' : 'text-slate-700'}`}
                                                                         >
-                                                                            {val !== null ? val.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '-'}
+                                                                            {typeof val === 'number'
+                                                                                ? val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
+                                                                                : '-'}
                                                                         </td>
                                                                     )
                                                                 })}
-                                                                <td className={`border border-slate-300 p-1 text-center font-black bg-blue-50/30 text-[10px] ${ueData.moyenne < 10 ? 'text-red-700' : 'text-slate-900'}`}>
+                                                                <td className={`border border-slate-300 p-1 text-center font-black bg-blue-50/30 text-[10px] ${typeof ueData.moyenne === 'number' && ueData.moyenne < 10 ? 'text-red-700' : 'text-slate-900'}`}>
                                                                     <div className="flex items-center justify-center gap-1">
                                                                         <span className={`w-2 h-2 rounded-full ${getStatusDot(ueData.status)}`}></span>
-                                                                        {ueData.moyenne ? ueData.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '-'}
+                                                                        {typeof ueData.moyenne === 'number'
+                                                                            ? ueData.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
+                                                                            : '-'}
                                                                     </div>
                                                                 </td>
                                                                 <td className="border border-slate-300 p-1 text-center font-bold bg-white text-[9px]">{ueData.credits || 0}</td>
@@ -335,10 +339,12 @@ const RelevesNotesView = () => {
                                                     })}
 
                                                     <td className="border border-slate-300 p-1 text-center font-bold bg-slate-50 text-[10px]">{row.totalCreditsValides || 0}</td>
-                                                    <td className={`border border-slate-300 p-1 text-center font-black text-[11px] bg-blue-600/5 ${row.moyenneGenerale < 10 ? 'text-red-700' : 'text-blue-900'}`}>
+                                                    <td className={`border border-slate-300 p-1 text-center font-black text-[11px] bg-blue-600/5 ${typeof row.moyenneGenerale === 'number' && row.moyenneGenerale < 10 ? 'text-red-700' : 'text-blue-900'}`}>
                                                         <div className="flex items-center justify-center gap-1">
-                                                            <span className={`w-2 h-2 rounded-full ${row.moyenneGenerale >= 10 ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                                            {row.moyenneGenerale ? row.moyenneGenerale.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) : '-'}
+                                                            <span className={`w-2 h-2 rounded-full ${typeof row.moyenneGenerale === 'number' && row.moyenneGenerale >= 10 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                                            {typeof row.moyenneGenerale === 'number'
+                                                                ? row.moyenneGenerale.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
+                                                                : '-'}
                                                         </div>
                                                     </td>
                                                     <td className="border border-slate-300 p-1 text-center font-black bg-slate-100 text-[10px] text-slate-800">{row.rang || '-'}</td>

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
 import { calculerMoyenneGenerale } from '../scolarite/calculationService.js'
+import { getScopedFilieresForDepartement } from './filiereScopeService.js'
 
 /**
  * Récupère tous les étudiants d'un département avec leurs moyennes générales pour le Chef de Département
@@ -8,11 +9,8 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
   try {
     const { filiere, niveau, semestre, search } = filters
 
-    // 1. Récupérer les filières du département
-    const { data: filieres } = await supabaseAdmin
-      .from('filieres')
-      .select('id, code, nom, departements(code)')
-      .eq('departement_id', departementId)
+    const filieresBrutes = await getScopedFilieresForDepartement(departementId)
+    const filieres = (filieresBrutes || []).filter((f) => f.type_filiere !== 'groupe')
 
     const departementCode = filieres && filieres.length > 0 ? filieres[0].departements?.code : ''
 

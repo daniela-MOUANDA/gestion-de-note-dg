@@ -54,6 +54,7 @@ export const getStatistiquesDEP = async () => {
     const { data: filieres } = await supabaseAdmin
       .from('filieres')
       .select('id, code, nom, departement_id')
+      .neq('type_filiere', 'groupe')
 
     const filieresParDepartement = {}
     if (filieres) {

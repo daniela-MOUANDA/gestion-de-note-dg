@@ -24,8 +24,11 @@ export const getFormations = async () => {
   return response.json()
 }
 
-export const getFilieres = async () => {
-  const response = await fetch(`${API_URL}/filieres`)
+export const getFilieres = async (options = {}) => {
+  const params = new URLSearchParams()
+  if (options.sansGroupes) params.set('sansGroupes', '1')
+  const qs = params.toString()
+  const response = await fetch(`${API_URL}/filieres${qs ? `?${qs}` : ''}`)
   if (!response.ok) throw new Error('Erreur lors de la récupération des filières')
   return response.json()
 }
@@ -247,6 +250,70 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
   })
   if (!response.ok) throw new Error('Erreur lors de la finalisation')
   return response.json()
+}
+
+/** Remplit les documents d’inscription manquants avec des fichiers modèles pour tout le périmètre filière/niveau/formation/promotion. */
+export const bulkFillPlaceholderDocuments = async (payload) => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/inscriptions/bulk-documents-placeholder`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  })
+
+  const raw = await response.text()
+  let data = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { error: raw?.slice(0, 240) || `Réponse invalide (HTTP ${response.status})` }
+  }
+
+  if (!response.ok) {
+    if (handleAuthError(response)) {
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    throw new Error(data.error || `Erreur lors du remplissage (HTTP ${response.status})`)
+  }
+
+  return data
+}
+
+/** Finalise (statut INSCRIT + compte étudiant) toutes les inscriptions du périmètre dont le dossier est complet. */
+export const bulkFinaliserComplets = async (payload) => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const response = await fetch(`${API_URL}/inscriptions/bulk-finaliser-complets`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  })
+
+  const raw = await response.text()
+  let data = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { error: raw?.slice(0, 240) || `Réponse invalide (HTTP ${response.status})` }
+  }
+
+  if (!response.ok) {
+    if (handleAuthError(response)) {
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    throw new Error(data.error || `Erreur finalisation groupée (HTTP ${response.status})`)
+  }
+
+  return data
 }
 
 // ============================================

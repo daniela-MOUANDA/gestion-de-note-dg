@@ -1,15 +1,10 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { getScopedFiliereIdsForDepartement, isFiliereInDepartementScope } from './filiereScopeService.js'
 
 // Obtenir toutes les classes d'un département
 export const getClassesByDepartement = async (departementId) => {
   try {
-    // Récupérer les filières du département
-    const { data: filieres } = await supabaseAdmin
-      .from('filieres')
-      .select('id')
-      .eq('departement_id', departementId)
-
-    const filiereIds = (filieres || []).map(f => f.id)
+    const filiereIds = await getScopedFiliereIdsForDepartement(departementId)
 
     if (filiereIds.length === 0) {
       return { success: true, classes: [] }
@@ -86,10 +81,18 @@ export const createClasse = async (data, departementId) => {
       .eq('id', filiereId)
       .single()
 
-    if (!filiere || filiere.departement_id !== departementId) {
+    const filiereInScope = filiere ? await isFiliereInDepartementScope(departementId, filiere.id) : false
+    if (!filiere || !filiereInScope) {
       return {
         success: false,
         error: 'Filière introuvable ou n\'appartient pas à votre département'
+      }
+    }
+
+    if (filiere.type_filiere === 'groupe') {
+      return {
+        success: false,
+        error: 'Choisissez un parcours (sous-filière), pas la filière parente seule.'
       }
     }
 

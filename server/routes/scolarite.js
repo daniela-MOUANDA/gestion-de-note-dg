@@ -1,5 +1,6 @@
 import express from 'express'
 import multer from 'multer'
+import XLSX from 'xlsx'
 import { supabaseAdmin } from '../config/supabase.js'
 import {
   getFormations,
@@ -10,6 +11,7 @@ import {
   getEtudiantsParFiliereNiveau,
   validerInscription,
   finaliserInscription,
+  bulkFinaliserInscriptionsCompletes,
   getPromotions
 } from '../../src/services/scolarite/inscriptionService.js'
 import {
@@ -37,7 +39,8 @@ import {
   upsertParent,
   getParents,
   getDossierEtudiant,
-  deleteInscriptionDocument
+  deleteInscriptionDocument,
+  bulkFillPlaceholderInscriptionDocuments
 } from '../../src/services/scolarite/inscriptionDocumentsService.js'
 import { verifyToken } from '../../src/services/authService.js'
 import { authenticate } from '../middleware/auth.js'
@@ -76,7 +79,9 @@ router.get('/formations', async (req, res) => {
 
 router.get('/filieres', async (req, res) => {
   try {
-    const filieres = await getFilieres()
+    const excludeGroupes =
+      req.query.sansGroupes === '1' || req.query.sansGroupes === 'true'
+    const filieres = await getFilieres({ excludeGroupes })
     res.json(filieres)
   } catch (error) {
     console.error('Erreur:', error)
@@ -281,6 +286,91 @@ router.post('/inscriptions/:id/finaliser', async (req, res) => {
   }
 })
 
+// Remplissage groupé des pièces manquantes par fichiers modèles (scolarité)
+router.post('/inscriptions/bulk-documents-placeholder', authenticate, async (req, res) => {
+  try {
+    const userRole = req.user?.role?.trim().toUpperCase()
+    const allowed = ['AGENT_SCOLARITE', 'SP_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
+    if (!allowed.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Accès refusé. Rôle insuffisant.'
+      })
+    }
+
+    const {
+      filiereId,
+      niveauId,
+      promotionId,
+      formationId,
+      typeInscription
+    } = req.body || {}
+
+    const result = await bulkFillPlaceholderInscriptionDocuments({
+      filiereId,
+      niveauId,
+      promotionId,
+      formationId,
+      typeInscription: typeInscription || 'inscription'
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    console.error('Erreur remplissage documents modèles:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur serveur'
+    })
+  }
+})
+
+// Finalisation groupée : dossiers complets (documents + infos perso + parent) → INSCRIT
+router.post('/inscriptions/bulk-finaliser-complets', authenticate, async (req, res) => {
+  try {
+    const userRole = req.user?.role?.trim().toUpperCase()
+    const allowed = ['AGENT_SCOLARITE', 'SP_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
+    if (!allowed.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Accès refusé. Rôle insuffisant.'
+      })
+    }
+
+    const agentId = req.user?.id
+    if (!agentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Utilisateur non identifié (agent).'
+      })
+    }
+
+    const {
+      filiereId,
+      niveauId,
+      promotionId,
+      formationId,
+      typeInscription
+    } = req.body || {}
+
+    const result = await bulkFinaliserInscriptionsCompletes({
+      filiereId,
+      niveauId,
+      promotionId,
+      formationId,
+      typeInscription: typeInscription || 'inscription',
+      agentId
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    console.error('Erreur finalisation groupée:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Erreur serveur'
+    })
+  }
+})
+
 // Routes Attestations
 router.post('/attestations', async (req, res) => {
   try {
@@ -452,11 +542,17 @@ router.post('/import-etudiants', authenticate, upload.single('file'), async (req
       })
     }
 
-    const { anneeAcademique } = req.body
+    const { anneeAcademique, formationId, niveauId, filiereId } = req.body
     if (!anneeAcademique) {
       return res.status(400).json({
         success: false,
         error: 'L\'année académique est requise'
+      })
+    }
+    if (!formationId || !niveauId) {
+      return res.status(400).json({
+        success: false,
+        error: 'La formation et le niveau sont requis'
       })
     }
 
@@ -479,8 +575,12 @@ router.post('/import-etudiants', authenticate, upload.single('file'), async (req
       })
     }
 
-    // Importer les étudiants
-    const result = await importEtudiants(dataBySheet, anneeAcademique, agentId)
+    const forcedFiliereId =
+      filiereId && String(filiereId).trim() !== '' ? String(filiereId).trim() : null
+
+    const result = await importEtudiants(dataBySheet, anneeAcademique, agentId, formationId, niveauId, {
+      forcedFiliereId
+    })
 
     res.json({
       success: true,
@@ -493,6 +593,109 @@ router.post('/import-etudiants', authenticate, upload.single('file'), async (req
       success: false,
       error: error.message || 'Erreur lors de l\'import du fichier Excel'
     })
+  }
+})
+
+// Route pour télécharger le modèle Excel d'import
+// niveauId (obligatoire) : L1/L2 => feuilles tronc commun uniquement ; L3 => une feuille par option (sous-parcours), plus les filières sans option (ex. TC, AV).
+router.get('/template-excel', authenticate, async (req, res) => {
+  try {
+    const { niveauId } = req.query
+    if (!niveauId || String(niveauId).trim() === '') {
+      return res.status(400).json({ error: 'Le paramètre niveauId est requis pour générer le modèle adapté.' })
+    }
+
+    const { data: niveau, error: nErr } = await supabaseAdmin
+      .from('niveaux')
+      .select('id, code')
+      .eq('id', niveauId)
+      .single()
+
+    if (nErr || !niveau) {
+      return res.status(400).json({ error: 'Niveau introuvable.' })
+    }
+
+    const niveauCode = String(niveau.code || '').toUpperCase()
+
+    const { data: filieresRows, error: fErr } = await supabaseAdmin
+      .from('filieres')
+      .select('id, code, nom, parent_filiere_id, type_filiere')
+      .neq('type_filiere', 'groupe')
+      .order('code', { ascending: true })
+
+    if (fErr) throw fErr
+
+    const rows = filieresRows || []
+    const roots = rows.filter((f) => !f.parent_filiere_id)
+    const children = rows.filter((f) => f.parent_filiere_id)
+
+    /** @type {{ id: string, code: string, nom: string }[]} */
+    let sheetFilieres = []
+
+    if (niveauCode === 'L3') {
+      for (const root of roots) {
+        const opts = children.filter((c) => c.parent_filiere_id === root.id)
+          .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'fr'))
+        if (opts.length > 0) {
+          sheetFilieres.push(...opts)
+        } else {
+          sheetFilieres.push(root)
+        }
+      }
+    } else {
+      sheetFilieres = [...roots].sort((a, b) => (a.code || '').localeCompare(b.code || '', 'fr'))
+    }
+
+    const seen = new Set()
+    sheetFilieres = sheetFilieres.filter((f) => {
+      if (seen.has(f.id)) return false
+      seen.add(f.id)
+      return true
+    })
+
+    if (sheetFilieres.length === 0) {
+      return res.status(500).json({ error: 'Aucune filière disponible pour générer le modèle.' })
+    }
+
+    const wb = XLSX.utils.book_new()
+
+    const headers = ['N°', 'Nom(s)', 'Prénom(s)', 'Date de naissance', 'Lieu de naissance', 'Nationalité', 'Série du BAC', "Année d'obtention", 'Sexe', 'Email', 'Téléphone', 'Adresse']
+    const colWidths = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 8 }, { wch: 28 }, { wch: 14 }, { wch: 25 }]
+    const exemple = ['1', 'MOUANDA', 'Daniela', '10/05/2004', 'Brazzaville', 'Congolaise', 'D', '2022', 'F', 'daniela.mouanda@email.com', '074000001', 'Brazzaville']
+
+    const usedSheetNames = new Set()
+    const safeSegment = niveauCode.replace(/[^a-zA-Z0-9_-]/g, '_') || 'niveau'
+
+    for (const f of sheetFilieres) {
+      let base = String(f.code || f.nom || 'Filiere').trim() || 'Filiere'
+      base = base.replace(/[\\/*?:\[\]]/g, '-')
+      let sheetName = base.length > 31 ? base.substring(0, 31) : base
+      let n = 2
+      while (usedSheetNames.has(sheetName)) {
+        const suffix = `_${n}`
+        sheetName =
+          base.length + suffix.length > 31
+            ? base.substring(0, Math.max(1, 31 - suffix.length)) + suffix
+            : base + suffix
+        n++
+      }
+      usedSheetNames.add(sheetName)
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, exemple])
+      ws['!cols'] = colWidths
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    }
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="modele_import_candidats_${safeSegment}.xlsx"`
+    )
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return res.end(buffer)
+  } catch (error) {
+    console.error('Erreur lors de la génération du modèle Excel:', error)
+    return res.status(500).json({ error: 'Erreur lors de la génération du modèle' })
   }
 })
 

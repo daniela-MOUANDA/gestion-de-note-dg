@@ -1,15 +1,14 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { getScopedFiliereIdsForDepartement } from './filiereScopeService.js'
+import {
+  fetchPromotionForCurrentAcademicYear,
+  getCurrentAcademicYearLabel
+} from '../../utils/academicYear.js'
 
 // Récupérer l'état de toutes les classes pour un semestre donné
 export const getEtatBulletinsToutesClasses = async (departementId, semestre = null) => {
   try {
-    // Récupérer toutes les classes du département
-    const { data: filieres } = await supabaseAdmin
-      .from('filieres')
-      .select('id')
-      .eq('departement_id', departementId)
-
-    const filiereIds = (filieres || []).map(f => f.id)
+    const filiereIds = await getScopedFiliereIdsForDepartement(departementId)
     if (filiereIds.length === 0) {
       return { success: true, classes: [] }
     }
@@ -528,12 +527,7 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
       nombreEtudiants > 0
 
     // Vérifier si des bulletins existent déjà pour cette classe et ce semestre
-    // Récupérer la promotion active pour vérifier les bulletins
-    const { data: promotion } = await supabaseAdmin
-      .from('promotions')
-      .select('id')
-      .eq('statut', 'EN_COURS')
-      .single()
+    const promotion = await fetchPromotionForCurrentAcademicYear(supabaseAdmin)
 
     let bulletinsExistent = false
     let nombreBulletinsGeneres = 0
@@ -627,39 +621,13 @@ export const genererBulletins = async (classeId, semestre, departementId, chefDe
       }
     }
 
-    // Récupérer la promotion active (statut = 'EN_COURS')
-    let { data: promotion, error: promotionError } = await supabaseAdmin
-      .from('promotions')
-      .select('id, annee')
-      .eq('statut', 'EN_COURS')
-      .single()
-
-    if (promotionError || !promotion) {
-      console.error('Erreur lors de la récupération de la promotion EN_COURS:', promotionError)
-      // Si aucune promotion EN_COURS, essayer de récupérer la dernière promotion
-      const { data: dernierePromotion, error: dernierePromotionError } = await supabaseAdmin
-        .from('promotions')
-        .select('id, annee')
-        .order('annee', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (dernierePromotionError || !dernierePromotion) {
-        return {
-          success: false,
-          error: 'Aucune promotion active trouvée. Veuillez créer une promotion avec le statut "EN_COURS" dans la base de données.'
-        }
-      }
-
-      console.log(`⚠️ Aucune promotion EN_COURS trouvée, utilisation de la dernière promotion: ${dernierePromotion.annee}`)
-      // Utiliser la dernière promotion trouvée
-      promotion = dernierePromotion
-    }
+    const promotion = await fetchPromotionForCurrentAcademicYear(supabaseAdmin)
 
     if (!promotion) {
       return {
         success: false,
-        error: 'Aucune promotion trouvée'
+        error:
+          `Aucune promotion trouvée. Créez une ligne dans « promotions » avec année = ${getCurrentAcademicYearLabel()} (année académique dérivée de la date du jour), ou indiquez statut EN_COURS.`
       }
     }
 

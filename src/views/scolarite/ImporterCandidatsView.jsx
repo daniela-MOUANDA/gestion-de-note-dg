@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import Modal from '../../components/common/Modal'
 import { getFormations, getFilieres, getPromotions } from '../../api/scolarite'
+import { pickPromotionForCurrentAcademicYear, getCurrentAcademicYearLabel } from '../../utils/academicYear.js'
 import { creerEtudiantManuel } from '../../api/scolarite'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
@@ -32,7 +33,20 @@ const ImporterCandidatsView = () => {
 
 
   const [selectedFile, setSelectedFile] = useState(null)
-  const [anneeAcademique, setAnneeAcademique] = useState('2025')
+  const [anneeAcademique, setAnneeAcademique] = useState(getCurrentAcademicYearLabel())
+
+  const importAnneeOptions = useMemo(() => {
+    const label = getCurrentAcademicYearLabel()
+    const parts = label.split('-').map((x) => parseInt(String(x).trim().replace(/\//g, ''), 10))
+    const endY = Number.isFinite(parts[1]) ? parts[1] : new Date().getFullYear()
+    return Array.from({ length: 6 }, (_, i) => {
+      const yr = endY - i
+      return { value: `${yr - 1}-${yr}`, label: `${yr - 1}–${yr}` }
+    })
+  }, [])
+  // Paramètres d'import
+  const [importFormationId, setImportFormationId] = useState('')
+  const [importNiveauId, setImportNiveauId] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -61,9 +75,17 @@ const ImporterCandidatsView = () => {
     promotionId: '',
     formationId: '',
     filiereId: '',
+    optionFiliereId: '',
     niveauId: '',
     typeInscription: 'INSCRIPTION'
   })
+
+  const selectedNiveauObj = niveaux.find(n => n.id === formData.niveauId)
+  const selectedNiveauCode = (selectedNiveauObj?.code || '').toUpperCase()
+  const selectedFiliereObj = filieres.find(f => f.id === formData.filiereId) || null
+  const selectedFiliereParentId = selectedFiliereObj?.parent_filiere_id || selectedFiliereObj?.id || null
+  const optionsForSelectedFiliere = filieres.filter(f => f.parent_filiere_id === selectedFiliereParentId)
+  const requiresL3Option = selectedNiveauCode === 'L3' && optionsForSelectedFiliere.length > 0
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0]
@@ -86,6 +108,11 @@ const ImporterCandidatsView = () => {
       return
     }
 
+    if (!importFormationId || !importNiveauId) {
+      alertError('Veuillez sélectionner une formation et un niveau avant d\'importer')
+      return
+    }
+
     if (!isAuthenticated || !user) {
       alertError('Vous devez être connecté pour importer des étudiants')
       return
@@ -98,6 +125,8 @@ const ImporterCandidatsView = () => {
       const formData = new FormData()
       formData.append('file', selectedFile)
       formData.append('anneeAcademique', anneeAcademique)
+      formData.append('formationId', importFormationId)
+      formData.append('niveauId', importNiveauId)
 
       // Récupérer le token depuis localStorage
       const token = localStorage.getItem('token')
@@ -148,9 +177,39 @@ const ImporterCandidatsView = () => {
     }
   }
 
-  const handleDownloadTemplate = () => {
-    // TODO: Créer et télécharger un template Excel
-    alert('Fonctionnalité de téléchargement du modèle à venir')
+  const handleDownloadTemplate = async () => {
+    if (!importNiveauId) {
+      alertError('Sélectionnez d\'abord le niveau : le modèle Excel (onglets) dépend du niveau (L1/L2 tronc commun, L3 options).')
+      return
+    }
+    try {
+      const token = localStorage.getItem('token')
+      const qs = new URLSearchParams({ niveauId: importNiveauId })
+      const response = await fetch(`${API_URL}/scolarite/template-excel?${qs.toString()}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!response.ok) {
+        const ct = response.headers.get('content-type') || ''
+        if (ct.includes('application/json')) {
+          const errBody = await response.json().catch(() => ({}))
+          throw new Error(errBody.error || 'Erreur lors du téléchargement')
+        }
+        throw new Error('Erreur lors du téléchargement')
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const niveauCode = niveaux.find(n => n.id === importNiveauId)?.code || 'niveau'
+      a.download = `modele_import_candidats_${niveauCode}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      alertError(err.message || 'Impossible de télécharger le modèle Excel')
+    }
   }
 
   // Charger les données au montage
@@ -160,7 +219,7 @@ const ImporterCandidatsView = () => {
         const token = localStorage.getItem('token')
         const [formationsData, filieresData, promotionsData, niveauxResponse] = await Promise.all([
           getFormations(),
-          getFilieres(),
+          getFilieres({ sansGroupes: true }),
           getPromotions(),
           fetch(`${API_URL}/scolarite/niveaux`, {
             headers: {
@@ -171,12 +230,17 @@ const ImporterCandidatsView = () => {
         setFormations(formationsData)
         setFilieres(filieresData)
         setPromotions(promotionsData)
-        setNiveaux(niveauxResponse || [])
+        const niveauxData = niveauxResponse || []
+        setNiveaux(niveauxData)
+
+        // Paramètres d'import : pré-sélectionner formation 1 et niveau L1
+        if (formationsData.length > 0) setImportFormationId(formationsData[0].id)
+        const niveauL1 = niveauxData.find(n => n.code === 'L1')
+        if (niveauL1) setImportNiveauId(niveauL1.id)
         
-        // Sélectionner la promotion en cours par défaut
-        const promoEnCours = promotionsData.find(p => p.statut === 'EN_COURS')
-        if (promoEnCours) {
-          setFormData(prev => ({ ...prev, promotionId: promoEnCours.id }))
+        const promoDefaut = pickPromotionForCurrentAcademicYear(promotionsData)
+        if (promoDefaut) {
+          setFormData(prev => ({ ...prev, promotionId: promoDefaut.id }))
         }
         
         // Sélectionner la première formation par défaut
@@ -191,9 +255,28 @@ const ImporterCandidatsView = () => {
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (!requiresL3Option) return
+    if (!selectedFiliereObj?.parent_filiere_id) return
+    if (formData.optionFiliereId) return
+    setFormData(prev => ({ ...prev, optionFiliereId: selectedFiliereObj.id }))
+  }, [requiresL3Option, selectedFiliereObj, formData.optionFiliereId])
+
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    setFormData(prev => {
+      const next = { ...prev, [name]: value }
+      if (name === 'filiereId') {
+        next.optionFiliereId = ''
+      }
+      if (name === 'niveauId') {
+        const niveau = niveaux.find(n => n.id === value)
+        if ((niveau?.code || '').toUpperCase() !== 'L3') {
+          next.optionFiliereId = ''
+        }
+      }
+      return next
+    })
   }
 
   const handleOpenModal = () => {
@@ -210,9 +293,10 @@ const ImporterCandidatsView = () => {
       email: '',
       telephone: '',
       adresse: '',
-      promotionId: promotions.find(p => p.statut === 'EN_COURS')?.id || '',
+      promotionId: pickPromotionForCurrentAcademicYear(promotions)?.id || '',
       formationId: formations[0]?.id || '',
       filiereId: '',
+      optionFiliereId: '',
       niveauId: '',
       typeInscription: 'INSCRIPTION'
     })
@@ -233,6 +317,10 @@ const ImporterCandidatsView = () => {
     
     if (!formData.promotionId || !formData.formationId || !formData.filiereId || !formData.niveauId) {
       alertError('Veuillez remplir tous les champs d\'inscription')
+      return
+    }
+    if (requiresL3Option && !formData.optionFiliereId) {
+      alertError('En L3, veuillez sélectionner une option/parcours.')
       return
     }
 
@@ -258,9 +346,10 @@ const ImporterCandidatsView = () => {
         email: '',
         telephone: '',
         adresse: '',
-        promotionId: promotions.find(p => p.statut === 'EN_COURS')?.id || '',
+        promotionId: pickPromotionForCurrentAcademicYear(promotions)?.id || '',
         formationId: formations[0]?.id || '',
         filiereId: '',
+        optionFiliereId: '',
         niveauId: '',
         typeInscription: 'INSCRIPTION'
       })
@@ -295,10 +384,21 @@ const ImporterCandidatsView = () => {
               <div className="flex-1">
                 <h3 className="font-semibold text-blue-900 mb-1">Instructions</h3>
                 <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-                  <li>Le fichier Excel doit contenir plusieurs feuilles, une par filière (ex: "Génie Info", "Réseaux-Télécoms", "Management des TIC")</li>
-                  <li>Chaque feuille doit contenir les colonnes : N°, Nom(s), Prénom(s), Date et lieu de naissance, Série du BAC, Année d'obtention, Sexe</li>
-                  <li>Les filières seront détectées automatiquement depuis les noms des feuilles Excel</li>
-                  <li>Assurez-vous que le fichier correspond à l'année académique sélectionnée</li>
+                  <li>
+                    <strong>Une feuille par filière / parcours.</strong> Le modèle Excel téléchargeable contient un onglet pour
+                    chaque parcours (Génie Info, Réseaux-Télécoms, Technico-commercial, Web Mastering, Ecommerce Digital,
+                    Management des TIC, Audiovisuel, etc.). <strong>Supprimez les feuilles dont vous n&apos;avez pas besoin</strong> avant d&apos;importer.
+                  </li>
+                  <li>
+                    Le nom de chaque onglet sert à reconnaître la filière (mappage automatique vers les codes en base).
+                  </li>
+                  <li>
+                    <strong>Colonnes obligatoires :</strong> en-têtes reconnaissables pour <strong>Nom</strong> et <strong>Prénom</strong> (ex. « Nom(s) », « Prénom(s) »).
+                    Toutes les autres colonnes du modèle sont <strong>facultatives</strong> : vous pouvez les laisser vides ou les retirer du fichier pour compléter les dossiers plus tard.
+                  </li>
+                  <li>En L3, utilisez des onglets d&apos;option explicites (ex: GI-DAR, RT-AZUR, MMI-WM, MTIC-EMCD), pas seulement le tronc (GI/RT/MMI/MTIC).</li>
+                  <li>Le modèle Excel téléchargeable s&apos;adapte au <strong>niveau</strong> choisi ci-dessus : L1/L2 = tronc commun uniquement ; L3 = une feuille par option (et les filières sans option comme TC).</li>
+                  <li>Vérifiez que l&apos;année académique et la formation sélectionnées correspondent à votre import.</li>
                 </ul>
               </div>
             </div>
@@ -307,29 +407,69 @@ const ImporterCandidatsView = () => {
           {/* Formulaire d'import */}
           <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
             <h2 className="text-lg font-bold text-slate-800 mb-4">Paramètres d'import</h2>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Année académique</label>
-              <div className="flex items-center gap-3">
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              {/* Année académique */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Année académique *</label>
                 <select
                   value={anneeAcademique}
                   onChange={(e) => setAnneeAcademique(e.target.value)}
                   disabled={isUploading}
-                  className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                 >
-                  <option value="2025">2025</option>
-                  <option value="2024">2024</option>
-                  <option value="2023">2023</option>
+                  {importAnneeOptions.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
-                <button
-                  onClick={handleOpenModal}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
-                >
-                  <FontAwesomeIcon icon={faUserPlus} />
-                  Ajouter un étudiant
-                </button>
               </div>
-              <p className="text-xs text-slate-500 mt-1">Les filières seront détectées automatiquement depuis les feuilles Excel</p>
+
+              {/* Formation */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Formation *</label>
+                <select
+                  value={importFormationId}
+                  onChange={(e) => setImportFormationId(e.target.value)}
+                  disabled={isUploading}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="">Sélectionner</option>
+                  {formations.map(f => (
+                    <option key={f.id} value={f.id}>{f.nom}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Niveau */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Niveau *</label>
+                <select
+                  value={importNiveauId}
+                  onChange={(e) => setImportNiveauId(e.target.value)}
+                  disabled={isUploading}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="">Sélectionner</option>
+                  {niveaux.map(n => (
+                    <option key={n.id} value={n.id}>{n.nom} ({n.code})</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={handleOpenModal}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+              >
+                <FontAwesomeIcon icon={faUserPlus} />
+                Ajouter un étudiant
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 mb-4">
+              Chaque onglet du fichier correspond à une filière : seules les feuilles présentes (non vides) sont importées.
+            </p>
 
             {/* Zone de téléversement */}
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50">
@@ -622,6 +762,23 @@ const ImporterCandidatsView = () => {
                       ))}
                     </select>
                   </div>
+                  {requiresL3Option && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Option / Parcours L3 *</label>
+                      <select
+                        name="optionFiliereId"
+                        value={formData.optionFiliereId}
+                        onChange={handleInputChange}
+                        required={requiresL3Option}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Sélectionner l'option</option>
+                        {optionsForSelectedFiliere.map(option => (
+                          <option key={option.id} value={option.id}>{option.nom} ({option.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Type d'inscription *</label>
                     <select

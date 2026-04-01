@@ -330,12 +330,15 @@ function drawPlancheTable(doc, data, startX, startY, totalWidth) {
         const avisWidth = 150
         doc.rect(x, currentY, avisWidth, rowHeight).stroke()
         doc.fontSize(7).font('Helvetica-Bold')
-        const semestreNum = data.semestre?.replace('S', '') || '1'
-        const decisionText = student.decision === 'Semestre validé'
-            ? `Semestre ${semestreNum} validé`
-            : `Semestre ${semestreNum} non validé`
-
-        if (student.decision !== 'Semestre validé') doc.fillColor('#CC0000')
+        const decisionText = student.decision || ''
+        const kind = student.avisJuryKind
+        if (kind === 'REDOUBLE_L2' || kind === 'SEMESTRE_NOK' || decisionText.includes('non Valide')) {
+            doc.fillColor('#DC2626')
+        } else if (kind === 'DIPLOME' || kind === 'STAGE' || kind === 'SEMESTRE_OK') {
+            doc.fillColor('#15803D')
+        } else {
+            doc.fillColor('#15803D')
+        }
         doc.text(decisionText.toUpperCase(), x + 5, currentY + 4, { width: avisWidth - 10 })
         doc.fillColor('#000000')
         x += avisWidth

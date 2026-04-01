@@ -814,9 +814,11 @@ router.post('/etudiants', authenticate, async (req, res) => {
 router.put('/etudiants/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params
-    const { email, telephone, adresse, nationalite } = req.body
+    const { nom, prenom, email, telephone, adresse, nationalite } = req.body
 
     const updated = await updateEtudiantInfo(id, {
+      nom,
+      prenom,
       email,
       telephone,
       adresse,

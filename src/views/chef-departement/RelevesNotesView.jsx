@@ -108,8 +108,25 @@ const RelevesNotesView = () => {
                 default: return status?.replace(/_/g, ' ') || 'UE non Acquise'
             }
         } else {
-            return status === 'VALIDE' ? `Semestre validé` : `Semestre non validé`
+            return status === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'
         }
+    }
+
+    const getJuryAvisText = (row) => {
+        const t = row.avisJury || getStatusText(row.statut, 'semestre')
+        return typeof t === 'string' ? t.toUpperCase() : t
+    }
+
+    const getJuryAvisClassName = (row) => {
+        const base = 'font-black uppercase leading-tight text-[9px] tracking-tight'
+        const k = row.avisJuryKind
+        if (k === 'REDOUBLE_L2' || k === 'SEMESTRE_NOK') {
+            return `${base} text-red-600`
+        }
+        if (k === 'DIPLOME' || k === 'STAGE' || k === 'SEMESTRE_OK') {
+            return `${base} text-green-700`
+        }
+        return row.statut === 'VALIDE' ? `${base} text-green-700` : `${base} text-red-600`
     }
 
     const getStatusColor = (status) => {
@@ -349,9 +366,9 @@ const RelevesNotesView = () => {
                                                     </td>
                                                     <td className="border border-slate-300 p-1 text-center font-black bg-slate-100 text-[10px] text-slate-800">{row.rang || '-'}</td>
                                                     <td className="border border-slate-300 p-2 text-[10px] bg-white">
-                                                        <div className="flex flex-col gap-0.5 font-bold uppercase italic center text-center">
-                                                            <span className={row.statut === 'VALIDE' ? 'text-green-700' : 'text-red-700'}>
-                                                                {getStatusText(row.statut, 'semestre')}
+                                                        <div className="flex flex-col items-center justify-center text-center">
+                                                            <span className={getJuryAvisClassName(row)}>
+                                                                {getJuryAvisText(row)}
                                                             </span>
                                                         </div>
                                                     </td>

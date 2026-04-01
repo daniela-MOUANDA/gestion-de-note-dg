@@ -264,9 +264,7 @@ router.get('/bulletins/:id/preview', async (req, res) => {
             mention: etudiantData.mention || getMention(etudiantData.moyenneGenerale || 0),
             penalitesAbsences: 0,
             uesValidees: etudiantData.uesValidees || [],
-            decision: etudiantData.statut === 'VALIDE'
-                ? `Semestre ${bulletin.semestre === 'S1' ? '1' : '2'} validé`
-                : `Semestre ${bulletin.semestre === 'S1' ? '1' : '2'} ajourné`,
+            decision: etudiantData.avisJury || (etudiantData.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'),
             dateGeneration: new Date().toISOString()
         }
 

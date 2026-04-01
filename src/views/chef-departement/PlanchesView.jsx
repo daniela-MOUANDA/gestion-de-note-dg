@@ -11,6 +11,13 @@ import { useAlert } from '../../contexts/AlertContext'
 import { getClasses, getBulletinData, exportPlanchePDF, exportPlancheExcel, exportAnnualPlanchePDF, exportAnnualPlancheExcel, getAnnualBulletinData } from '../../api/chefDepartement.js'
 import * as XLSX from 'xlsx'
 
+const PLANCHE_PHASE_OPTIONS = [
+    { value: '', label: 'Phase du semestre (optionnel)' },
+    { value: 'avant_rattrapage', label: 'Avant rattrapage' },
+    { value: 'apres_rattrapage', label: 'Après rattrapage' },
+    { value: 'apres_soutenance', label: 'Après soutenance' }
+]
+
 const PlanchesView = () => {
     const { user } = useAuth()
     const { showAlert } = useAlert()
@@ -24,6 +31,7 @@ const PlanchesView = () => {
     const [classes, setClasses] = useState([])
     const [selectedClasse, setSelectedClasse] = useState('')
     const [selectedSemestre, setSelectedSemestre] = useState('')
+    const [planchePhase, setPlanchePhase] = useState('')
 
     const [bulletinData, setBulletinData] = useState([])
     const [metaData, setMetaData] = useState(null)
@@ -142,12 +150,26 @@ const PlanchesView = () => {
                     return status?.replace(/_/g, ' ') || 'UE non Acquise'
             }
         } else {
-            // Pour le semestre
-            const num = selectedSemestre?.replace('S', '') || '1'
-            return status === 'VALIDE'
-                ? `Semestre ${num} validé`
-                : `Semestre ${num} non validé`
+            return status === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'
         }
+    }
+
+    const getJuryAvisText = (row) => {
+        const t = row.avisJury || getStatusText(row.statut, 'semestre')
+        return typeof t === 'string' ? t.toUpperCase() : t
+    }
+
+    /** Avis du jury : majuscules + gras — vert (admission stage, diplôme / classe sup.), rouge (redouble, semestre non valide) */
+    const getJuryAvisClassName = (row) => {
+        const base = 'font-black uppercase leading-tight text-[9px] tracking-tight'
+        const k = row.avisJuryKind
+        if (k === 'REDOUBLE_L2' || k === 'SEMESTRE_NOK') {
+            return `${base} text-red-600`
+        }
+        if (k === 'DIPLOME' || k === 'STAGE' || k === 'SEMESTRE_OK') {
+            return `${base} text-green-700`
+        }
+        return row.statut === 'VALIDE' ? `${base} text-green-700` : `${base} text-red-600`
     }
 
     const getStatusColor = (status) => {
@@ -199,6 +221,11 @@ const PlanchesView = () => {
         if (filiereCode) return `${classeNom} (${filiereCode})`
         return classeNom
     }
+
+    const planchePhaseLabel = useMemo(
+        () => PLANCHE_PHASE_OPTIONS.find((o) => o.value === planchePhase)?.label || '',
+        [planchePhase]
+    )
 
     const getAvailableSemestres = () => {
         const info = getSelectedClasseInfo()
@@ -255,12 +282,13 @@ const PlanchesView = () => {
             const classInfo = getSelectedClasseInfo()
             const classeNom = classInfo?.nom || 'Classe'
             const filiereNom = classInfo?.filieres?.nom || ''
+            const phaseLabel = planchePhase ? planchePhaseLabel : ''
 
             let blob
             if (selectedSemestre === 'ANNUEL') {
-                blob = await exportAnnualPlancheExcel(selectedClasse, classeNom, filiereNom)
+                blob = await exportAnnualPlancheExcel(selectedClasse, classeNom, filiereNom, phaseLabel)
             } else {
-                blob = await exportPlancheExcel(selectedClasse, selectedSemestre, classeNom, filiereNom)
+                blob = await exportPlancheExcel(selectedClasse, selectedSemestre, classeNom, filiereNom, phaseLabel)
             }
 
             // Créer un lien pour le téléchargement
@@ -327,6 +355,21 @@ const PlanchesView = () => {
                                     )}
                                 </select>
                             </div>
+
+                            <div className="w-full sm:w-56">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Mention</label>
+                                <select
+                                    value={planchePhase}
+                                    onChange={(e) => setPlanchePhase(e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {PLANCHE_PHASE_OPTIONS.map((opt) => (
+                                        <option key={opt.value || 'none'} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
                         <div className="flex gap-2">
@@ -385,6 +428,11 @@ const PlanchesView = () => {
                                                     ? `ANNUEL (${getAvailableSemestres().join(' + ')})`
                                                     : selectedSemestre?.replace('S', 'SEMESTRE ')}
                                             </p>
+                                            {planchePhase && (
+                                                <p className="text-sm sm:text-base font-semibold text-amber-900 uppercase tracking-wide mt-2 border-t border-slate-300 pt-2">
+                                                    {planchePhaseLabel}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="text-right min-w-[250px] pt-2">
                                             <p className="text-sm font-black text-slate-800 uppercase tracking-tight">Année Académique 2024-2025</p>
@@ -634,9 +682,9 @@ const PlanchesView = () => {
                                                             {row.rang || '-'}
                                                         </td>
                                                         <td className="border border-slate-300 p-2 text-[10px] bg-white">
-                                                            <div className="flex flex-col gap-0.5 font-bold uppercase italic">
-                                                                <span className={row.statut === 'VALIDE' ? 'text-green-700' : 'text-red-700'}>
-                                                                    {getStatusText(row.statut, 'semestre')}
+                                                            <div className="flex flex-col items-center justify-center text-center">
+                                                                <span className={getJuryAvisClassName(row)}>
+                                                                    {getJuryAvisText(row)}
                                                                 </span>
                                                             </div>
                                                         </td>

@@ -1,6 +1,18 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
 import { calculerMoyenneGenerale } from '../scolarite/calculationService.js'
 
+function roundCr(x) {
+    return Math.round((Number(x) || 0) * 100) / 100
+}
+
+/** Module « Projet / Stage » (planche S4 L2) — reconnaissance par code / nom */
+export function moduleEstProjetStage(m) {
+    const t = `${m.code || ''} ${m.nom || ''}`.toLowerCase()
+    if (t.includes('projet/stage')) return true
+    if (t.includes('projet') && t.includes('stage')) return true
+    return false
+}
+
 export const getBulletinData = async (classeId, semestre, departementId) => {
     try {
         console.log('DEBUG: getBulletinData v4 START', { classeId, semestre, departementId })
@@ -50,6 +62,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             .select('*, etudiants(*)')
             .eq('classe_id', classeId)
             .eq('statut', 'INSCRIT') // Seulement les inscriptions validées
+            .order('date_inscription', { ascending: true })
 
         if (errorInscriptions) {
             console.error('DEBUG: Inscriptions error', errorInscriptions)
@@ -69,7 +82,6 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             .map(i => i.etudiants)
             .filter(e => e !== null && e !== undefined) // Filtrer seulement les null/undefined
             .filter(e => e.actif !== false) // Garder ceux qui sont actifs ou sans champ actif
-            .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''))
 
         console.log('DEBUG: Étudiants actifs trouvés', etudiants.length)
         if (etudiants.length > 0) {
@@ -336,6 +348,21 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         }
         console.log(`🧠 Smart Mapping prêt : ${Object.keys(studentNotesMap).length} étudiants indexés`)
 
+        // Code département pour moyenne « officielle » (MTIC/RSN) — fallback si l'embed filieres n'expose pas departements.code
+        let deptCode = classe.filieres?.departements?.code || ''
+        if (!deptCode && departementId) {
+            const { data: dep } = await supabaseAdmin
+                .from('departements')
+                .select('code')
+                .eq('id', departementId)
+                .maybeSingle()
+            if (dep?.code) deptCode = dep.code
+        }
+        const filiereCode = classe.filieres?.code || ''
+
+        // Crédits total du semestre (syllabus) — identique pour tous les bulletins de cet appel
+        const totalCreditsAttendusSemestre = modules.reduce((sum, m) => sum + (m.credit || 0), 0)
+
         // 6. Calcul des moyennes et rangs
         console.log('DEBUG: Calcul des moyennes pour', etudiants.length, 'étudiants')
         const bulletin = etudiants.map(etudiant => {
@@ -351,11 +378,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
             let totalCreditsSemestre = 0 // Crédits des modules ayant des notes
             let totalPointsSemestre = 0
 
-            // Calculer le total des crédits attendus pour tout le semestre
-            const totalCreditsAttendus = modules.reduce((sum, m) => sum + (m.credit || 0), 0)
-
-            // Calculer la moyenne générale d'abord pour savoir si on compense
-            // On fait un premier passage
+            // Premier passage : moyenne de chaque module et agrégats semestre (moyenne générale affichée)
             modules.forEach(module => {
                 const evaluationsConfig = parametresMap[module.id] || []
                 if (evaluationsConfig.length === 0) return
@@ -407,21 +430,36 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 ? parseFloat((totalPointsSemestre / totalCreditsSemestre).toFixed(2))
                 : null
 
-            // Le semestre n'est valide que si la moyenne sur l'ENSEMBLE des crédits attendus est >= 10
-            const moyenneSyllabus = totalCreditsAttendus > 0
-                ? parseFloat((totalPointsSemestre / totalCreditsAttendus).toFixed(2))
-                : 0
+            // Moyenne « officielle » : même formule que partout (RSN GI/RT, MTIC : /30, sinon crédits syllabus)
+            const moyenneFinale = calculerMoyenneGenerale(
+                totalPointsSemestre,
+                totalCreditsAttendusSemestre,
+                totalCreditsSemestre,
+                deptCode,
+                filiereCode
+            )
 
-            const semestreValide = moyenneSyllabus >= 10
-
-            // Deuxième passage: Calcul par UE et statut final
+            // Deuxième passage : UE — crédits UE entiers seulement si chaque module est ≥ 10 OU si la moyenne pondérée de l'UE est ≥ 10 (compensation intra-UE).
+            // Sinon : uniquement les crédits des modules ≥ 10. La validation du semestre ne compense jamais une UE.
             let totalCreditsValides = 0
             const modulesResult = []
 
             Object.keys(modulesByUE).sort().forEach(ueName => {
                 const modsUE = modulesByUE[ueName]
-                let pointsUE = 0
-                let creditsUE = 0
+
+                const creditsUE = modsUE.reduce((sum, m) => sum + m.credit, 0)
+                const pointsUE = modsUE.reduce(
+                    (sum, m) => sum + (m.moyenneCalculee !== null ? m.moyenneCalculee * m.credit : 0),
+                    0
+                )
+                const moyenneUE = creditsUE > 0 ? pointsUE / creditsUE : 0
+
+                const tousModulesValidesIndividuellement = modsUE.every(
+                    m => m.moyenneCalculee !== null && Number(m.moyenneCalculee) >= 10
+                )
+                const ueAcquiseParMoyenne = moyenneUE >= 10
+                const ueAcquise = tousModulesValidesIndividuellement || ueAcquiseParMoyenne
+
                 let totalCreditsUEValides = 0
                 let containsCompensatedModule = false
 
@@ -434,7 +472,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                         if (moyenne >= 10) {
                             valide = true
                             status = 'ACQUIS'
-                        } else if (semestreValide) {
+                        } else if (ueAcquise) {
                             valide = true
                             status = 'COMPENSE'
                             containsCompensatedModule = true
@@ -455,23 +493,11 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                     return res
                 })
 
-                pointsUE = modsResultUE.reduce((sum, m) => sum + (m.moyenne !== null ? m.moyenne * m.credit : 0), 0)
-                creditsUE = modsResultUE.reduce((sum, m) => sum + m.credit, 0)
-                const moyenneUE = creditsUE > 0 ? pointsUE / creditsUE : 0
-
-                const ueAcquise = moyenneUE >= 10 || semestreValide
-
-                // NOUVELLE LOGIQUE: Une UE est "par compensation" si elle est acquise ET (moyenne < 10 OU contient un module < 10)
                 let ueStatus = 'NON_ACQUISE'
                 if (ueAcquise) {
-                    if (moyenneUE >= 10 && !containsCompensatedModule) {
-                        ueStatus = 'ACQUISE'
-                    } else {
-                        ueStatus = 'ACQUISE_PAR_COMPENSATION'
-                    }
+                    ueStatus = containsCompensatedModule ? 'ACQUISE_PAR_COMPENSATION' : 'ACQUISE'
                 }
 
-                // Si l'UE est acquise (même par compensation), tous ses crédits sont validés
                 const creditsUEFinaux = ueAcquise ? creditsUE : totalCreditsUEValides
                 totalCreditsValides += creditsUEFinaux
 
@@ -486,22 +512,11 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 })
             })
 
-            const statut = semestreValide ? 'VALIDE' : 'AJOURNE'
-
-            // --- CALCUL DE LA MOYENNE FINALE AVEC LE SERVICE CENTRALISÉ ---
-            const deptCode = classe.filieres?.departements?.code || ''
-            const filiereCode = classe.filieres?.code || ''
-
-            const moyenneFinale = calculerMoyenneGenerale(
-                totalPointsSemestre,
-                totalCreditsAttendus,
-                totalCreditsSemestre,
-                deptCode,
-                filiereCode
-            )
-
-            // Mettre à jour le statut final basé sur la moyenneFinale calculée
-            const statutFinal = (moyenneFinale >= 10) ? 'VALIDE' : 'AJOURNE'
+            // Validation du semestre : tous les crédits du syllabus doivent être capitalisés (la moyenne seule ne suffit pas)
+            const crVal = Math.round(totalCreditsValides * 100) / 100
+            const crAtt = Math.round(totalCreditsAttendusSemestre * 100) / 100
+            const semestreValide = crAtt > 0 && crVal >= crAtt
+            const statutFinal = semestreValide ? 'VALIDE' : 'AJOURNE'
 
             return {
                 etudiant,
@@ -509,6 +524,7 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 uesValidees: uesResult, // On retourne aussi les UEs calculées
                 moyenneGenerale: moyenneFinale,
                 totalCreditsValides,
+                totalCreditsAttendusSemestre,
                 statut: statutFinal
             }
         })
@@ -517,23 +533,25 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         const etudiantsAvecNotesList = bulletin.filter(b => b.moyenneGenerale !== null && b.moyenneGenerale !== undefined)
 
         if (etudiantsAvecNotesList.length > 0) {
-            // Tri par moyenne générale décroissante (les null en dernier)
-            bulletin.sort((a, b) => {
+            // Le rang est calculé sur une copie triée, sans changer l'ordre d'affichage de la classe.
+            const ranked = [...bulletin].sort((a, b) => {
                 if (a.moyenneGenerale === null && b.moyenneGenerale === null) return 0
                 if (a.moyenneGenerale === null) return 1
                 if (b.moyenneGenerale === null) return -1
                 return (b.moyenneGenerale || 0) - (a.moyenneGenerale || 0)
             })
 
-            // Assigner les rangs seulement aux étudiants avec des notes
+            // Assigner les rangs par étudiant (ID) puis les injecter dans l'ordre initial.
             let rangActuel = 1
-            bulletin.forEach((item, index) => {
+            const rangByEtudiantId = new Map()
+            ranked.forEach((item) => {
                 if (item.moyenneGenerale !== null && item.moyenneGenerale !== undefined) {
-                    item.rang = rangActuel
+                    rangByEtudiantId.set(item.etudiant.id, rangActuel)
                     rangActuel++
-                } else {
-                    item.rang = null // Pas de rang si pas de notes
                 }
+            })
+            bulletin.forEach((item) => {
+                item.rang = rangByEtudiantId.get(item.etudiant.id) || null
             })
         } else {
             // Aucun étudiant n'a de notes, pas de rang
@@ -609,6 +627,76 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         const etudiantsSansNotes = bulletin.filter(b => b.moyenneGenerale === null).length
         console.log(`📊 Statistiques: ${etudiantsAvecNotes} avec notes, ${etudiantsSansNotes} sans notes`)
 
+        // Planche S4 (L2) : avis du jury (stage, S3+S4, diplôme)
+        let s4AvisJuryRegles = false
+        if (semestre === 'S4' && niveauCode === 'L2') {
+            s4AvisJuryRegles = true
+            const stageModuleIds = new Set(
+                modules.filter((m) => moduleEstProjetStage(m)).map((m) => m.id)
+            )
+
+            bulletin.forEach((row) => {
+                const stageRows = (row.modules || []).filter((m) => stageModuleIds.has(m.id))
+                let noteStage = null
+                if (stageRows.length) {
+                    const vals = stageRows
+                        .map((m) => m.moyenne)
+                        .filter((v) => v !== null && v !== undefined && !Number.isNaN(Number(v)))
+                    if (vals.length) {
+                        noteStage = roundCr(
+                            vals.reduce((a, b) => a + Number(b), 0) / vals.length
+                        )
+                    }
+                }
+                if (noteStage !== null && noteStage !== 0 && noteStage < 10) {
+                    row.avisJury = 'Redouble la Licence 2'
+                    row.avisJuryKind = 'REDOUBLE_L2'
+                }
+            })
+
+            const s3Res = await getBulletinData(classeId, 'S3', departementId)
+            if (s3Res.success && s3Res.data?.length) {
+                const mapS3 = new Map(s3Res.data.map((r) => [r.etudiant.id, r]))
+                const attendusS3 = roundCr(s3Res.meta.totalCreditsAttendusSemestre || 0)
+                const attendusS4 = roundCr(totalCreditsAttendusSemestre)
+                const creditsStageAttendus = roundCr(
+                    modules.filter((m) => moduleEstProjetStage(m)).reduce((s, m) => s + (m.credit || 0), 0)
+                )
+                const seuilS4SansStage = Math.max(0, roundCr(attendusS4 - creditsStageAttendus))
+
+                bulletin.forEach((row) => {
+                    if (row.avisJuryKind === 'REDOUBLE_L2') return
+
+                    const s3Row = mapS3.get(row.etudiant.id)
+                    const cr3 = s3Row ? roundCr(s3Row.totalCreditsValides || 0) : 0
+                    const cr4 = roundCr(row.totalCreditsValides || 0)
+                    let cr4HorsStage = 0
+                    ;(row.modules || []).forEach((m) => {
+                        if (!stageModuleIds.has(m.id) && m.valide) {
+                            cr4HorsStage += m.credit || 0
+                        }
+                    })
+                    cr4HorsStage = roundCr(cr4HorsStage)
+
+                    const s3Ok = attendusS3 <= 0 || cr3 >= attendusS3
+                    const s4HorsStageOk = seuilS4SansStage <= 0 || cr4HorsStage >= seuilS4SansStage
+                    const totalAttendus = roundCr(attendusS3 + attendusS4)
+                    const diplomeOk = totalAttendus <= 0 || roundCr(cr3 + cr4) >= totalAttendus
+
+                    if (diplomeOk) {
+                        row.avisJury = 'Admis(e) en troisième année et diplômé(e)'
+                        row.avisJuryKind = 'DIPLOME'
+                    } else if (s3Ok && s4HorsStageOk) {
+                        row.avisJury = 'Admission en stage'
+                        row.avisJuryKind = 'STAGE'
+                    } else {
+                        row.avisJury = row.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'
+                        row.avisJuryKind = row.statut === 'VALIDE' ? 'SEMESTRE_OK' : 'SEMESTRE_NOK'
+                    }
+                })
+            }
+        }
+
         return {
             success: true,
             data: bulletin,
@@ -621,7 +709,9 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 parametresCount: parametresList?.length || 0,
                 etudiantsAvecNotes,
                 etudiantsSansNotes,
-                moyenneGeneraleClasse // Ajout métadonnée
+                moyenneGeneraleClasse, // Ajout métadonnée
+                totalCreditsAttendusSemestre,
+                s4AvisJuryRegles
             }
         }
 

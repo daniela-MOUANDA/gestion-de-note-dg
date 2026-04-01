@@ -85,10 +85,14 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
             }
         })
 
-        // 3. Calculer les rangs annuels
-        annualData.sort((a, b) => b.annuel.moyenne - a.annuel.moyenne)
-        annualData.forEach((item, index) => {
-            item.annuel.rang = index + 1
+        // 3. Calculer les rangs annuels sans modifier l'ordre de la classe
+        const rankedAnnual = [...annualData].sort((a, b) => b.annuel.moyenne - a.annuel.moyenne)
+        const rangByEtudiantId = new Map()
+        rankedAnnual.forEach((item, index) => {
+            rangByEtudiantId.set(item.etudiant.id, index + 1)
+        })
+        annualData.forEach((item) => {
+            item.annuel.rang = rangByEtudiantId.get(item.etudiant.id) || null
         })
 
         return {

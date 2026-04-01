@@ -36,6 +36,13 @@ export const getClassesByDepartement = async (departementId) => {
         nom: classe.nom,
         niveau: classe.niveaux?.code,
         filiere: classe.filieres?.code,
+        filieres: classe.filieres
+          ? {
+              id: classe.filieres.id,
+              nom: classe.filieres.nom,
+              code: classe.filieres.code
+            }
+          : null,
         effectif: classe.effectif,
         nombreModules: classe.nombre_modules || 0,
         filiereId: classe.filiere_id,

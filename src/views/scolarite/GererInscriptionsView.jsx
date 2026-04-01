@@ -226,6 +226,8 @@ const GererInscriptionsView = () => {
 
           // Initialiser les informations de l'étudiant
           setEtudiantInfo({
+            nom: dossier.etudiant?.nom || '',
+            prenom: dossier.etudiant?.prenom || '',
             email: dossier.etudiant?.email || '',
             telephone: dossier.etudiant?.telephone || '',
             adresse: dossier.etudiant?.adresse || '',
@@ -1021,6 +1023,32 @@ const GererInscriptionsView = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Nom</p>
+                    {editingInfo ? (
+                      <input
+                        type="text"
+                        value={etudiantInfo.nom || ''}
+                        onChange={(e) => setEtudiantInfo({ ...etudiantInfo, nom: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{dossier.etudiant.nom || 'Non renseigné'}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Prénom</p>
+                    {editingInfo ? (
+                      <input
+                        type="text"
+                        value={etudiantInfo.prenom || ''}
+                        onChange={(e) => setEtudiantInfo({ ...etudiantInfo, prenom: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{dossier.etudiant.prenom || 'Non renseigné'}</p>
+                    )}
+                  </div>
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Email</p>
                     {editingInfo ? (

@@ -215,6 +215,8 @@ export const updateEtudiantInfo = async (etudiantId, data) => {
   try {
     const updateData = {}
 
+    if (data.nom !== undefined) updateData.nom = data.nom
+    if (data.prenom !== undefined) updateData.prenom = data.prenom
     if (data.email !== undefined) updateData.email = data.email
     if (data.telephone !== undefined) updateData.telephone = data.telephone
     if (data.adresse !== undefined) updateData.adresse = data.adresse

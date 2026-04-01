@@ -6,6 +6,49 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Couleurs lisibles dans Excel (ARGB) — vert / rouge pour l'avis du jury */
+const AVIS_EXCEL_GREEN = { argb: 'FF16A34A' }
+const AVIS_EXCEL_RED = { argb: 'FFDC2626' }
+
+/**
+ * Style final de la cellule « Avis du jury » (gras, pas italique, couleur).
+ * Réappliqué en dernier pour ne pas être écrasé par le zébrage ou d'autres passes.
+ */
+function applyAvisDuJuryCellStyle(cell, student) {
+    const decision = (student.decision || '').trim()
+    const kind = student.avisJuryKind
+    const dLower = decision.toLowerCase()
+
+    let color = AVIS_EXCEL_GREEN
+
+    const isPositive =
+        kind === 'DIPLOME' ||
+        kind === 'STAGE' ||
+        kind === 'SEMESTRE_OK' ||
+        /admission\s+en\s+stage/i.test(dLower) ||
+        /troisi[eè]me\s+ann[eé]e/.test(dLower) ||
+        /dipl[oô]m/i.test(dLower) ||
+        /^semestre\s+valide$/i.test(decision.trim())
+
+    const isNegative =
+        kind === 'REDOUBLE_L2' ||
+        kind === 'SEMESTRE_NOK' ||
+        /non\s*valide/i.test(decision) ||
+        /redouble\s+la\s+licence/i.test(dLower)
+
+    if (isPositive) color = AVIS_EXCEL_GREEN
+    if (isNegative) color = AVIS_EXCEL_RED
+
+    cell.font = {
+        name: 'Calibri',
+        bold: true,
+        italic: false,
+        size: 9,
+        color
+    }
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+}
+
 /**
  * Génère une planche semestrielle au format Excel
  */
@@ -198,9 +241,8 @@ export async function generatePlancheExcel(data, outputPath) {
         c++;
 
         const cellAvis = row.getCell(c);
+        const avisCol = c;
         cellAvis.value = student.decision?.toUpperCase() || '';
-        cellAvis.font = { bold: true, italic: true, size: 9 };
-        if (!student.decision?.includes('validé')) cellAvis.font.color = { argb: 'FFFF0000' };
 
         // Zebra striping
         if (sIdx % 2 === 1) {
@@ -224,6 +266,8 @@ export async function generatePlancheExcel(data, outputPath) {
                 };
             }
         });
+
+        applyAvisDuJuryCellStyle(row.getCell(avisCol), student);
     });
 
     // Ajuster largeur colonnes
@@ -424,6 +468,16 @@ async function drawHeader(worksheet, workbook, data, isAnnual) {
     subTitleCell.value = subTitle.toUpperCase();
     subTitleCell.font = { bold: true, size: 15, color: { argb: 'FF1565C0' } }; // Bleu professionnel
     subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const phaseRaw = (data.phaseLabel && String(data.phaseLabel).trim()) || '';
+    if (phaseRaw) {
+        worksheet.mergeCells('F5:N5');
+        const phaseCell = worksheet.getCell('F5');
+        phaseCell.value = phaseRaw.toUpperCase();
+        phaseCell.font = { bold: true, size: 12, color: { argb: 'FFB45309' } };
+        phaseCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        worksheet.getRow(5).height = 28;
+    }
 }
 
 function formatStatus(status) {

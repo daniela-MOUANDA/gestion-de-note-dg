@@ -97,6 +97,25 @@ const uploadModulesExcel = multer({
 
 const router = express.Router()
 
+/** Nom affichable de la filière pour exports planches (query > relation embed > table filieres) */
+async function resolveFiliereNomPourPlanche(classe, queryFiliereNom) {
+  const q = String(queryFiliereNom ?? '').trim()
+  if (q) return q
+  const f = classe?.filieres
+  const embedded = Array.isArray(f) ? f[0]?.nom : f?.nom
+  if (embedded) return embedded
+  if (classe?.filiere_id) {
+    const { data } = await supabaseAdmin
+      .from('filieres')
+      .select('nom, code')
+      .eq('id', classe.filiere_id)
+      .maybeSingle()
+    if (data?.nom) return data.nom
+    if (data?.code) return data.code
+  }
+  return 'Filière inconnue'
+}
+
 // Toutes les routes nécessitent une authentification
 router.use(authenticate)
 
@@ -1447,9 +1466,7 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       mention: etudiantData.mention || getMention(etudiantData.moyenneGenerale || 0),
       penalitesAbsences: 0,
       uesValidees: etudiantData.uesValidees || [], // Utiliser les UEs calculées par le service
-      decision: etudiantData.statut === 'VALIDE'
-        ? `${bulletin.semestre} validé`
-        : `${bulletin.semestre} ajourné`,
+      decision: etudiantData.avisJury || (etudiantData.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'),
       dateGeneration: bulletin.date_generation || new Date().toISOString()
     }
 
@@ -1535,11 +1552,13 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
     // Récupérer les infos de la classe et de sa promotion
     const { data: classe, error: classeError } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom, departements(code)), promotions(annee)')
+      .select('*, filieres(nom, code, departements(code)), promotions(annee)')
       .eq('id', classeId)
       .single()
 
     if (classeError) throw classeError
+
+    const filierePdf = await resolveFiliereNomPourPlanche(classe, '')
 
     console.log(`📊 [Backend] Students to map:`, studentsData.length)
 
@@ -1547,7 +1566,7 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
     const plancheData = {
       classe: {
         nom: classe?.nom || 'Inconnue',
-        filiere: classe?.filieres?.nom || '',
+        filiere: filierePdf,
         departement: classe?.filieres?.departements?.code || ''
       },
       anneeUniversitaire: classe?.promotions?.annee || '2024-2025',
@@ -1568,7 +1587,8 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
           moyenneSemestre: s.moyenneGenerale,
           totalCreditsValides: s.totalCreditsValides,
           rangEtudiant: s.rang,
-          decision: s.statut === 'VALIDE' ? 'Semestre validé' : 'Semestre ajourné'
+          decision: s.avisJury || (s.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'),
+          avisJuryKind: s.avisJuryKind || null
         }
       })
     }
@@ -1602,7 +1622,7 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
 router.get('/classes/:classeId/planches/:semestre/excel', async (req, res) => {
   try {
     const { classeId, semestre } = req.params
-    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom } = req.query
+    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom, phaseLabel: queryPhaseLabel } = req.query
     const departementId = req.user?.departementId
 
     if (!departementId) {
@@ -1615,16 +1635,20 @@ router.get('/classes/:classeId/planches/:semestre/excel', async (req, res) => {
     const { data: studentsData } = result
     const { data: classe } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom, departements(code)), promotions(annee)')
+      .select('*, filieres(nom, code, departements(code)), promotions(annee)')
       .eq('id', classeId)
       .single()
+
+    const filiereLabel = await resolveFiliereNomPourPlanche(classe, queryFiliereNom)
+    const phaseLabel = String(queryPhaseLabel ?? '').trim()
 
     const plancheData = {
       classe: {
         nom: queryClasseNom || classe?.nom || 'Classe Inconnue',
-        filiere: queryFiliereNom || (Array.isArray(classe?.filieres) ? classe?.filieres[0]?.nom : classe?.filieres?.nom) || classe?.filiere?.nom || 'Filière Inconnue',
+        filiere: filiereLabel,
         departement: (Array.isArray(classe?.filieres) ? (Array.isArray(classe?.filieres[0]?.departements) ? classe?.filieres[0]?.departements[0]?.code : classe?.filieres[0]?.departements?.code) : classe?.filieres?.departements?.code) || 'INPTIC'
       },
+      phaseLabel,
       anneeUniversitaire: classe?.promotions?.annee || '2024-2025',
       semestre: semestre,
       students: studentsData.map(s => ({
@@ -1642,7 +1666,8 @@ router.get('/classes/:classeId/planches/:semestre/excel', async (req, res) => {
         moyenneSemestre: s.moyenneGenerale,
         totalCreditsValides: s.totalCreditsValides,
         rangEtudiant: s.rang,
-        decision: s.statut === 'VALIDE' ? 'Semestre validé' : 'Semestre ajourné'
+        decision: s.avisJury || (s.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'),
+        avisJuryKind: s.avisJuryKind || null
       }))
     }
 
@@ -1679,14 +1704,16 @@ router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
     // Infos classe pour l'en-tête
     const { data: classe } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom), promotions(annee)')
+      .select('*, filieres(nom, code), promotions(annee)')
       .eq('id', classeId)
       .single()
+
+    const filiereAnnuelle = await resolveFiliereNomPourPlanche(classe, '')
 
     const plancheData = {
       classe: {
         nom: classe?.nom,
-        filiere: classe?.filieres?.nom
+        filiere: filiereAnnuelle
       },
       anneeUniversitaire: classe?.promotions?.annee,
       semA: result.meta?.semestreA || 'S1',
@@ -1721,7 +1748,7 @@ router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
 router.get('/classes/:classeId/planches/annuel/excel', async (req, res) => {
   try {
     const { classeId } = req.params
-    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom } = req.query
+    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom, phaseLabel: queryPhaseLabel } = req.query
     const departementId = req.user?.departementId
 
     if (!departementId) {
@@ -1733,15 +1760,19 @@ router.get('/classes/:classeId/planches/annuel/excel', async (req, res) => {
 
     const { data: classe } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom), promotions(annee)')
+      .select('*, filieres(nom, code), promotions(annee)')
       .eq('id', classeId)
       .single()
 
+    const filiereLabel = await resolveFiliereNomPourPlanche(classe, queryFiliereNom)
+    const phaseLabel = String(queryPhaseLabel ?? '').trim()
+
     const plancheData = {
       classe: {
-        nom: classe?.nom,
-        filiere: classe?.filieres?.nom
+        nom: queryClasseNom || classe?.nom,
+        filiere: filiereLabel
       },
+      phaseLabel,
       anneeUniversitaire: classe?.promotions?.annee,
       semA: result.meta?.semestreA || 'S1',
       semB: result.meta?.semestreB || 'S2',

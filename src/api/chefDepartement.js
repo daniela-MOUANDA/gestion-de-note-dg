@@ -501,13 +501,20 @@ export const exportPlanchePDF = async (classeId, semestre) => {
   return response.blob()
 }
 
-export const exportPlancheExcel = async (classeId, semestre, classeNom = '', filiereNom = '') => {
+export const exportPlancheExcel = async (
+  classeId,
+  semestre,
+  classeNom = '',
+  filiereNom = '',
+  phaseLabel = ''
+) => {
   const token = localStorage.getItem('token')
   let url = `${API_BASE_URL}/classes/${classeId}/planches/${semestre}/excel`
 
   const params = new URLSearchParams()
   if (classeNom) params.append('classeNom', classeNom)
   if (filiereNom) params.append('filiereNom', filiereNom)
+  if (phaseLabel) params.append('phaseLabel', phaseLabel)
 
   if (params.toString()) {
     url += `?${params.toString()}`
@@ -543,13 +550,19 @@ export const exportAnnualPlanchePDF = async (classeId) => {
   return response.blob()
 }
 
-export const exportAnnualPlancheExcel = async (classeId, classeNom = '', filiereNom = '') => {
+export const exportAnnualPlancheExcel = async (
+  classeId,
+  classeNom = '',
+  filiereNom = '',
+  phaseLabel = ''
+) => {
   const token = localStorage.getItem('token')
   let url = `${API_BASE_URL}/classes/${classeId}/planches/annuel/excel`
 
   const params = new URLSearchParams()
   if (classeNom) params.append('classeNom', classeNom)
   if (filiereNom) params.append('filiereNom', filiereNom)
+  if (phaseLabel) params.append('phaseLabel', phaseLabel)
 
   if (params.toString()) {
     url += `?${params.toString()}`

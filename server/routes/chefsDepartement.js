@@ -78,7 +78,8 @@ import { getAnnualPlancheData } from '../../src/services/chefDepartement/planche
 import {
   listCoordinateursPedagogiques,
   createCoordinateurPedagogique,
-  updateCoordinateurPedagogique
+  updateCoordinateurPedagogique,
+  deleteCoordinateurPedagogique
 } from '../../src/services/chefDepartement/coordinateurPedagogiqueService.js'
 import { fileURLToPath } from 'url'
 
@@ -174,6 +175,24 @@ router.patch('/coordinateurs-pedagogiques/:id', requireRole('CHEF_DEPARTEMENT'),
       { chefUtilisateurId: req.user.id, departementId },
       req.params.id,
       { nom, prenom, telephone, actif, motDePasse }
+    )
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ success: false, error: 'Erreur serveur' })
+  }
+})
+
+router.delete('/coordinateurs-pedagogiques/:id', requireRole('CHEF_DEPARTEMENT'), async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Aucun département associé à votre compte' })
+    }
+    const result = await deleteCoordinateurPedagogique(
+      { chefUtilisateurId: req.user.id, departementId },
+      req.params.id
     )
     if (!result.success) return res.status(400).json(result)
     res.json(result)

@@ -602,3 +602,9 @@ export const updateCoordinateurPedagogiqueApi = async (id, payload) => {
     body: JSON.stringify(payload)
   })
 }
+
+export const deleteCoordinateurPedagogiqueApi = async (id) => {
+  return request(`/coordinateurs-pedagogiques/${id}`, {
+    method: 'DELETE'
+  })
+}

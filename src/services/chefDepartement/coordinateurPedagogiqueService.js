@@ -178,3 +178,39 @@ export async function updateCoordinateurPedagogique(
     return { success: false, error: e.message || 'Erreur lors de la mise à jour' }
   }
 }
+
+export async function deleteCoordinateurPedagogique({ chefUtilisateurId, departementId }, coordId) {
+  try {
+    const own = await assertChefOwnsCoordinateur(coordId, chefUtilisateurId, departementId)
+    if (!own.ok) return { success: false, error: own.error }
+
+    const { data: victim } = await supabaseAdmin
+      .from('utilisateurs')
+      .select('email, prenom, nom')
+      .eq('id', coordId)
+      .single()
+
+    await supabaseAdmin.from('actions_audit').insert({
+      utilisateur_id: chefUtilisateurId,
+      action: 'Suppression coordinateur pédagogique',
+      details: `Compte supprimé : ${victim?.prenom || ''} ${victim?.nom || ''} (${victim?.email || coordId})`,
+      type_action: 'CONNEXION',
+      date_action: new Date().toISOString()
+    })
+
+    const { error: delError } = await supabaseAdmin.from('utilisateurs').delete().eq('id', coordId)
+    if (delError) throw delError
+
+    return { success: true }
+  } catch (e) {
+    console.error('deleteCoordinateurPedagogique:', e)
+    const msg = e.message || 'Erreur lors de la suppression'
+    if (/foreign key|violates foreign key/i.test(msg)) {
+      return {
+        success: false,
+        error: 'Impossible de supprimer ce compte : des données y sont encore liées. Désactivez-le plutôt.'
+      }
+    }
+    return { success: false, error: msg }
+  }
+}

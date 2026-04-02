@@ -9,15 +9,18 @@ import {
   faLock,
   faUser,
   faToggleOn,
-  faToggleOff
+  faToggleOff,
+  faTrash
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
+import Modal from '../../components/common/Modal'
 import { useAlert } from '../../contexts/AlertContext'
 import {
   getCoordinateursPedagogiques,
   createCoordinateurPedagogiqueApi,
-  updateCoordinateurPedagogiqueApi
+  updateCoordinateurPedagogiqueApi,
+  deleteCoordinateurPedagogiqueApi
 } from '../../api/chefDepartement'
 
 const emptyForm = () => ({
@@ -36,6 +39,7 @@ const CoordinateursPedagogiquesView = () => {
   const [form, setForm] = useState(emptyForm())
   const [editingId, setEditingId] = useState(null)
   const [editPatch, setEditPatch] = useState({})
+  const [confirmDeleteRow, setConfirmDeleteRow] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -124,8 +128,56 @@ const CoordinateursPedagogiquesView = () => {
     }
   }
 
+  const confirmDelete = async () => {
+    if (!confirmDeleteRow) return
+    setSaving(true)
+    try {
+      const res = await deleteCoordinateurPedagogiqueApi(confirmDeleteRow.id)
+      if (res.success) {
+        showAlert('Compte coordinateur supprimé définitivement.', 'success')
+        setConfirmDeleteRow(null)
+        cancelEdit()
+        await load()
+      } else showAlert(res.error || 'Suppression impossible', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+      <Modal
+        isOpen={!!confirmDeleteRow}
+        onClose={() => !saving && setConfirmDeleteRow(null)}
+        type="warning"
+        title="Supprimer ce coordinateur ?"
+        message={
+          confirmDeleteRow
+            ? `Le compte de ${confirmDeleteRow.prenom} ${confirmDeleteRow.nom} (${confirmDeleteRow.email}) sera supprimé définitivement. Cette action est irréversible.`
+            : ''
+        }
+      >
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setConfirmDeleteRow(null)}
+            className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={confirmDelete}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60"
+          >
+            {saving ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faTrash} />}
+            Supprimer
+          </button>
+        </div>
+      </Modal>
+
       <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />
@@ -308,6 +360,15 @@ const CoordinateursPedagogiquesView = () => {
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-medium text-slate-800 hover:bg-slate-200"
                             >
                               <FontAwesomeIcon icon={faUser} /> Modifier
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteRow(r)}
+                              disabled={saving}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-60"
+                              title="Supprimer définitivement ce compte"
+                            >
+                              <FontAwesomeIcon icon={faTrash} /> Supprimer
                             </button>
                           </div>
                         </div>

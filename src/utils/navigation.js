@@ -60,6 +60,7 @@ export const redirectToDashboard = (role) => {
       navigateTo('/sp-scolarite/dashboard', { replace: true })
       break
     case 'CHEF_DEPARTEMENT':
+    case 'COORD_PEDAGOGIQUE':
       navigateTo('/chef/departement/dashboard', { replace: true })
       break
     case 'DEP':

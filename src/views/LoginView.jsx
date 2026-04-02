@@ -41,7 +41,7 @@ const LoginView = () => {
     console.log('Redirection par code de rôle:', roleCode)
 
     // Pour certains rôles critiques, forcer la redirection par code plutôt que par routeDashboard
-    const criticalRoles = ['CHEF_DEPARTEMENT', 'CHEF_SERVICE_SCOLARITE', 'DEP', 'SP_SCOLARITE']
+    const criticalRoles = ['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE', 'CHEF_SERVICE_SCOLARITE', 'DEP', 'SP_SCOLARITE']
     const useRouteDashboard = !criticalRoles.includes(roleCode) && user.roleDetails && user.roleDetails.routeDashboard
 
     if (useRouteDashboard) {
@@ -67,7 +67,8 @@ const LoginView = () => {
         navigate('/sp-scolarite/dashboard', { replace: true })
         break
       case 'CHEF_DEPARTEMENT':
-        console.log('✅ Redirection vers /chef/departement/dashboard pour CHEF_DEPARTEMENT')
+      case 'COORD_PEDAGOGIQUE':
+        console.log('✅ Redirection espace département (chef ou coordinateur)')
         navigate('/chef/departement/dashboard', { replace: true })
         break
       case 'DEP':

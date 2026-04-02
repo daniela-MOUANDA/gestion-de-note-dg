@@ -580,3 +580,25 @@ export const exportAnnualPlancheExcel = async (
 
   return response.blob()
 }
+
+// ============================================
+// COORDONNATEURS PÉDAGOGIQUES (chef de département uniquement)
+// ============================================
+
+export const getCoordinateursPedagogiques = async () => {
+  return request('/coordinateurs-pedagogiques')
+}
+
+export const createCoordinateurPedagogiqueApi = async (payload) => {
+  return request('/coordinateurs-pedagogiques', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export const updateCoordinateurPedagogiqueApi = async (id, payload) => {
+  return request(`/coordinateurs-pedagogiques/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  })
+}

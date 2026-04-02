@@ -46,6 +46,7 @@ const RelevesNotesView = lazy(() => import('./views/chef-departement/RelevesNote
 const PlanchesView = lazy(() => import('./views/chef-departement/PlanchesView'))
 const BulletinsChefDepartementView = lazy(() => import('./views/chef-departement/BulletinsView'))
 const StatistiquesChefDepartementView = lazy(() => import('./views/chef-departement/StatistiquesView'))
+const CoordinateursPedagogiquesView = lazy(() => import('./views/chef-departement/CoordinateursPedagogiquesView'))
 const MessagerieChefView = lazy(() => import('./views/chef/MessagerieChefView'))
 const GererClassesView = lazy(() => import('./views/chef/GererClassesView'))
 const GererEnseignantsView = lazy(() => import('./views/chef/GererEnseignantsView'))
@@ -217,11 +218,11 @@ function App() {
               }
             />
 
-            {/* Routes Chef de Département - Protégées pour le rôle CHEF_DEPARTEMENT */}
+            {/* Routes Chef / Coordinateur pédagogique — même espace (sauf /chef/coordinateurs : chef seul) */}
             <Route
               path="/chef/departement/dashboard"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <DashboardChefView />
                 </ProtectedRoute>
               }
@@ -229,7 +230,7 @@ function App() {
             <Route
               path="/chef/dashboard"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <DashboardChefView />
                 </ProtectedRoute>
               }
@@ -237,7 +238,7 @@ function App() {
             <Route
               path="/chef/messagerie"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <MessagerieChefView />
                 </ProtectedRoute>
               }
@@ -245,7 +246,7 @@ function App() {
             <Route
               path="/chef/classes"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <ClassesChefDepartementView />
                 </ProtectedRoute>
               }
@@ -253,7 +254,7 @@ function App() {
             <Route
               path="/chef/modules"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <ModulesChefDepartementView />
                 </ProtectedRoute>
               }
@@ -261,7 +262,7 @@ function App() {
             <Route
               path="/chef/enseignants"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <EnseignantsChefDepartementView />
                 </ProtectedRoute>
               }
@@ -269,7 +270,7 @@ function App() {
             <Route
               path="/chef/etudiants"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <EtudiantsInscritsView />
                 </ProtectedRoute>
               }
@@ -277,7 +278,7 @@ function App() {
             <Route
               path="/chef/repartition"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <RepartitionClasseView />
                 </ProtectedRoute>
               }
@@ -285,7 +286,7 @@ function App() {
             <Route
               path="/chef/notes"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <NotesChefDepartementView />
                 </ProtectedRoute>
               }
@@ -293,7 +294,7 @@ function App() {
             <Route
               path="/chef/notes/ajouter"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <AjouterNotesView />
                 </ProtectedRoute>
               }
@@ -301,7 +302,7 @@ function App() {
             <Route
               path="/chef/emplois-du-temps"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <EmploiDuTempsChefDepartementView />
                 </ProtectedRoute>
               }
@@ -309,7 +310,7 @@ function App() {
             <Route
               path="/chef/rattrapages"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <GererRattrapagesView />
                 </ProtectedRoute>
               }
@@ -317,7 +318,7 @@ function App() {
             <Route
               path="/chef/unites-enseignement"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <PublierUnitesEnseignementView />
                 </ProtectedRoute>
               }
@@ -325,7 +326,7 @@ function App() {
             <Route
               path="/chef/releves"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <RelevesNotesView />
                 </ProtectedRoute>
               }
@@ -333,7 +334,7 @@ function App() {
             <Route
               path="/chef/planches"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <PlanchesView />
                 </ProtectedRoute>
               }
@@ -341,7 +342,7 @@ function App() {
             <Route
               path="/chef/bulletins"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <BulletinsChefDepartementView />
                 </ProtectedRoute>
               }
@@ -349,8 +350,16 @@ function App() {
             <Route
               path="/chef/statistiques"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                <ProtectedRoute requireAuth={true} allowedRoles={['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']}>
                   <StatistiquesChefDepartementView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chef/coordinateurs"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_DEPARTEMENT">
+                  <CoordinateursPedagogiquesView />
                 </ProtectedRoute>
               }
             />

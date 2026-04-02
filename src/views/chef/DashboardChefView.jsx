@@ -24,11 +24,13 @@ import { useAuth } from '../../contexts/AuthContext'
 const DashboardChefView = () => {
   const { user, isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Chef de Département'
+  const isEspaceDepartement =
+    user?.role === 'CHEF_DEPARTEMENT' || user?.role === 'COORD_PEDAGOGIQUE'
+  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Département'
 
   // Vérification du rôle et redirection si nécessaire
   useEffect(() => {
-    if (isAuthenticated && user?.role !== 'CHEF_DEPARTEMENT') {
+    if (isAuthenticated && !isEspaceDepartement) {
       console.warn(`Accès non autorisé au dashboard Chef de Département pour le rôle: ${user?.role}. Redirection...`)
       const role = user?.role?.trim().toUpperCase()
       if (role === 'CHEF_SERVICE_SCOLARITE') {
@@ -43,7 +45,7 @@ const DashboardChefView = () => {
         navigate('/login', { replace: true })
       }
     }
-  }, [isAuthenticated, user, navigate])
+  }, [isAuthenticated, user, navigate, isEspaceDepartement])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
     totalClasses: 0,
@@ -104,10 +106,10 @@ const DashboardChefView = () => {
 
   // Charger les données
   useEffect(() => {
-    if (isAuthenticated && user?.role === 'CHEF_DEPARTEMENT') {
+    if (isAuthenticated && isEspaceDepartement) {
       loadDashboardData()
     }
-  }, [isAuthenticated, user, loadDashboardData])
+  }, [isAuthenticated, isEspaceDepartement, loadDashboardData])
 
 
 

@@ -79,6 +79,7 @@ const getUserDashboard = (role) => {
     case 'SP_SCOLARITE':
       return '/sp-scolarite/dashboard'
     case 'CHEF_DEPARTEMENT':
+    case 'COORD_PEDAGOGIQUE':
       return '/chef/departement/dashboard'
     case 'DEP':
       return '/dep/dashboard'

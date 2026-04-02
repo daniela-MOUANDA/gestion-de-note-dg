@@ -48,6 +48,7 @@ const LoginStudentView = () => {
         navigate('/sp-scolarite/dashboard')
         break
       case 'CHEF_DEPARTEMENT':
+      case 'COORD_PEDAGOGIQUE':
         navigate('/chef/departement/dashboard')
         break
       case 'DEP':

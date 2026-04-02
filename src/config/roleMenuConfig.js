@@ -19,7 +19,8 @@ import {
     faFileContract,
     faHistory,
     faShieldAlt,
-    faLock
+    faLock,
+    faUserFriends
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -119,6 +120,24 @@ export const ROLE_MENUS = {
     // Chef de Département
     CHEF_DEPARTEMENT: [
         { path: '/chef/dashboard', icon: faHome, label: 'Tableau de bord' },
+        { path: '/chef/coordinateurs', icon: faUserFriends, label: 'Coordinateurs' },
+        { path: '/chef/enseignants', icon: faChalkboardTeacher, label: 'Enseignants' },
+        { path: '/chef/modules', icon: faBook, label: 'Modules' },
+        { path: '/chef/emplois-du-temps', icon: faCalendarAlt, label: 'Emplois du temps' },
+        { path: '/chef/notes', icon: faGraduationCap, label: 'Notes' },
+        { path: '/chef/classes', icon: faBuilding, label: 'Classes' },
+        { path: '/chef/repartition', icon: faUsers, label: 'Répartition' },
+        { path: '/chef/releves', icon: faFileAlt, label: 'Relevé de notes' },
+        { path: '/chef/bulletins', icon: faClipboardList, label: 'Bulletins' },
+        { path: '/chef/planches', icon: faUsers, label: 'Planches' },
+        { path: '/chef/statistiques', icon: faChartLine, label: 'Statistiques' },
+        { path: '/admin/profil', icon: faUser, label: 'Profil' },
+        { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
+    ],
+
+    // Coordinateur pédagogique (même espace fonctionnel que le chef, sans gestion des sous-comptes)
+    COORD_PEDAGOGIQUE: [
+        { path: '/chef/dashboard', icon: faHome, label: 'Tableau de bord' },
         { path: '/chef/enseignants', icon: faChalkboardTeacher, label: 'Enseignants' },
         { path: '/chef/modules', icon: faBook, label: 'Modules' },
         { path: '/chef/emplois-du-temps', icon: faCalendarAlt, label: 'Emplois du temps' },
@@ -167,6 +186,7 @@ export const getRoleDashboardTitle = (roleCode, roleName) => {
         AGENT_SCOLARITE: 'Service Scolarité',
         SP_SCOLARITE: 'Secrétaire Particulière - Direction de la Scolarité',
         CHEF_DEPARTEMENT: 'Chef de Département',
+        COORD_PEDAGOGIQUE: 'Coordinateur pédagogique',
         ADMIN_SYSTEME: 'Administration Système',
     }
 

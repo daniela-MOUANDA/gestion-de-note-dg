@@ -60,3 +60,23 @@ export const requireRole = (...roles) => {
   }
 }
 
+/** Rôles autorisés sur les routes « chef département » (API + saisie) : chef ou coordinateur pédagogique */
+export const ROLES_DEPARTEMENT_PEDAGOGIQUE = ['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE']
+
+export const requireChefOuCoordinateurDepartement = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Non authentifié'
+    })
+  }
+  const code = req.user.role?.trim().toUpperCase()
+  if (!ROLES_DEPARTEMENT_PEDAGOGIQUE.includes(code)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Accès réservé au chef ou au coordinateur pédagogique du département.'
+    })
+  }
+  next()
+}
+

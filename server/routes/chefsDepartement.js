@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import XLSX from 'xlsx'
 import multer from 'multer'
-import { authenticate } from '../middleware/auth.js'
+import { authenticate, requireChefOuCoordinateurDepartement, requireRole } from '../middleware/auth.js'
 import {
   createChefDepartement,
   getAllChefsDepartement,
@@ -75,6 +75,11 @@ import { generatePlanchePDF } from '../services/planchePDFGenerator.js'
 import { generatePlancheAnnuelPDF } from '../services/plancheAnnuelPDFGenerator.js'
 import { generatePlancheExcel, generateAnnualExcel } from '../services/plancheExcelGenerator.js'
 import { getAnnualPlancheData } from '../../src/services/chefDepartement/plancheAnnuelService.js'
+import {
+  listCoordinateursPedagogiques,
+  createCoordinateurPedagogique,
+  updateCoordinateurPedagogique
+} from '../../src/services/chefDepartement/coordinateurPedagogiqueService.js'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -118,18 +123,64 @@ async function resolveFiliereNomPourPlanche(classe, queryFiliereNom) {
 
 // Toutes les routes nécessitent une authentification
 router.use(authenticate)
+router.use(requireChefOuCoordinateurDepartement)
 
-// Middleware pour vérifier que l'utilisateur est un DEP (ADMIN ou un rôle spécifique)
-// Pour l'instant, on accepte tous les utilisateurs authentifiés
-// Vous pouvez ajouter une vérification de rôle spécifique ici
-router.use((req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      error: 'Non authentifié'
-    })
+// ============================================
+// COORDONNATEURS PÉDAGOGIQUES (réservé au chef de département)
+// ============================================
+
+router.get('/coordinateurs-pedagogiques', requireRole('CHEF_DEPARTEMENT'), async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Aucun département associé à votre compte' })
+    }
+    const result = await listCoordinateursPedagogiques(req.user.id, departementId)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ success: false, error: 'Erreur serveur' })
   }
-  next()
+})
+
+router.post('/coordinateurs-pedagogiques', requireRole('CHEF_DEPARTEMENT'), async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Aucun département associé à votre compte' })
+    }
+    const { nom, prenom, email, motDePasse, telephone } = req.body || {}
+    const result = await createCoordinateurPedagogique(
+      { chefUtilisateurId: req.user.id, departementId },
+      { nom, prenom, email, motDePasse, telephone }
+    )
+    if (!result.success) return res.status(400).json(result)
+    res.status(201).json(result)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ success: false, error: 'Erreur serveur' })
+  }
+})
+
+router.patch('/coordinateurs-pedagogiques/:id', requireRole('CHEF_DEPARTEMENT'), async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Aucun département associé à votre compte' })
+    }
+    const { nom, prenom, telephone, actif, motDePasse } = req.body || {}
+    const result = await updateCoordinateurPedagogique(
+      { chefUtilisateurId: req.user.id, departementId },
+      req.params.id,
+      { nom, prenom, telephone, actif, motDePasse }
+    )
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ success: false, error: 'Erreur serveur' })
+  }
 })
 
 // ============================================

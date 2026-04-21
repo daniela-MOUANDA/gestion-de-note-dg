@@ -791,10 +791,10 @@ const ArchivageView = () => {
                 <div key={etudiant.id} className={`bg-white rounded-xl shadow-md border-2 border-${isDiplomes ? 'green' : 'red'}-200 hover:shadow-lg transition-shadow p-6`}>
                   <div className="flex items-start gap-4 mb-4">
                     <div className={`w-16 h-16 bg-gradient-to-br from-${isDiplomes ? 'green' : 'red'}-500 to-${isDiplomes ? 'green' : 'red'}-600 rounded-full flex items-center justify-center text-white font-bold text-xl`}>
-                      {etudiant.prenom[0]}{etudiant.nom[0]}
+                      {etudiant.nom[0]}{etudiant.prenom[0]}
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-bold text-slate-800">{etudiant.prenom} {etudiant.nom}</h3>
+                      <h3 className="text-lg font-bold text-slate-800">{etudiant.nom} {etudiant.prenom}</h3>
                       <p className="text-sm text-slate-600">{etudiant.matricule}</p>
                     </div>
                   </div>

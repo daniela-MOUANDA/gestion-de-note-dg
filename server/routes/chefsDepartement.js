@@ -1,6 +1,8 @@
 import express from 'express'
 import path from 'path'
 import fs from 'fs'
+import { abbreviateClasseLabel } from '../utils/classeLabel.js'
+import { buildPlancheDownloadFilename } from '../../src/utils/plancheFileName.js'
 import XLSX from 'xlsx'
 import multer from 'multer'
 import { authenticate, requireChefOuCoordinateurDepartement, requireRole } from '../middleware/auth.js'
@@ -66,6 +68,34 @@ import {
 import { getBulletinData } from '../../src/services/chefDepartement/relevesService.js'
 import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartementService.js'
 import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
+
+const normalizeSemestreForBulletinEnum = (semestre) => {
+  const value = String(semestre || '').toUpperCase().trim()
+  const match = value.match(/^S([1-6])$/)
+  if (!match) return value
+  const n = Number(match[1])
+  return n % 2 === 0 ? 'S2' : 'S1'
+}
+
+const resolveSemestreForClasseLevel = (semestreStocke, niveauCode, semestreDemande) => {
+  const requested = String(semestreDemande || '').toUpperCase().trim()
+  const stored = String(semestreStocke || '').toUpperCase().trim()
+  const niveau = String(niveauCode || '').toUpperCase().trim()
+
+  const allowedByLevel = {
+    L1: ['S1', 'S2'],
+    L2: ['S3', 'S4'],
+    L3: ['S5', 'S6']
+  }
+
+  if (requested && (allowedByLevel[niveau] || []).includes(requested)) {
+    return requested
+  }
+
+  if (stored === 'S1') return niveau === 'L2' ? 'S3' : (niveau === 'L3' ? 'S5' : 'S1')
+  if (stored === 'S2') return niveau === 'L2' ? 'S4' : (niveau === 'L3' ? 'S6' : 'S2')
+  return stored
+}
 import { supabaseAdmin } from '../../src/lib/supabase.js'
 import { fetchPromotionForCurrentAcademicYear, getCurrentAcademicYearLabel } from '../../src/utils/academicYear.js'
 import { getMention } from '../utils/mentions.js'
@@ -120,6 +150,20 @@ async function resolveFiliereNomPourPlanche(classe, queryFiliereNom) {
     if (data?.code) return data.code
   }
   return 'Filière inconnue'
+}
+
+/** Libellé centre planche = formation abrégée + code filière (comme PlanchesView.getDisplayProgramme). */
+function buildPlancheClasseDisplayLine(classe) {
+  if (!classe) return 'CLASSE INCONNUE'
+  const formationEmbed = classe.formations || classe.formation
+  const ctx = { ...classe, formation: formationEmbed }
+  const abbreviated = abbreviateClasseLabel(classe.nom || '', ctx)
+  const filiereObj = Array.isArray(classe.filieres) ? classe.filieres[0] : classe.filieres
+  const filiereCode = filiereObj?.code || ''
+  if (filiereCode && !abbreviated.includes(`(${filiereCode})`)) {
+    return `${abbreviated} (${filiereCode})`
+  }
+  return abbreviated
 }
 
 // Toutes les routes nécessitent une authentification
@@ -1265,6 +1309,7 @@ router.get('/bulletins/classe/:classeId', async (req, res) => {
     const validStudentIds = inscriptions ? inscriptions.map(i => i.etudiant_id) : []
 
     // Récupérer les bulletins
+    const semestreBulletin = normalizeSemestreForBulletinEnum(semestre)
     const { data: bulletins, error: bulletinsError } = await supabaseAdmin
       .from('bulletins')
       .select(`
@@ -1282,7 +1327,7 @@ router.get('/bulletins/classe/:classeId', async (req, res) => {
       `)
       .eq('promotion_id', promotion.id)
       .eq('classe_id', classeId)
-      .eq('semestre', semestre)
+      .eq('semestre', semestreBulletin)
       .in('etudiant_id', validStudentIds)
 
     if (bulletinsError) throw bulletinsError
@@ -1314,6 +1359,7 @@ router.get('/bulletins/:bulletinId/pdf', authenticate, async (req, res) => {
     }
 
     const { bulletinId } = req.params
+    const semestreDemande = req.query?.semestre
 
     // Récupérer le bulletin
     const { data: bulletin, error: bulletinError } = await supabaseAdmin
@@ -1334,6 +1380,7 @@ router.get('/bulletins/:bulletinId/pdf', authenticate, async (req, res) => {
           id,
           nom,
           code,
+          niveaux(code),
           filiere_id,
           filieres!inner (
             id,
@@ -1353,7 +1400,12 @@ router.get('/bulletins/:bulletinId/pdf', authenticate, async (req, res) => {
     // (on peut vérifier via la classe qui devrait avoir le même département)
 
     // Récupérer les données du bulletin pour générer le PDF
-    const bulletinDataResult = await getBulletinData(bulletin.classe_id, bulletin.semestre, departementId)
+    const semestreCalcul = resolveSemestreForClasseLevel(
+      bulletin.semestre,
+      bulletin.classes?.niveaux?.code,
+      semestreDemande
+    )
+    const bulletinDataResult = await getBulletinData(bulletin.classe_id, semestreCalcul, departementId)
 
     if (!bulletinDataResult.success) {
       return res.status(400).json({ success: false, error: bulletinDataResult.error })
@@ -1379,7 +1431,7 @@ router.get('/bulletins/:bulletinId/pdf', authenticate, async (req, res) => {
       meta: bulletinDataResult.meta,
       bulletin: {
         id: bulletin.id,
-        semestre: bulletin.semestre,
+        semestre: semestreCalcul,
         date_generation: bulletin.date_generation
       }
     })
@@ -1427,6 +1479,7 @@ router.get('/releves/annual/:classeId', async (req, res) => {
 router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
   try {
     const { id } = req.params
+    const semestreDemande = req.query?.semestre
     const departementId = req.user.departementId
 
     if (!departementId) {
@@ -1473,9 +1526,14 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
     }
 
     // Récupérer les données complètes du bulletin (notes, moyennes, etc.)
+    const semestreCalcul = resolveSemestreForClasseLevel(
+      bulletin.semestre,
+      bulletin.classes?.niveaux?.code,
+      semestreDemande
+    )
     const bulletinDataResult = await getBulletinData(
       bulletin.classe_id,
-      bulletin.semestre,
+      semestreCalcul,
       departementId
     )
 
@@ -1513,7 +1571,7 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
         nom: classe.nom || '',
         option: classe.filieres?.nom || ''
       },
-      semestre: bulletin.semestre || '',
+      semestre: semestreCalcul || '',
       anneeUniversitaire: promotion.annee || '',
       modules: modules.map(mod => ({
         ue: mod.ue || 'UE',
@@ -1570,7 +1628,7 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       await generateBulletinPDF(pdfData, outputPath, includeStamp, depInfo)
 
       // Envoyer le PDF en téléchargement
-      const nomFichier = `Bulletin_${etudiant.nom || 'etudiant'}_${etudiant.prenom || ''}_${bulletin.semestre || 'S1'}.pdf`
+      const nomFichier = `Bulletin_${etudiant.nom || 'etudiant'}_${etudiant.prenom || ''}_${semestreCalcul || 'S1'}.pdf`
       res.download(outputPath, nomFichier, (err) => {
         if (err) {
           console.error('Erreur lors de l\'envoi du PDF:', err)
@@ -1590,6 +1648,129 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
 
   } catch (error) {
     console.error('Erreur lors de la génération du PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/**
+ * Planches ANNUELLES : routes statiques /annuel/ AVANT /:semestre/
+ * Sinon Express capture "annuel" comme :semestre et getBulletinData('annuel') échoue (niveau L1/L2/L3).
+ */
+
+/**
+ * Générer et télécharger la planche ANNUELLE au format PDF
+ */
+router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const departementId = req.user?.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getAnnualPlancheData(classeId, departementId)
+    if (!result.success) return res.status(500).json(result)
+
+    // Infos classe pour l'en-tête
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres(nom, code), promotions(annee), niveaux(code), formations(code, nom)')
+      .eq('id', classeId)
+      .single()
+
+    const filiereAnnuelle = await resolveFiliereNomPourPlanche(classe, '')
+
+    const plancheData = {
+      classe: {
+        nom: classe?.nom,
+        filiere: filiereAnnuelle
+      },
+      anneeUniversitaire: classe?.promotions?.annee,
+      semA: result.meta?.semestreA || 'S1',
+      semB: result.meta?.semestreB || 'S2',
+      students: result.data.map(s => ({
+        nom: s.etudiant.nom,
+        prenom: s.etudiant.prenom,
+        s1: s.s1,
+        s2: s.s2,
+        annuel: s.annuel
+      }))
+    }
+
+    const uploadsDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+
+    const outputPath = path.join(uploadsDir, `planche_annuelle_${classeId}_${Date.now()}.pdf`)
+    await generatePlancheAnnuelPDF(plancheData, outputPath)
+
+    res.download(outputPath, buildPlancheDownloadFilename(classe, 'ANNUEL', 'pdf'), (err) => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+  } catch (error) {
+    console.error('❌ [Backend] Erreur Planche Annuelle PDF:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/**
+ * Générer et télécharger la planche ANNUELLE au format Excel
+ */
+router.get('/classes/:classeId/planches/annuel/excel', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom, phaseLabel: queryPhaseLabel } = req.query
+    const departementId = req.user?.departementId
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getAnnualPlancheData(classeId, departementId)
+    if (!result.success) return res.status(500).json(result)
+
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('*, filieres(nom, code), promotions(annee), niveaux(code), formations(code, nom)')
+      .eq('id', classeId)
+      .single()
+
+    const filiereLabel = await resolveFiliereNomPourPlanche(classe, queryFiliereNom)
+    const phaseLabel = String(queryPhaseLabel ?? '').trim()
+    const classeDisplayLine =
+      String(queryClasseNom ?? '').trim() || buildPlancheClasseDisplayLine(classe)
+
+    const plancheData = {
+      classe: {
+        nom: classeDisplayLine,
+        filiere: filiereLabel
+      },
+      phaseLabel,
+      anneeUniversitaire: classe?.promotions?.annee,
+      semA: result.meta?.semestreA || 'S1',
+      semB: result.meta?.semestreB || 'S2',
+      ueOrderS1: result.meta?.ueOrderS1 || [],
+      ueOrderS2: result.meta?.ueOrderS2 || [],
+      students: (result.data || []).map(s => ({
+        nom: s.etudiant?.nom ?? 'N/A',
+        prenom: s.etudiant?.prenom ?? '',
+        s1: s.s1,
+        s2: s.s2,
+        annuel: s.annuel
+      }))
+    }
+
+    const tempDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
+
+    const outputPath = path.join(tempDir, `planche_annuelle_${classeId}_${Date.now()}.xlsx`)
+    await generateAnnualExcel(plancheData, outputPath)
+
+    res.download(outputPath, buildPlancheDownloadFilename(classe, 'ANNUEL', 'xlsx'), (err) => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+  } catch (error) {
+    console.error('❌ [Backend] Erreur Planche Annuelle Excel:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -1622,7 +1803,7 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
     // Récupérer les infos de la classe et de sa promotion
     const { data: classe, error: classeError } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom, code, departements(code)), promotions(annee)')
+      .select('*, filieres(nom, code, departements(code)), promotions(annee), niveaux(code), formations(code, nom)')
       .eq('id', classeId)
       .single()
 
@@ -1674,7 +1855,7 @@ router.get('/classes/:classeId/planches/:semestre/pdf', async (req, res) => {
     await generatePlanchePDF(plancheData, outputPath)
 
     // Télécharger le fichier
-    const fileName = `Planche_${classe?.nom}_${semestre}.pdf`
+    const fileName = buildPlancheDownloadFilename(classe, semestre, 'pdf')
     res.download(outputPath, fileName, (err) => {
       if (err) console.error('Erreur envoi PDF:', err)
       if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
@@ -1705,16 +1886,18 @@ router.get('/classes/:classeId/planches/:semestre/excel', async (req, res) => {
     const { data: studentsData } = result
     const { data: classe } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres(nom, code, departements(code)), promotions(annee)')
+      .select('*, filieres(nom, code, departements(code)), promotions(annee), niveaux(code), formations(code, nom)')
       .eq('id', classeId)
       .single()
 
     const filiereLabel = await resolveFiliereNomPourPlanche(classe, queryFiliereNom)
     const phaseLabel = String(queryPhaseLabel ?? '').trim()
+    const classeDisplayLine =
+      String(queryClasseNom ?? '').trim() || buildPlancheClasseDisplayLine(classe)
 
     const plancheData = {
       classe: {
-        nom: queryClasseNom || classe?.nom || 'Classe Inconnue',
+        nom: classeDisplayLine,
         filiere: filiereLabel,
         departement: (Array.isArray(classe?.filieres) ? (Array.isArray(classe?.filieres[0]?.departements) ? classe?.filieres[0]?.departements[0]?.code : classe?.filieres[0]?.departements?.code) : classe?.filieres?.departements?.code) || 'INPTIC'
       },
@@ -1747,125 +1930,11 @@ router.get('/classes/:classeId/planches/:semestre/excel', async (req, res) => {
     const outputPath = path.join(tempDir, `planche_${classeId}_${Date.now()}.xlsx`)
     await generatePlancheExcel(plancheData, outputPath)
 
-    res.download(outputPath, `Planche_${classe?.nom}_${semestre}.xlsx`, (err) => {
+    res.download(outputPath, buildPlancheDownloadFilename(classe, semestre, 'xlsx'), (err) => {
       if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
     })
   } catch (error) {
     console.error('❌ [Backend] Erreur Planche Excel:', error)
-    res.status(500).json({ success: false, error: error.message })
-  }
-})
-
-/**
- * Générer et télécharger la planche ANNUELLE au format PDF
- */
-router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
-  try {
-    const { classeId } = req.params
-    const departementId = req.user?.departementId
-
-    if (!departementId) {
-      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
-    }
-
-    const result = await getAnnualPlancheData(classeId, departementId)
-    if (!result.success) return res.status(500).json(result)
-
-    // Infos classe pour l'en-tête
-    const { data: classe } = await supabaseAdmin
-      .from('classes')
-      .select('*, filieres(nom, code), promotions(annee)')
-      .eq('id', classeId)
-      .single()
-
-    const filiereAnnuelle = await resolveFiliereNomPourPlanche(classe, '')
-
-    const plancheData = {
-      classe: {
-        nom: classe?.nom,
-        filiere: filiereAnnuelle
-      },
-      anneeUniversitaire: classe?.promotions?.annee,
-      semA: result.meta?.semestreA || 'S1',
-      semB: result.meta?.semestreB || 'S2',
-      students: result.data.map(s => ({
-        nom: s.etudiant.nom,
-        prenom: s.etudiant.prenom,
-        s1: s.s1,
-        s2: s.s2,
-        annuel: s.annuel
-      }))
-    }
-
-    const uploadsDir = path.join(process.cwd(), 'temp')
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
-
-    const outputPath = path.join(uploadsDir, `planche_annuelle_${classeId}_${Date.now()}.pdf`)
-    await generatePlancheAnnuelPDF(plancheData, outputPath)
-
-    res.download(outputPath, `Planche_Annuelle_${classe?.nom}.pdf`, (err) => {
-      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
-    })
-  } catch (error) {
-    console.error('❌ [Backend] Erreur Planche Annuelle PDF:', error)
-    res.status(500).json({ success: false, error: error.message })
-  }
-})
-
-/**
- * Générer et télécharger la planche ANNUELLE au format Excel
- */
-router.get('/classes/:classeId/planches/annuel/excel', async (req, res) => {
-  try {
-    const { classeId } = req.params
-    const { classeNom: queryClasseNom, filiereNom: queryFiliereNom, phaseLabel: queryPhaseLabel } = req.query
-    const departementId = req.user?.departementId
-
-    if (!departementId) {
-      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
-    }
-
-    const result = await getAnnualPlancheData(classeId, departementId)
-    if (!result.success) return res.status(500).json(result)
-
-    const { data: classe } = await supabaseAdmin
-      .from('classes')
-      .select('*, filieres(nom, code), promotions(annee)')
-      .eq('id', classeId)
-      .single()
-
-    const filiereLabel = await resolveFiliereNomPourPlanche(classe, queryFiliereNom)
-    const phaseLabel = String(queryPhaseLabel ?? '').trim()
-
-    const plancheData = {
-      classe: {
-        nom: queryClasseNom || classe?.nom,
-        filiere: filiereLabel
-      },
-      phaseLabel,
-      anneeUniversitaire: classe?.promotions?.annee,
-      semA: result.meta?.semestreA || 'S1',
-      semB: result.meta?.semestreB || 'S2',
-      students: result.data.map(s => ({
-        nom: s.etudiant.nom,
-        prenom: s.etudiant.prenom,
-        s1: s.s1,
-        s2: s.s2,
-        annuel: s.annuel
-      }))
-    }
-
-    const tempDir = path.join(process.cwd(), 'temp')
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
-
-    const outputPath = path.join(tempDir, `planche_annuelle_${classeId}_${Date.now()}.xlsx`)
-    await generateAnnualExcel(plancheData, outputPath)
-
-    res.download(outputPath, `Planche_Annuelle_${classe?.nom}.xlsx`, (err) => {
-      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
-    })
-  } catch (error) {
-    console.error('❌ [Backend] Erreur Planche Annuelle Excel:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })

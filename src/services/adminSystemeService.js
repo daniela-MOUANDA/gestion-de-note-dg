@@ -104,7 +104,7 @@ export const updateStudentPassword = async (userId, newPassword, adminId) => {
                 .insert({
                     utilisateur_id: adminId,
                     action: 'Réinitialisation mot de passe étudiant',
-                    details: `Mot de passe réinitialisé pour l'étudiant ${utilisateur.prenom} ${utilisateur.nom} (Username: ${utilisateur.username})`,
+                    details: `Mot de passe réinitialisé pour l'étudiant ${utilisateur.nom} ${utilisateur.prenom} (Username: ${utilisateur.username})`,
                     type_action: 'CONNEXION',
                     date_action: new Date().toISOString()
                 })
@@ -203,7 +203,7 @@ export const createStudentAccount = async (studentId, password, adminId) => {
                 .insert({
                     utilisateur_id: adminId,
                     action: 'Création compte étudiant',
-                    details: `Compte créé manuellement pour ${etudiant.prenom} ${etudiant.nom} (Matricule: ${etudiant.matricule})`,
+                    details: `Compte créé manuellement pour ${etudiant.nom} ${etudiant.prenom} (Matricule: ${etudiant.matricule})`,
                     type_action: 'CONNEXION',
                     date_action: new Date().toISOString()
                 })
@@ -294,7 +294,7 @@ export const getFullAuditLogs = async (filters = {}) => {
                 type: log.type_action.toLowerCase(),
                 action: log.action,
                 details: log.details,
-                agent: log.utilisateurs ? `${log.utilisateurs.prenom} ${log.utilisateurs.nom}` : 'Système',
+                agent: log.utilisateurs ? `${log.utilisateurs.nom} ${log.utilisateurs.prenom}` : 'Système',
                 agentId: log.utilisateur_id
             }))
         }
@@ -324,7 +324,7 @@ export const getAllUsersForAudit = async () => {
             success: true,
             users: users.map(u => ({
                 id: u.id,
-                nom: `${u.prenom} ${u.nom}`,
+                nom: `${u.nom} ${u.prenom}`,
                 role: u.roles?.nom
             }))
         }
@@ -404,7 +404,7 @@ export const getRecentSystemLogs = async (limit = 5) => {
             logs: data.map(log => ({
                 id: log.id,
                 action: log.action,
-                user: log.utilisateurs ? `${log.utilisateurs.prenom} ${log.utilisateurs.nom}` : 'Système',
+                user: log.utilisateurs ? `${log.utilisateurs.nom} ${log.utilisateurs.prenom}` : 'Système',
                 date: new Date(log.date_action).toLocaleString('fr-FR', {
                     hour: '2-digit',
                     minute: '2-digit',

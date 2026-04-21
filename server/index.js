@@ -5,10 +5,15 @@ import path from 'path'
 // Charger les variables d'environnement AVANT tous les autres imports
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-dotenv.config({ path: path.join(__dirname, '..', '.env') })
+const rootEnv = path.join(__dirname, '..', '.env')
+const serverEnv = path.join(__dirname, '.env')
+dotenv.config({ path: rootEnv })
+// Complète avec server/.env les clés absentes de la racine (ex. SMTP uniquement côté server)
+dotenv.config({ path: serverEnv })
 
 // Debug: vérifier si les variables sont chargées
-console.log('📍 Chemin du fichier .env:', path.join(__dirname, '..', '.env'))
+console.log('📍 Fichiers .env:', rootEnv, '|', serverEnv)
+console.log('📧 SMTP configuré:', process.env.SMTP_USER || process.env.EMAIL_USER ? 'OUI' : 'NON')
 console.log('✅ SUPABASE_URL chargé:', process.env.SUPABASE_URL ? 'OUI' : 'NON')
 console.log('✅ SUPABASE_ANON_KEY chargé:', process.env.SUPABASE_ANON_KEY ? 'OUI' : 'NON')
 

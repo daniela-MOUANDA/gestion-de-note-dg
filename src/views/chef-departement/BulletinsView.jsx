@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faFileAlt, faSpinner, faCheckCircle, faExclamationTriangle,
@@ -10,103 +10,135 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
 import { getEtatBulletinsToutesClasses, genererBulletins, getBulletinsGeneres } from '../../api/chefDepartement'
 
+const BULLETINS_FETCH_TIMEOUT_MS = 90000
+
 const BulletinsView = () => {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { showAlert } = useAlert()
 
-  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
   const [error, setError] = useState(null)
   const [classesAvecEtat, setClassesAvecEtat] = useState([])
   const [selectedFiliere, setSelectedFiliere] = useState('')
   const [selectedNiveau, setSelectedNiveau] = useState('')
   const [selectedSemestre, setSelectedSemestre] = useState('')
   const [generationLoading, setGenerationLoading] = useState({})
-  const [bulletinsModal, setBulletinsModal] = useState({ open: false, classeId: null, semestre: null, classeCode: '' })
+  const [cardSemestreSelection, setCardSemestreSelection] = useState({})
+  const [bulletinsModal, setBulletinsModal] = useState({
+    open: false,
+    classeId: null,
+    semestre: null,
+    classeCode: '',
+    semestresDisponibles: []
+  })
   const [bulletinsList, setBulletinsList] = useState([])
   const [loadingBulletins, setLoadingBulletins] = useState(false)
   const [viewingBulletinId, setViewingBulletinId] = useState(null)
 
-  // Fonction pour charger les données
-  const loadEtatBulletins = useCallback(async () => {
-    if (!user) {
-      console.log('⏳ En attente de l\'utilisateur...')
+  const loadEtatBulletins = async () => {
+    if (authLoading || !user?.id) {
       return
     }
 
     try {
-      console.log('🚀 Début du chargement des bulletins...')
-      console.log('👤 Utilisateur:', user)
-      console.log('📅 Semestre sélectionné:', selectedSemestre || 'Tous')
-
-      setLoading(true)
+      console.log('🚀 Début du chargement des bulletins...', { semestre: selectedSemestre || 'Tous' })
+      setDataLoading(true)
       setError(null)
 
       const semestreParam = selectedSemestre || null
-      console.log('📡 Appel API avec paramètre:', { semestre: semestreParam })
 
-      const result = await getEtatBulletinsToutesClasses(semestreParam)
-
-      console.log('📥 Réponse API reçue:', result)
+      const result = await Promise.race([
+        getEtatBulletinsToutesClasses(semestreParam),
+        new Promise((_, reject) => {
+          setTimeout(
+            () => reject(new Error(
+              `Le serveur ne répond pas assez vite (>${Math.round(BULLETINS_FETCH_TIMEOUT_MS / 1000)} s). ` +
+              'Vérifiez que le backend tourne et rechargez la page.'
+            )),
+            BULLETINS_FETCH_TIMEOUT_MS
+          )
+        })
+      ])
 
       if (result && result.success) {
-        console.log('✅ Succès - Classes reçues:', result.classes?.length || 0)
-
         if (result.classes && Array.isArray(result.classes)) {
-          console.log('📊 Détails des classes:')
-          result.classes.forEach((classe, index) => {
-            console.log(`  ${index + 1}. ${classe.code} (${classe.filiere} ${classe.niveau})`)
-            console.log(`     - Semestres:`, classe.semestres?.map(s => s.semestre).join(', ') || 'Aucun')
-            console.log(`     - Modules requis:`, classe.nombreModulesRequis || 'Non défini')
-          })
-
           setClassesAvecEtat(result.classes)
         } else {
-          console.warn('⚠️ Aucune classe dans la réponse')
           setClassesAvecEtat([])
         }
       } else {
         const errorMessage = result?.error || 'Erreur inconnue lors du chargement'
-        console.error('❌ Erreur API:', errorMessage)
+        console.error('❌ Erreur API bulletins:', errorMessage)
         setError(errorMessage)
         setClassesAvecEtat([])
         showAlert(errorMessage, 'error')
       }
-    } catch (error) {
-      console.error('❌ Exception lors du chargement:', error)
-      const errorMessage = error.message || 'Erreur de connexion au serveur'
+    } catch (err) {
+      console.error('❌ Exception lors du chargement bulletins:', err)
+      const errorMessage = err.message || 'Erreur de connexion au serveur'
       setError(errorMessage)
       setClassesAvecEtat([])
       showAlert(errorMessage, 'error')
     } finally {
-      setLoading(false)
-      console.log('✅ Chargement terminé')
+      setDataLoading(false)
     }
-  }, [user, selectedSemestre, showAlert])
+  }
 
-  // Charger les données au montage et quand le semestre change
   useEffect(() => {
-    console.log('🔄 useEffect déclenché - user:', user?.id, 'semestre:', selectedSemestre)
+    if (authLoading) return
+
+    if (!user?.id) {
+      setError('Vous devez être connecté pour consulter les bulletins.')
+      setClassesAvecEtat([])
+      setDataLoading(false)
+      return
+    }
+
     loadEtatBulletins()
-  }, [loadEtatBulletins])
+  }, [authLoading, user?.id, selectedSemestre, showAlert])
+
+  const pageLoading = authLoading || dataLoading
 
   // Fonction pour voir les bulletins générés
-  const handleVoirBulletins = async (classeId, semestre, classeCode) => {
+  const loadBulletinsForClasseSemestre = async (classeId, semestre) => {
+    const result = await getBulletinsGeneres(classeId, semestre)
+    if (result && result.success) {
+      setBulletinsList(result.bulletins || [])
+    } else {
+      showAlert(result?.error || 'Erreur lors du chargement des bulletins', 'error')
+      setBulletinsList([])
+    }
+  }
+
+  const handleVoirBulletins = async (classeId, semestre, classeCode, semestresDisponibles = []) => {
     try {
       setLoadingBulletins(true)
-      setBulletinsModal({ open: true, classeId, semestre, classeCode })
-
-      const result = await getBulletinsGeneres(classeId, semestre)
-
-      if (result && result.success) {
-        setBulletinsList(result.bulletins || [])
-      } else {
-        showAlert(result?.error || 'Erreur lors du chargement des bulletins', 'error')
-        setBulletinsList([])
-      }
+      setBulletinsModal({
+        open: true,
+        classeId,
+        semestre,
+        classeCode,
+        semestresDisponibles
+      })
+      await loadBulletinsForClasseSemestre(classeId, semestre)
     } catch (error) {
       console.error('Erreur:', error)
       showAlert('Erreur lors du chargement des bulletins', 'error')
       setBulletinsList([])
+    } finally {
+      setLoadingBulletins(false)
+    }
+  }
+
+  const handleChangeSemestreModal = async (newSemestre) => {
+    if (!bulletinsModal.classeId || !newSemestre) return
+    try {
+      setLoadingBulletins(true)
+      setBulletinsModal(prev => ({ ...prev, semestre: newSemestre }))
+      await loadBulletinsForClasseSemestre(bulletinsModal.classeId, newSemestre)
+    } catch (error) {
+      console.error('Erreur changement semestre modal:', error)
+      showAlert('Erreur lors du changement de semestre', 'error')
     } finally {
       setLoadingBulletins(false)
     }
@@ -119,7 +151,8 @@ const BulletinsView = () => {
       const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
       // Faire une requête authentifiée pour récupérer les données du bulletin
-      const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/pdf`, {
+      const semParam = bulletinsModal?.semestre ? `?semestre=${encodeURIComponent(bulletinsModal.semestre)}` : ''
+      const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/pdf${semParam}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -271,6 +304,24 @@ const BulletinsView = () => {
 
       if (result && result.success) {
         showAlert(result.message || 'Bulletins générés avec succès', 'success')
+        // Mise à jour optimiste de la carte pour éviter de rester sur "Générer"
+        setClassesAvecEtat(prev =>
+          (prev || []).map((classe) => {
+            if (classe.id !== classeId) return classe
+            return {
+              ...classe,
+              semestres: (classe.semestres || []).map((s) =>
+                s.semestre === semestre
+                  ? {
+                    ...s,
+                    bulletinsExistent: true,
+                    nombreBulletinsGeneres: result.nombreBulletins || s.nombreBulletinsGeneres || 0
+                  }
+                  : s
+              )
+            }
+          })
+        )
         // Recharger l'état après un court délai
         setTimeout(() => {
           loadEtatBulletins()
@@ -319,8 +370,25 @@ const BulletinsView = () => {
   const filieres = [...new Set(classesAvecEtat.map(c => c.filiere).filter(Boolean))].sort()
   const niveaux = [...new Set(classesAvecEtat.map(c => c.niveau).filter(Boolean))].sort()
 
+  if (!authLoading && !user?.id) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <AdminSidebar />
+        <div className="flex flex-col lg:ml-64 min-h-screen">
+          <AdminHeader />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-amber-900">
+              <p className="font-medium">Session non disponible</p>
+              <p className="text-sm mt-1">{error || 'Reconnectez-vous pour accéder aux bulletins.'}</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
   // Écran de chargement
-  if (loading) {
+  if (pageLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
         <AdminSidebar />
@@ -353,11 +421,11 @@ const BulletinsView = () => {
             </div>
             <button
               onClick={loadEtatBulletins}
-              disabled={loading}
+              disabled={pageLoading}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               title="Actualiser les données"
             >
-              <FontAwesomeIcon icon={faRefresh} className={loading ? 'animate-spin' : ''} />
+              <FontAwesomeIcon icon={faRefresh} className={pageLoading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">Actualiser</span>
             </button>
           </div>
@@ -451,11 +519,14 @@ const BulletinsView = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {groupe.classes.map((classe) => {
-                      // Trouver le semestre à afficher
-                      const semestreData = selectedSemestre
-                        ? classe.semestres?.find(s => s.semestre === selectedSemestre)
-                        : classe.semestres?.[0] // Prendre le premier semestre si aucun n'est sélectionné
+                      const semestresDisponibles = classe.semestres || []
+                      if (!semestresDisponibles.length) return null
 
+                      const semestreActif = selectedSemestre ||
+                        cardSemestreSelection[classe.id] ||
+                        semestresDisponibles[0]?.semestre
+
+                      const semestreData = semestresDisponibles.find(s => s.semestre === semestreActif) || semestresDisponibles[0]
                       if (!semestreData) return null
 
                       const {
@@ -480,7 +551,7 @@ const BulletinsView = () => {
                       const isLoading = generationLoading[key]
 
                       return (
-                        <div key={`${classe.id}_${semestre}`} className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div key={classe.id} className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between mb-3">
                             <div>
                               <h4 className="font-bold text-lg text-slate-800">{classe.code}</h4>
@@ -556,13 +627,42 @@ const BulletinsView = () => {
                               </span>
                               <span className="font-medium">{semestre}</span>
                             </div>
+                            <div className="flex items-center justify-between text-sm text-slate-600">
+                              <span className="flex items-center gap-1">
+                                <FontAwesomeIcon icon={faCalendarAlt} className="text-xs" />
+                                Semestres disponibles
+                              </span>
+                              <span className="font-medium">{semestresDisponibles.map(s => s.semestre).join(' / ')}</span>
+                            </div>
+                            {!selectedSemestre && semestresDisponibles.length > 1 && (
+                              <div className="pt-1">
+                                <select
+                                  value={semestre}
+                                  onChange={(e) =>
+                                    setCardSemestreSelection(prev => ({ ...prev, [classe.id]: e.target.value }))
+                                  }
+                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  {semestresDisponibles.map((s) => (
+                                    <option key={`${classe.id}_${s.semestre}`} value={s.semestre}>
+                                      {s.semestre}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
                           </div>
 
                           {/* Boutons d'action */}
                           {bulletinsExistent ? (
                             <div className="space-y-2 mt-3">
                               <button
-                                onClick={() => handleVoirBulletins(classe.id, semestre, classe.code)}
+                                onClick={() => handleVoirBulletins(
+                                  classe.id,
+                                  semestre,
+                                  classe.code,
+                                  semestresDisponibles.map(s => s.semestre)
+                                )}
                                 className="w-full px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                               >
                                 <FontAwesomeIcon icon={faEye} />
@@ -635,7 +735,7 @@ const BulletinsView = () => {
                     </p>
                   </div>
                   <button
-                    onClick={() => setBulletinsModal({ open: false, classeId: null, semestre: null, classeCode: '' })}
+                    onClick={() => setBulletinsModal({ open: false, classeId: null, semestre: null, classeCode: '', semestresDisponibles: [] })}
                     className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                   >
                     <FontAwesomeIcon icon={faTimes} className="text-slate-600" />
@@ -643,6 +743,20 @@ const BulletinsView = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
+                  {bulletinsModal.semestresDisponibles?.length > 1 && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Semestre</label>
+                      <select
+                        value={bulletinsModal.semestre || ''}
+                        onChange={(e) => handleChangeSemestreModal(e.target.value)}
+                        className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {bulletinsModal.semestresDisponibles.map((sem) => (
+                          <option key={sem} value={sem}>{sem}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {loadingBulletins ? (
                     <div className="flex items-center justify-center py-12">
                       <FontAwesomeIcon icon={faSpinner} className="text-4xl text-blue-600 animate-spin" />
@@ -706,7 +820,8 @@ const BulletinsView = () => {
                                           const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
                                           // Télécharger le PDF et l'ouvrir dans un nouvel onglet
-                                          const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/download-pdf`, {
+                                          const semParam = bulletinsModal?.semestre ? `?semestre=${encodeURIComponent(bulletinsModal.semestre)}` : ''
+                                          const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/download-pdf${semParam}`, {
                                             method: 'GET',
                                             headers: {
                                               'Authorization': `Bearer ${token}`
@@ -756,7 +871,8 @@ const BulletinsView = () => {
                                           const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
                                           // Télécharger le PDF
-                                          const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/download-pdf`, {
+                                          const semParam = bulletinsModal?.semestre ? `?semestre=${encodeURIComponent(bulletinsModal.semestre)}` : ''
+                                          const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/download-pdf${semParam}`, {
                                             method: 'GET',
                                             headers: {
                                               'Authorization': `Bearer ${token}`

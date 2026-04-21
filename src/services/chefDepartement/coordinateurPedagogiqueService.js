@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt'
 import { supabaseAdmin } from '../../lib/supabase.js'
+import { sendCoordinatorWelcomeEmail } from '../emailService.js'
 
 const COORD_CODE = 'COORD_PEDAGOGIQUE'
 
@@ -99,12 +100,38 @@ export async function createCoordinateurPedagogique(
     await supabaseAdmin.from('actions_audit').insert({
       utilisateur_id: chefUtilisateurId,
       action: 'Création coordinateur pédagogique',
-      details: `Compte coordonnateur : ${prenom} ${nom} (${normalizedEmail})`,
+      details: `Compte coordonnateur : ${nom} ${prenom} (${normalizedEmail})`,
       type_action: 'CONNEXION',
       date_action: new Date().toISOString()
     })
 
-    return { success: true, coordinateur: created }
+    const [{ data: deptRow }, { data: chefRow }] = await Promise.all([
+      supabaseAdmin.from('departements').select('nom').eq('id', departementId).maybeSingle(),
+      supabaseAdmin.from('utilisateurs').select('prenom, nom').eq('id', chefUtilisateurId).maybeSingle()
+    ])
+
+    let emailResult = { success: false, error: 'Email non tenté' }
+    try {
+      emailResult = await sendCoordinatorWelcomeEmail({
+        prenom: prenom.trim(),
+        nom: nom.trim(),
+        email: normalizedEmail,
+        motDePasse,
+        departementNom: deptRow?.nom,
+        chefPrenom: chefRow?.prenom,
+        chefNom: chefRow?.nom
+      })
+    } catch (emailErr) {
+      console.error('createCoordinateurPedagogique — exception envoi email:', emailErr)
+      emailResult = { success: false, error: emailErr.message || 'Erreur SMTP' }
+    }
+
+    return {
+      success: true,
+      coordinateur: created,
+      emailEnvoye: emailResult.success,
+      ...(emailResult.success ? {} : { avertissementEmail: emailResult.error })
+    }
   } catch (e) {
     console.error('createCoordinateurPedagogique:', e)
     return { success: false, error: e.message || 'Erreur lors de la création' }
@@ -193,7 +220,7 @@ export async function deleteCoordinateurPedagogique({ chefUtilisateurId, departe
     await supabaseAdmin.from('actions_audit').insert({
       utilisateur_id: chefUtilisateurId,
       action: 'Suppression coordinateur pédagogique',
-      details: `Compte supprimé : ${victim?.prenom || ''} ${victim?.nom || ''} (${victim?.email || coordId})`,
+      details: `Compte supprimé : ${victim?.nom || ''} ${victim?.prenom || ''} (${victim?.email || coordId})`,
       type_action: 'CONNEXION',
       date_action: new Date().toISOString()
     })

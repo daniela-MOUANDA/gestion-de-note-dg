@@ -256,7 +256,7 @@ const EmploiDuTempsView = () => {
       classeId: selectedClasse,
       moduleId: cours.module?.id || '',
       enseignantId: cours.enseignant?.id || '',
-      enseignantNom: cours.enseignant ? `${cours.enseignant.prenom} ${cours.enseignant.nom}` : '',
+      enseignantNom: cours.enseignant ? `${cours.enseignant.nom} ${cours.enseignant.prenom}` : '',
       jours: [cours.jour],
       heureDebut: cours.heureDebut,
       heureFin: cours.heureFin,
@@ -676,7 +676,7 @@ const EmploiDuTempsView = () => {
                         // Trouver l'enseignant affecté par défaut
                         const enseignant = module?.enseignants?.[0]
                         const enseignantId = enseignant?.id || ''
-                        const enseignantNom = enseignant ? `${enseignant.prenom} ${enseignant.nom}` : ''
+                        const enseignantNom = enseignant ? `${enseignant.nom} ${enseignant.prenom}` : ''
 
                         setFormData({
                           ...formData,
@@ -731,7 +731,7 @@ const EmploiDuTempsView = () => {
                       <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-medium flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-green-500"></div>
                         {/* On cherche le nom dans la liste si on l'a pas stocké directement, ou on utilise celui stocké */}
-                        {enseignants.find(e => e.id === formData.enseignantId)?.prenom} {enseignants.find(e => e.id === formData.enseignantId)?.nom}
+                        {enseignants.find(e => e.id === formData.enseignantId)?.nom} {enseignants.find(e => e.id === formData.enseignantId)?.prenom}
                       </div>
                     ) : (
                       <select

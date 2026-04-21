@@ -238,7 +238,7 @@ const ProfilAdminView = () => {
   }
 
   const nomComplet = userData.prenom && userData.nom
-    ? `${userData.prenom} ${userData.nom}`
+    ? `${userData.nom} ${userData.prenom}`
     : userData.email || 'Utilisateur'
 
   return (
@@ -309,7 +309,7 @@ const ProfilAdminView = () => {
           <div className="flex-1 text-center md:text-left space-y-4 pt-2">
             <div>
               <h2 className="text-3xl font-bold text-slate-800 tracking-tight">
-                {userData.prenom} {userData.nom}
+                {userData.nom} {userData.prenom}
               </h2>
               <p className="text-lg text-blue-600 font-medium mt-1">
                 {userData.poste}

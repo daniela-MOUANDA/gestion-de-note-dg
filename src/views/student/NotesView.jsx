@@ -141,7 +141,7 @@ const NotesView = () => {
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <div className="lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName || `${student.prenom} ${student.nom}`} />
+        <Header studentName={student.fullName || `${student.nom} ${student.prenom}`} />
 
         <main className="p-6 pt-24">
           {/* Header */}

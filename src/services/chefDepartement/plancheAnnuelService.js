@@ -1,5 +1,77 @@
 import { getBulletinData } from './relevesService.js'
 
+/** Ordre stable des codes UE (1 avant 2, puis ordre alpha) pour remplir les colonnes « 1re UE / 2e UE ». */
+function compareUeCodes(a, b) {
+    const na = extractUeOrdinal(a)
+    const nb = extractUeOrdinal(b)
+    if (na !== null && nb !== null && na !== nb) return na - nb
+    return String(a || '').localeCompare(String(b || ''), 'fr', { numeric: true, sensitivity: 'base' })
+}
+
+function extractUeOrdinal(ue) {
+    const s = String(ue || '').toUpperCase()
+    const m = s.match(/(\d+)/)
+    return m ? parseInt(m[1], 10) : null
+}
+
+function collectUeOrderFromBulletins(studentRows) {
+    const set = new Set()
+    for (const s of studentRows || []) {
+        for (const u of s.uesValidees || []) {
+            if (u && u.ue != null && String(u.ue).trim() !== '') set.add(u.ue)
+        }
+    }
+    return [...set].sort(compareUeCodes)
+}
+
+/** Mention selon la moyenne annuelle (/20), grille LMD demandée. */
+function mentionFromMoyenneAnnuelle(moy) {
+    const m = Number(moy)
+    if (!Number.isFinite(m)) return 'Faible'
+    if (m >= 18) return 'Excellent'
+    if (m >= 16) return 'Très Bien'
+    if (m >= 14) return 'Bien'
+    if (m >= 12) return 'Assez Bien'
+    if (m >= 10) return 'Passable'
+    if (m >= 6) return 'Insuffisant'
+    return 'Faible'
+}
+
+/** Année de Licence en cours d’après le 1er semestre de la paire (S1/S2→L1, S3/S4→L2, S5/S6→L3). */
+function licenceAnneeEnCours(semestreA) {
+    const s = String(semestreA || '').toUpperCase()
+    if (s === 'S1' || s === 'S2') return 1
+    if (s === 'S3' || s === 'S4') return 2
+    if (s === 'S5' || s === 'S6') return 3
+    return 1
+}
+
+/**
+ * Règles annuelles :
+ * - Admis en année suivante : 60 crédits capitalisés sur l’année.
+ * - Passage conditionnel (48–59 cr.) : uniquement L1 → L2 (comme en L2 il n’existe pas d’équivalent pour entrer en L3 : il faut tous les crédits).
+ * - Sinon : redoublement de l’année en cours (L2 ou L3 si crédits incomplets).
+ *
+ * @returns {{ text: string, kind: 'ADMIS' | 'REDOUBLE' | 'PASSAGE_CONDITIONNEL' }}
+ */
+function decisionAnnuelleDetails(totalCreditsAnnuel, semestreA) {
+    const annee = licenceAnneeEnCours(semestreA)
+    const suivante = annee < 3 ? annee + 1 : null
+
+    if (totalCreditsAnnuel >= 60) {
+        if (suivante != null) {
+            return { text: `Admis en Licence ${suivante}`, kind: 'ADMIS' }
+        }
+        return { text: 'Admis — validation de la Licence 3', kind: 'ADMIS' }
+    }
+
+    if (totalCreditsAnnuel >= 48 && annee === 1 && suivante === 2) {
+        return { text: 'Passage conditionnel en Licence 2', kind: 'PASSAGE_CONDITIONNEL' }
+    }
+
+    return { text: `Redouble la Licence ${annee}`, kind: 'REDOUBLE' }
+}
+
 /**
  * Récupère et consolide les données pour une planche annuelle
  * @param {string} classeId 
@@ -33,42 +105,41 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
         const studentsA = resultsA.data
         const studentsB = resultsB.success ? resultsB.data : []
 
+        const toNum = (v) => {
+            const n = Number(v)
+            return Number.isFinite(n) ? n : 0
+        }
+
         // 2. Fusionner les données par étudiant
         const annualData = studentsA.map(studentA => {
-            const studentB = studentsB.find(s => s.etudiant.id === studentA.etudiant.id)
+            const idA = studentA.etudiant?.id
+            const studentB = idA
+                ? studentsB.find(s => s.etudiant?.id === idA)
+                : null
 
-            const moyS1 = studentA.moyenneGenerale || 0
-            const moyS2 = studentB?.moyenneGenerale || 0
-            const creditsS1 = studentA.totalCreditsValides || 0
-            const creditsS2 = studentB?.totalCreditsValides || 0
+            const moyS1 = toNum(studentA.moyenneGenerale)
+            const moyS2 = toNum(studentB?.moyenneGenerale)
+            const creditsS1 = toNum(studentA.totalCreditsValides)
+            const creditsS2 = toNum(studentB?.totalCreditsValides)
 
             const moyAnnuelle = (moyS1 + moyS2) / (studentB ? 2 : 1)
+            const moyAnnuelleArrondie = Number.isFinite(moyAnnuelle)
+                ? parseFloat(moyAnnuelle.toFixed(2))
+                : 0
             const totalCreditsAnnuel = creditsS1 + creditsS2
 
-            // Décision du jury (Règles standards LMD)
-            let decision = 'Redouble'
-            let statusColor = 'red'
+            const { text: decision, kind: decisionKind } = decisionAnnuelleDetails(totalCreditsAnnuel, sA)
+            const statusColor =
+                decisionKind === 'ADMIS' ? 'green' : decisionKind === 'REDOUBLE' ? 'red' : 'orange'
 
-            if (totalCreditsAnnuel >= 60) {
-                decision = 'Admis'
-                statusColor = 'green'
-            } else if (totalCreditsAnnuel >= 48) {
-                decision = 'Passage conditionnel'
-                statusColor = 'orange'
-            }
-
-            // Mention
-            let mention = 'Passable'
-            if (moyAnnuelle >= 16) mention = 'Très Bien'
-            else if (moyAnnuelle >= 14) mention = 'Bien'
-            else if (moyAnnuelle >= 12) mention = 'Assez Bien'
+            const mention = mentionFromMoyenneAnnuelle(moyAnnuelleArrondie)
 
             return {
                 etudiant: studentA.etudiant,
                 s1: {
                     moyenne: moyS1,
                     credits: creditsS1,
-                    ues: studentA.uesValidees
+                    ues: studentA.uesValidees || []
                 },
                 s2: {
                     moyenne: moyS2,
@@ -76,9 +147,10 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
                     ues: studentB?.uesValidees || []
                 },
                 annuel: {
-                    moyenne: parseFloat(moyAnnuelle.toFixed(2)),
+                    moyenne: moyAnnuelleArrondie,
                     credits: totalCreditsAnnuel,
                     decision,
+                    decisionKind,
                     mention,
                     statusColor
                 }
@@ -86,14 +158,23 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
         })
 
         // 3. Calculer les rangs annuels sans modifier l'ordre de la classe
-        const rankedAnnual = [...annualData].sort((a, b) => b.annuel.moyenne - a.annuel.moyenne)
+        const rankedAnnual = [...annualData].sort((a, b) => {
+            const mb = toNum(b.annuel?.moyenne)
+            const ma = toNum(a.annuel?.moyenne)
+            return mb - ma
+        })
         const rangByEtudiantId = new Map()
         rankedAnnual.forEach((item, index) => {
-            rangByEtudiantId.set(item.etudiant.id, index + 1)
+            const id = item.etudiant?.id
+            if (id) rangByEtudiantId.set(id, index + 1)
         })
         annualData.forEach((item) => {
-            item.annuel.rang = rangByEtudiantId.get(item.etudiant.id) || null
+            const id = item.etudiant?.id
+            item.annuel.rang = id ? rangByEtudiantId.get(id) ?? null : null
         })
+
+        const ueOrderS1 = collectUeOrderFromBulletins(studentsA)
+        const ueOrderS2 = collectUeOrderFromBulletins(studentsB)
 
         return {
             success: true,
@@ -101,7 +182,9 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
             meta: {
                 semestreA: sA,
                 semestreB: sB,
-                classeInfo: resultsA.meta?.classeInfo
+                classeInfo: resultsA.meta?.classeInfo,
+                ueOrderS1,
+                ueOrderS2
             }
         }
 

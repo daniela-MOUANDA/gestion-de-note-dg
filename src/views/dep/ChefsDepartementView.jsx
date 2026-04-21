@@ -217,7 +217,7 @@ const ChefsDepartementView = () => {
                             <FontAwesomeIcon icon={faUserTie} className="text-blue-600" />
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-800">{chef.prenom} {chef.nom}</p>
+                            <p className="font-semibold text-slate-800">{chef.nom} {chef.prenom}</p>
                           </div>
                         </div>
                       </td>
@@ -340,7 +340,7 @@ const ChefsDepartementView = () => {
                           style={isAssigned ? { color: '#999', fontStyle: 'italic' } : {}}
                         >
                           {dept.nom} ({dept.code})
-                          {isAssigned && assignedChef && ` - Déjà assigné à ${assignedChef.prenom} ${assignedChef.nom}`}
+                          {isAssigned && assignedChef && ` - Déjà assigné à ${assignedChef.nom} ${assignedChef.prenom}`}
                         </option>
                       )
                     })}

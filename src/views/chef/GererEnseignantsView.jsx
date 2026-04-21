@@ -245,7 +245,7 @@ const GererEnseignantsView = () => {
                   </span>
                 </div>
                 <h3 className="text-lg font-bold text-slate-800 mb-1">
-                  {enseignant.prenom} {enseignant.nom}
+                  {enseignant.nom} {enseignant.prenom}
                 </h3>
                 <p className="text-sm text-slate-600 mb-2">{enseignant.specialite}</p>
                 <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
@@ -553,7 +553,7 @@ const GererEnseignantsView = () => {
                   </div>
                   <h2 className="text-2xl font-bold text-slate-800 mb-2">Supprimer l'enseignant</h2>
                   <p className="text-slate-600">
-                    Êtes-vous sûr de vouloir supprimer <strong>{enseignantToDelete.prenom} {enseignantToDelete.nom}</strong> ?
+                    Êtes-vous sûr de vouloir supprimer <strong>{enseignantToDelete.nom} {enseignantToDelete.prenom}</strong> ?
                   </p>
                 </div>
 

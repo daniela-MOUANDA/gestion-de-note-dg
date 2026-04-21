@@ -110,7 +110,7 @@ export const getEtudiantsParDepartement = async (departementId, page = 1, limit 
           etudiant.matricule?.toLowerCase().includes(searchLower) ||
           etudiant.nom?.toLowerCase().includes(searchLower) ||
           etudiant.prenom?.toLowerCase().includes(searchLower) ||
-          `${etudiant.prenom} ${etudiant.nom}`.toLowerCase().includes(searchLower)
+          `${etudiant.nom} ${etudiant.prenom}`.toLowerCase().includes(searchLower)
         )
       })
     }

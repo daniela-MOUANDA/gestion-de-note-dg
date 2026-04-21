@@ -247,7 +247,7 @@ const EtudiantsInscritsView = () => {
                                   <FontAwesomeIcon icon={faGraduationCap} className="text-blue-600" />
                                 </div>
                                 <div>
-                                  <p className="font-semibold text-slate-800">{etudiant.prenom} {etudiant.nom}</p>
+                                  <p className="font-semibold text-slate-800">{etudiant.nom} {etudiant.prenom}</p>
                                 </div>
                               </div>
                             </td>
@@ -381,7 +381,7 @@ const EtudiantsInscritsView = () => {
                       </div>
                       <div>
                         <h3 className="text-2xl font-bold text-slate-800">
-                          {selectedEtudiant.prenom} {selectedEtudiant.nom}
+                          {selectedEtudiant.nom} {selectedEtudiant.prenom}
                         </h3>
                         <p className="text-slate-600">Matricule: {selectedEtudiant.matricule}</p>
                       </div>
@@ -410,7 +410,7 @@ const EtudiantsInscritsView = () => {
                     <div className="space-y-3">
                       <div>
                         <p className="text-xs text-slate-500 mb-1">Nom complet</p>
-                        <p className="font-medium text-slate-800">{selectedEtudiant.prenom} {selectedEtudiant.nom}</p>
+                        <p className="font-medium text-slate-800">{selectedEtudiant.nom} {selectedEtudiant.prenom}</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-500 mb-1">Date de naissance</p>

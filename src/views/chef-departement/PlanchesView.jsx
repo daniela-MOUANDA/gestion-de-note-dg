@@ -10,6 +10,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
 import { getClasses, getBulletinData, exportPlanchePDF, exportPlancheExcel, exportAnnualPlanchePDF, exportAnnualPlancheExcel, getAnnualBulletinData } from '../../api/chefDepartement.js'
 import * as XLSX from 'xlsx'
+import { abbreviateClasseLabel } from '../../utils/classeLabel'
+import { buildPlancheDownloadFilename } from '../../utils/plancheFileName'
 
 const PLANCHE_PHASE_OPTIONS = [
     { value: '', label: 'Phase du semestre (optionnel)' },
@@ -150,13 +152,29 @@ const PlanchesView = () => {
                     return status?.replace(/_/g, ' ') || 'UE non Acquise'
             }
         } else {
-            return status === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'
+            const semestreLabel = selectedSemestre?.startsWith('S')
+                ? `Semestre ${selectedSemestre.replace('S', '')}`
+                : 'Semestre'
+            return status === 'VALIDE'
+                ? `${semestreLabel} valide`
+                : `${semestreLabel} non valide`
         }
     }
 
     const getJuryAvisText = (row) => {
-        const t = row.avisJury || getStatusText(row.statut, 'semestre')
-        return typeof t === 'string' ? t.toUpperCase() : t
+        const statusText = getStatusText(row.statut, 'semestre')
+        const raw = row.avisJury
+
+        // Remplacer les anciens libellés génériques par la version avec numéro de semestre.
+        if (
+            !raw ||
+            /semestre\s+valide/i.test(raw) ||
+            /semestre\s+non\s+valide/i.test(raw)
+        ) {
+            return statusText.toUpperCase()
+        }
+
+        return typeof raw === 'string' ? raw.toUpperCase() : statusText.toUpperCase()
     }
 
     /** Avis du jury : majuscules + gras — vert (admission stage, diplôme / classe sup.), rouge (redouble, semestre non valide) */
@@ -216,9 +234,9 @@ const PlanchesView = () => {
         const classeInfo = getSelectedClasseInfo()
         if (!classeInfo) return ''
 
-        const classeNom = classeInfo.nom || ''
+        const classeNom = abbreviateClasseLabel(classeInfo.nom || '', classeInfo)
         const filiereCode = classeInfo.filieres?.code || ''
-        if (filiereCode) return `${classeNom} (${filiereCode})`
+        if (filiereCode && !classeNom.includes(`(${filiereCode})`)) return `${classeNom} (${filiereCode})`
         return classeNom
     }
 
@@ -258,8 +276,9 @@ const PlanchesView = () => {
             const link = document.createElement('a')
             link.href = url
 
-            const classeNom = classes.find(c => c.id === selectedClasse)?.nom || 'Classe'
-            link.setAttribute('download', `Planche_${classeNom}_${selectedSemestre}.pdf`)
+            const classInfo = getSelectedClasseInfo()
+            const period = selectedSemestre === 'ANNUEL' ? 'ANNUEL' : selectedSemestre
+            link.setAttribute('download', buildPlancheDownloadFilename(classInfo, period, 'pdf'))
 
             document.body.appendChild(link)
             link.click()
@@ -280,15 +299,16 @@ const PlanchesView = () => {
         try {
             setLoading(true)
             const classInfo = getSelectedClasseInfo()
-            const classeNom = classInfo?.nom || 'Classe'
+            const rawClasseNom = classInfo?.nom || 'Classe'
+            const classeAffichee = getDisplayProgramme() || rawClasseNom
             const filiereNom = classInfo?.filieres?.nom || ''
             const phaseLabel = planchePhase ? planchePhaseLabel : ''
 
             let blob
             if (selectedSemestre === 'ANNUEL') {
-                blob = await exportAnnualPlancheExcel(selectedClasse, classeNom, filiereNom, phaseLabel)
+                blob = await exportAnnualPlancheExcel(selectedClasse, classeAffichee, filiereNom, phaseLabel)
             } else {
-                blob = await exportPlancheExcel(selectedClasse, selectedSemestre, classeNom, filiereNom, phaseLabel)
+                blob = await exportPlancheExcel(selectedClasse, selectedSemestre, classeAffichee, filiereNom, phaseLabel)
             }
 
             // Créer un lien pour le téléchargement
@@ -296,7 +316,8 @@ const PlanchesView = () => {
             const link = document.createElement('a')
             link.href = url
 
-            link.setAttribute('download', `Planche_${classeNom}_${selectedSemestre}.xlsx`)
+            const period = selectedSemestre === 'ANNUEL' ? 'ANNUEL' : selectedSemestre
+            link.setAttribute('download', buildPlancheDownloadFilename(classInfo, period, 'xlsx'))
 
             document.body.appendChild(link)
             link.click()
@@ -331,7 +352,14 @@ const PlanchesView = () => {
                                     <option value="">Sélectionner une classe</option>
                                     {classes.map(c => (
                                         <option key={c.id} value={c.id}>
-                                            {c.nom} {c.filieres?.code ? `(${c.filieres.code})` : ''}
+                                            {(() => {
+                                                const classeNom = abbreviateClasseLabel(c.nom, c)
+                                                const filiereCode = c.filieres?.code
+                                                if (filiereCode && !classeNom.includes(`(${filiereCode})`)) {
+                                                    return `${classeNom} (${filiereCode})`
+                                                }
+                                                return classeNom
+                                            })()}
                                         </option>
                                     ))}
                                 </select>
@@ -445,59 +473,66 @@ const PlanchesView = () => {
                                     {selectedSemestre === 'ANNUEL' ? (
                                         <table className="w-full border-collapse border border-slate-300 bg-white" id="planche-table">
                                             <thead className="sticky top-0 z-20 shadow-sm">
-                                                {/* Row 1: Main Headers */}
-                                                <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase">
-                                                    <th rowSpan={2} className="border border-slate-600 p-2 w-10 sticky left-0 z-30 bg-slate-900 border-r-2 border-r-white/20">N°</th>
-                                                    <th rowSpan={2} className="border border-slate-600 p-2 min-w-[180px] sticky left-10 z-30 bg-slate-900 border-r-2 border-r-white/20">Nom et Prénom</th>
+                                                {/* Row 1: Main Headers — tons pastel (lisibles, moins agressifs) */}
+                                                <tr className="bg-slate-200/95 text-slate-800 font-bold text-[10px] uppercase">
+                                                    <th rowSpan={2} className="border border-slate-300 p-2 w-10 sticky left-0 z-30 bg-slate-100 border-r-2 border-r-slate-300">N°</th>
+                                                    <th rowSpan={2} className="border border-slate-300 p-2 min-w-[180px] sticky left-10 z-30 bg-slate-100 border-r-2 border-r-slate-300">Nom et Prénom</th>
 
                                                     {/* Semestre 1 Blocks */}
-                                                    <th colSpan={6} className="border border-slate-600 p-2 bg-blue-900/50">
+                                                    <th colSpan={6} className="border border-slate-300 p-2 bg-sky-100/90 text-slate-800">
                                                         {metaData?.semestreA ? `SEMESTRE ${metaData.semestreA.replace('S', '')}` : 'SEMESTRE 1'}
                                                     </th>
 
                                                     {/* Semestre 2 Blocks */}
-                                                    <th colSpan={6} className="border border-slate-600 p-2 bg-indigo-900/50">
+                                                    <th colSpan={6} className="border border-slate-300 p-2 bg-violet-100/90 text-slate-800">
                                                         {metaData?.semestreB ? `SEMESTRE ${metaData.semestreB.replace('S', '')}` : 'SEMESTRE 2'}
                                                     </th>
 
                                                     {/* Annuel Summary */}
-                                                    <th colSpan={5} className="border border-slate-600 p-2 bg-slate-700">RÉSULTATS ANNUELS</th>
+                                                    <th colSpan={5} className="border border-slate-300 p-2 bg-teal-100/90 text-slate-800">RÉSULTATS ANNUELS</th>
                                                 </tr>
 
-                                                <tr className="bg-slate-100 text-slate-800 text-[9px] font-black uppercase">
-                                                    {/* S1 sub-headers */}
-                                                    <th className="border border-slate-300 p-1">{metaData?.semestreA || 'S1'} UE1</th>
+                                                <tr className="bg-slate-50 text-slate-800 text-[9px] font-black uppercase">
+                                                    {/* S1 sub-headers — codes UE réels issus des bulletins */}
+                                                    <th className="border border-slate-300 p-1 max-w-[5.5rem] truncate" title={metaData?.ueOrderS1?.[0]}>{metaData?.semestreA || 'S1'} {metaData?.ueOrderS1?.[0] ?? 'UE1'}</th>
                                                     <th className="border border-slate-300 p-1">CTS</th>
-                                                    <th className="border border-slate-300 p-1">{metaData?.semestreA || 'S1'} UE2</th>
+                                                    <th className="border border-slate-300 p-1 max-w-[5.5rem] truncate" title={metaData?.ueOrderS1?.[1]}>{metaData?.semestreA || 'S1'} {metaData?.ueOrderS1?.[1] ?? 'UE2'}</th>
                                                     <th className="border border-slate-300 p-1">CTS</th>
-                                                    <th className="border border-slate-300 p-1 bg-blue-200">MOY {metaData?.semestreA || 'S1'}</th>
-                                                    <th className="border border-slate-300 p-1 bg-blue-200">CTS {metaData?.semestreA || 'S1'}</th>
+                                                    <th className="border border-slate-300 p-1 bg-sky-50">MOY {metaData?.semestreA || 'S1'}</th>
+                                                    <th className="border border-slate-300 p-1 bg-sky-50">CTS {metaData?.semestreA || 'S1'}</th>
 
                                                     {/* S2 sub-headers */}
-                                                    <th className="border border-slate-300 p-1">{metaData?.semestreB || 'S2'} UE1</th>
+                                                    <th className="border border-slate-300 p-1 max-w-[5.5rem] truncate" title={metaData?.ueOrderS2?.[0]}>{metaData?.semestreB || 'S2'} {metaData?.ueOrderS2?.[0] ?? 'UE1'}</th>
                                                     <th className="border border-slate-300 p-1">CTS</th>
-                                                    <th className="border border-slate-300 p-1">{metaData?.semestreB || 'S2'} UE2</th>
+                                                    <th className="border border-slate-300 p-1 max-w-[5.5rem] truncate" title={metaData?.ueOrderS2?.[1]}>{metaData?.semestreB || 'S2'} {metaData?.ueOrderS2?.[1] ?? 'UE2'}</th>
                                                     <th className="border border-slate-300 p-1">CTS</th>
-                                                    <th className="border border-slate-300 p-1 bg-indigo-200">MOY {metaData?.semestreB || 'S2'}</th>
-                                                    <th className="border border-slate-300 p-1 bg-indigo-200">CTS {metaData?.semestreB || 'S2'}</th>
+                                                    <th className="border border-slate-300 p-1 bg-violet-50">MOY {metaData?.semestreB || 'S2'}</th>
+                                                    <th className="border border-slate-300 p-1 bg-violet-50">CTS {metaData?.semestreB || 'S2'}</th>
 
                                                     {/* Annual sub-headers */}
-                                                    <th className="border border-slate-300 p-1 bg-slate-800 text-white">MOY ANN</th>
-                                                    <th className="border border-slate-300 p-1 bg-slate-800 text-white">CTS ANN</th>
-                                                    <th className="border border-slate-300 p-1 bg-slate-800 text-white">RANG</th>
-                                                    <th className="border border-slate-300 p-1 bg-slate-800 text-white">DÉCISION</th>
-                                                    <th className="border border-slate-300 p-1 bg-slate-800 text-white">MENTION</th>
+                                                    <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">MOY ANN</th>
+                                                    <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">CTS ANN</th>
+                                                    <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">RANG</th>
+                                                    <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">DÉCISION</th>
+                                                    <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">MENTION</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {bulletinData.map((row, idx) => {
-                                                    const s1_ue1 = row.s1?.ues?.find(u => u.ue === 'UE1') || {}
-                                                    const s1_ue2 = row.s1?.ues?.find(u => u.ue === 'UE2') || {}
-                                                    const s2_ue1 = row.s2?.ues?.find(u => u.ue === 'UE1') || {}
-                                                    const s2_ue2 = row.s2?.ues?.find(u => u.ue === 'UE2') || {}
+                                                    const k1a = metaData?.ueOrderS1?.[0]
+                                                    const k1b = metaData?.ueOrderS1?.[1]
+                                                    const k2a = metaData?.ueOrderS2?.[0]
+                                                    const k2b = metaData?.ueOrderS2?.[1]
+                                                    const s1_ue1 = k1a ? row.s1?.ues?.find(u => u.ue === k1a) || {} : {}
+                                                    const s1_ue2 = k1b ? row.s1?.ues?.find(u => u.ue === k1b) || {} : {}
+                                                    const s2_ue1 = k2a ? row.s2?.ues?.find(u => u.ue === k2a) || {} : {}
+                                                    const s2_ue2 = k2b ? row.s2?.ues?.find(u => u.ue === k2b) || {} : {}
 
                                                     return (
-                                                        <tr key={row.etudiant.id} className="hover:bg-blue-50/50 border-b border-slate-200 h-10">
+                                                        <tr
+                                                            key={row.etudiant.id}
+                                                            className="table-row-hover border-b border-slate-200 h-10 transition-all duration-150"
+                                                        >
                                                             <td className="border border-slate-300 p-1 text-center font-bold sticky left-0 z-10 bg-white border-r-2">{idx + 1}</td>
                                                             <td className="border border-slate-300 p-2 font-bold sticky left-10 z-10 bg-white border-r-2 whitespace-nowrap uppercase text-[10px]">
                                                                 {row.etudiant.nom} {row.etudiant.prenom}
@@ -523,8 +558,16 @@ const PlanchesView = () => {
                                                             <td className="border border-slate-300 p-1 text-center font-black bg-blue-100 text-[10px]">{row.annuel?.moyenne?.toFixed(2) || '-'}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold bg-slate-50 text-[10px]">{row.annuel?.credits || 0}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold text-[10px]">{row.annuel?.rang || '-'}</td>
-                                                            <td className={`border border-slate-300 p-1 text-[9px] font-black text-center ${row.annuel?.decision === 'Admis' ? 'text-green-700' : row.annuel?.decision === 'Redouble' ? 'text-red-700' : 'text-orange-700'}`}>
-                                                                {row.annuel?.decision?.toUpperCase()}
+                                                            <td
+                                                                className={`border border-slate-300 p-1 text-[8px] font-black text-center leading-tight max-w-[11rem] ${
+                                                                    row.annuel?.decisionKind === 'ADMIS'
+                                                                        ? 'text-green-700'
+                                                                        : row.annuel?.decisionKind === 'REDOUBLE'
+                                                                          ? 'text-red-700'
+                                                                          : 'text-orange-700'
+                                                                }`}
+                                                            >
+                                                                {row.annuel?.decision}
                                                             </td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold text-[9px] uppercase">{row.annuel?.mention}</td>
                                                         </tr>
@@ -539,6 +582,7 @@ const PlanchesView = () => {
                                                 <tr>
                                                     <th rowSpan={4} className="border border-slate-300 p-1 min-w-[40px] sticky left-0 z-30 bg-white">N°</th>
                                                     <th rowSpan={4} className="border border-slate-300 p-2 min-w-[250px] sticky left-10 z-30 bg-white">Nom et Prénom (Matières)</th>
+                                                    <th className="border border-slate-300 p-1 min-w-[72px] bg-white"></th>
                                                     {ueGroups.map((ue, idx) => (
                                                         <th
                                                             key={ue.code}
@@ -554,6 +598,13 @@ const PlanchesView = () => {
 
                                                 {/* Row 2: Module Names + UE Summaries */}
                                                 <tr className="bg-white">
+                                                    <th className="border border-slate-300 p-1 min-w-[72px] h-32 relative overflow-hidden bg-white">
+                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                            <span className="block w-20 text-[10px] font-bold text-center transform -rotate-90 leading-tight uppercase">
+                                                                Matières
+                                                            </span>
+                                                        </div>
+                                                    </th>
                                                     {ueGroups.map(ue => (
                                                         <>
                                                             {ue.modules.map(m => (
@@ -577,6 +628,9 @@ const PlanchesView = () => {
 
                                                 {/* Row 3: Credits values per module + sums */}
                                                 <tr className="bg-white font-bold text-[10px]">
+                                                    <th className="border border-slate-300 p-1 text-center font-bold text-slate-700 bg-white">
+                                                        Crédits
+                                                    </th>
                                                     {ueGroups.map(ue => {
                                                         const totalCredits = ue.modules.reduce((sum, m) => sum + (m.credit || 0), 0)
                                                         return (
@@ -599,6 +653,9 @@ const PlanchesView = () => {
 
                                                 {/* Row 4: Coefficients values per module + sums */}
                                                 <tr className="bg-white font-bold text-[10px]">
+                                                    <th className="border border-slate-300 p-1 text-center font-bold text-slate-700 bg-white">
+                                                        Coefficients
+                                                    </th>
                                                     {ueGroups.map(ue => {
                                                         const totalCoeff = ue.modules.reduce((sum, m) => sum + (m.credit || 0), 0)
                                                         return (
@@ -622,11 +679,15 @@ const PlanchesView = () => {
 
                                             <tbody>
                                                 {bulletinData.map((row, rowIndex) => (
-                                                    <tr key={row.etudiant.id} className="hover:bg-blue-50/50 transition-colors h-10 border-b border-slate-200">
+                                                    <tr
+                                                        key={row.etudiant.id}
+                                                        className="table-row-hover transition-all duration-150 h-10 border-b border-slate-200"
+                                                    >
                                                         <td className="border border-slate-200 p-1 text-center font-bold sticky left-0 z-10 bg-white">{rowIndex + 1}</td>
                                                         <td className="border border-slate-200 p-2 font-bold sticky left-10 z-10 bg-white">
                                                             <div className="truncate uppercase text-[9px]">{row.etudiant.nom} {row.etudiant.prenom}</div>
                                                         </td>
+                                                        <td className="border border-slate-200 p-1 bg-white"></td>
 
                                                         {ueGroups.map((ueGroup, groupIdx) => {
                                                             const ueData = row.uesValidees?.find(u => u.ue === ueGroup.code) || {}
@@ -638,7 +699,15 @@ const PlanchesView = () => {
                                                                         return (
                                                                             <td
                                                                                 key={`${row.etudiant.id}-${m.id}`}
-                                                                                className={`border border-slate-200 p-1 text-center font-medium ${val != null && val < 10 ? 'bg-red-50 text-red-700' : 'text-slate-700'}`}
+                                                                                className={`border border-slate-200 p-1 text-center font-medium ${
+                                                                                    val == null
+                                                                                        ? 'text-slate-700'
+                                                                                        : val < 6
+                                                                                            ? 'bg-red-50 text-red-700'
+                                                                                            : val < 10
+                                                                                                ? 'bg-yellow-50 text-yellow-700'
+                                                                                                : 'bg-white text-slate-700'
+                                                                                }`}
                                                                             >
                                                                                 {typeof val === 'number'
                                                                                   ? val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
@@ -648,11 +717,19 @@ const PlanchesView = () => {
                                                                     })}
 
                                                                     {/* Summary Columns for UE */}
-                                                                    <td className={`border border-slate-300 p-1 text-center font-black bg-blue-50/30 text-[10px] ${typeof ueData.moyenne === 'number' && ueData.moyenne < 10 ? 'text-red-700' : 'text-slate-900'}`}>
+                                                                    <td className={`border border-slate-300 p-1 text-center font-black text-[10px] ${
+                                                                        typeof ueData.moyenne !== 'number'
+                                                                            ? 'bg-white text-slate-900'
+                                                                            : ueData.moyenne < 6
+                                                                                ? 'bg-red-50 text-red-700'
+                                                                                : ueData.moyenne < 10
+                                                                                    ? 'bg-yellow-50 text-yellow-700'
+                                                                                    : 'bg-white text-slate-900'
+                                                                    }`}>
                                                                         <div className="flex items-center justify-center gap-1">
                                                                             <span className={`w-2 h-2 rounded-full ${getStatusDot(ueData.status)}`}></span>
                                                                             {typeof ueData.moyenne === 'number'
-                                                                              ? ueData.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
+                                                                              ? ueData.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                                                               : '-'}
                                                                         </div>
                                                                     </td>
@@ -670,7 +747,15 @@ const PlanchesView = () => {
                                                         <td className="border border-slate-300 p-1 text-center font-bold bg-slate-50 text-[10px]">
                                                             {row.totalCreditsValides || 0}
                                                         </td>
-                                                        <td className={`border border-slate-300 p-1 text-center font-black text-[11px] bg-blue-600/5 ${typeof row.moyenneGenerale === 'number' && row.moyenneGenerale < 10 ? 'text-red-700' : 'text-blue-900'}`}>
+                                                        <td className={`border border-slate-300 p-1 text-center font-black text-[11px] ${
+                                                            typeof row.moyenneGenerale !== 'number'
+                                                                ? 'bg-white text-blue-900'
+                                                                : row.moyenneGenerale < 6
+                                                                    ? 'bg-red-50 text-red-700'
+                                                                    : row.moyenneGenerale < 10
+                                                                        ? 'bg-yellow-50 text-yellow-700'
+                                                                        : 'bg-white text-blue-900'
+                                                        }`}>
                                                             <div className="flex items-center justify-center gap-1">
                                                                 <span className={`w-2 h-2 rounded-full ${typeof row.moyenneGenerale === 'number' && row.moyenneGenerale >= 10 ? 'bg-green-500' : 'bg-red-500'}`}></span>
                                                                 {typeof row.moyenneGenerale === 'number'

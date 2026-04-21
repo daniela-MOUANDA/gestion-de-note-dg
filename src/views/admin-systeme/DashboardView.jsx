@@ -14,7 +14,7 @@ import { getDashboardStats, getRecentLogs } from '../../api/adminSysteme'
 const DashboardAdminSystemeView = () => {
     const { user } = useAuth()
     const [loading, setLoading] = useState(true)
-    const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Administrateur Système'
+    const nomComplet = user ? `${user.nom} ${user.prenom}` : 'Administrateur Système'
 
     const [stats, setStats] = useState({
         totalUsers: 0,
@@ -59,7 +59,7 @@ const DashboardAdminSystemeView = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
+        <div className="min-h-screen bg-[#f4f6f9]">
             <AdminSidebar />
             <div className="flex flex-col lg:ml-64 min-h-screen">
                 <AdminHeader />
@@ -195,26 +195,26 @@ const DashboardAdminSystemeView = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl shadow-lg p-6 text-white">
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-slate-800">
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
-                                        <h3 className="font-bold text-lg">Statut des Services</h3>
-                                        <p className="text-indigo-100 text-sm">Mise à jour automatique en temps réel</p>
+                                        <h3 className="font-bold text-lg text-slate-800">Statut des Services</h3>
+                                        <p className="text-slate-500 text-sm">Mise à jour automatique en temps réel</p>
                                     </div>
-                                    <FontAwesomeIcon icon={faServer} className="text-2xl text-indigo-200" />
+                                    <FontAwesomeIcon icon={faServer} className="text-2xl text-slate-400" />
                                 </div>
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between text-sm">
                                         <span>Base de données Supabase</span>
-                                        <span className="bg-green-400/20 text-green-300 px-2 py-0.5 rounded text-xs font-bold border border-green-400/30">LIGNE</span>
+                                        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold border border-emerald-200">LIGNE</span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
                                         <span>Serveur API Node.js</span>
-                                        <span className="bg-green-400/20 text-green-300 px-2 py-0.5 rounded text-xs font-bold border border-green-400/30">LIGNE</span>
+                                        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold border border-emerald-200">LIGNE</span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
                                         <span>Services de Stockage</span>
-                                        <span className="bg-green-400/20 text-green-300 px-2 py-0.5 rounded text-xs font-bold border border-green-400/30">LIGNE</span>
+                                        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold border border-emerald-200">LIGNE</span>
                                     </div>
                                 </div>
                             </div>

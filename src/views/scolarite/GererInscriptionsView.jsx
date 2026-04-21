@@ -262,9 +262,9 @@ const GererInscriptionsView = () => {
   // Valider que les informations personnelles sont complètes
   const isPersonalInfoComplete = (etudiant) => {
     if (!etudiant) return false
+    // Prénom non requis pour finaliser (certains étudiants n'en ont pas)
     return !!(
       etudiant.nom &&
-      etudiant.prenom &&
       etudiant.dateNaissance &&
       etudiant.lieuNaissance &&
       etudiant.nationalite &&
@@ -297,7 +297,7 @@ const GererInscriptionsView = () => {
 
     // Vérifier les informations personnelles
     if (!isPersonalInfoComplete(dossierComplet.etudiant)) {
-      return { valid: false, reason: 'Toutes les informations personnelles doivent être renseignées (nom, prénom, date de naissance, lieu de naissance, nationalité, email, téléphone, adresse)' }
+      return { valid: false, reason: 'Toutes les informations personnelles requises doivent être renseignées (nom, date de naissance, lieu de naissance, nationalité, e-mail, téléphone, adresse). Le prénom est facultatif.' }
     }
 
     // Vérifier qu'au moins un parent est renseigné
@@ -578,7 +578,7 @@ const GererInscriptionsView = () => {
     }
 
     // Confirmation avant suppression
-    const confirmMessage = `Êtes-vous sûr de vouloir supprimer l'étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} ?\n\nCette action est irréversible et supprimera également toutes ses inscriptions et données associées.`
+    const confirmMessage = `Êtes-vous sûr de vouloir supprimer l'étudiant ${selectedEtudiant.nom} ${selectedEtudiant.prenom} ?\n\nCette action est irréversible et supprimera également toutes ses inscriptions et données associées.`
 
     if (!window.confirm(confirmMessage)) {
       return
@@ -587,7 +587,7 @@ const GererInscriptionsView = () => {
     try {
       setLoading(true)
       await deleteEtudiant(selectedEtudiant.id)
-      success(`L'étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été supprimé avec succès`)
+      success(`L'étudiant ${selectedEtudiant.nom} ${selectedEtudiant.prenom} a été supprimé avec succès`)
 
       // Retourner à la liste et recharger les étudiants
       setSelectedEtudiant(null)
@@ -636,7 +636,7 @@ const GererInscriptionsView = () => {
       // Afficher les identifiants dans une modal
       if (result.password) {
         setStudentCredentials({
-          nom: result.etudiantNom || `${selectedEtudiant.prenom} ${selectedEtudiant.nom}`,
+          nom: result.etudiantNom || `${selectedEtudiant.nom} ${selectedEtudiant.prenom}`,
           email: result.etudiantEmail || selectedEtudiant.email,
           matricule: result.etudiantMatricule || selectedEtudiant.matricule,
           password: result.password
@@ -645,8 +645,8 @@ const GererInscriptionsView = () => {
       }
 
       const message = typeInscription === 'inscription'
-        ? `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été inscrit avec succès!`
-        : `${selectedEtudiant.prenom} ${selectedEtudiant.nom} a été réinscrit avec succès!`
+        ? `${selectedEtudiant.nom} ${selectedEtudiant.prenom} a été inscrit avec succès!`
+        : `${selectedEtudiant.nom} ${selectedEtudiant.prenom} a été réinscrit avec succès!`
       success(message)
 
       // Recharger le dossier pour mettre à jour le statut
@@ -948,7 +948,7 @@ const GererInscriptionsView = () => {
                     {dossier.etudiant.photo ? (
                       <img
                         src={dossier.etudiant.photo.startsWith('http') ? dossier.etudiant.photo : `http://localhost:3000${dossier.etudiant.photo}`}
-                        alt={`${dossier.etudiant.prenom} ${dossier.etudiant.nom}`}
+                        alt={`${[dossier.etudiant.prenom, dossier.etudiant.nom].filter(Boolean).join(' ')}`}
                         className="w-full h-full object-cover rounded-full"
                         onError={(e) => {
                           // Si l'image ne charge pas, afficher les initiales
@@ -956,14 +956,14 @@ const GererInscriptionsView = () => {
                           const parent = e.target.parentElement
                           if (parent && !parent.querySelector('.fallback-initials')) {
                             const fallback = document.createElement('span')
-                            fallback.textContent = `${dossier.etudiant.prenom[0]}${dossier.etudiant.nom[0]}`
+                            fallback.textContent = `${dossier.etudiant.prenom?.[0] || ''}${dossier.etudiant.nom?.[0] || ''}`
                             fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
                             parent.appendChild(fallback)
                           }
                         }}
                       />
                     ) : (
-                      <span>{dossier.etudiant.prenom[0]}{dossier.etudiant.nom[0]}</span>
+                      <span>{dossier.etudiant.nom?.[0] || ''}{dossier.etudiant.prenom?.[0] || ''}</span>
                     )}
                     <input
                       type="file"
@@ -981,7 +981,7 @@ const GererInscriptionsView = () => {
                       </div>
                     )}
                   </div>
-                  <h2 className="text-xl font-bold text-slate-800">{dossier.etudiant.prenom} {dossier.etudiant.nom}</h2>
+                  <h2 className="text-xl font-bold text-slate-800">{[dossier.etudiant.prenom, dossier.etudiant.nom].filter(Boolean).join(' ')}</h2>
                   <p className="text-slate-600 text-sm">{dossier.etudiant.matricule}</p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
@@ -1478,11 +1478,11 @@ const GererInscriptionsView = () => {
                             />
                           ) : null}
                           {!etudiant.photo && (
-                            <span className="absolute inset-0 flex items-center justify-center">{(etudiant.prenom?.[0] || '')}{(etudiant.nom?.[0] || '')}</span>
+                            <span className="absolute inset-0 flex items-center justify-center">{(etudiant.nom?.[0] || '')}{(etudiant.prenom?.[0] || '')}</span>
                           )}
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-lg font-bold text-slate-800">{etudiant.prenom || ''} {etudiant.nom || ''}</h3>
+                          <h3 className="text-lg font-bold text-slate-800">{etudiant.nom || ''} {etudiant.prenom || ''}</h3>
                           <p className="text-sm text-slate-600">{etudiant.matricule || 'N/A'}</p>
                           <p className="text-sm text-slate-600">{etudiant.email || 'Email non renseigné'}</p>
                         </div>
@@ -1587,11 +1587,11 @@ const GererInscriptionsView = () => {
                                   />
                                 ) : null}
                                 {!etudiant.photo && (
-                                  <span className="absolute inset-0 flex items-center justify-center">{(etudiant.prenom?.[0] || '')}{(etudiant.nom?.[0] || '')}</span>
+                                  <span className="absolute inset-0 flex items-center justify-center">{(etudiant.nom?.[0] || '')}{(etudiant.prenom?.[0] || '')}</span>
                                 )}
                               </div>
                               <div>
-                                <div className="text-sm font-bold text-slate-900">{etudiant.prenom || ''} {etudiant.nom || ''}</div>
+                                <div className="text-sm font-bold text-slate-900">{etudiant.nom || ''} {etudiant.prenom || ''}</div>
                                 {etudiant.email && (
                                   <div className="text-xs text-slate-500 mt-0.5">{etudiant.email}</div>
                                 )}

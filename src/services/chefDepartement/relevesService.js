@@ -5,6 +5,10 @@ function roundCr(x) {
     return Math.round((Number(x) || 0) * 100) / 100
 }
 
+function normalizeModuleCode(code) {
+    return String(code || '').trim().toUpperCase()
+}
+
 /** Module « Projet / Stage » (planche S4 L2) — reconnaissance par code / nom */
 export function moduleEstProjetStage(m) {
     const t = `${m.code || ''} ${m.nom || ''}`.toLowerCase()
@@ -245,15 +249,30 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
         // 4. Récupérer toutes les notes (DÉPLACÉ AVANT LES PARAMÈTRES)
         const etudiantIds = etudiants.map(e => e.id)
-        const { data: notes, error: errorNotes } = await supabaseAdmin
-            .from('notes')
-            .select('*, modules(id, code, nom, filiere_id)')
-            .eq('semestre', semestre)
-            .in('etudiant_id', etudiantIds)
+        const pageSize = 1000
+        let pageStart = 0
+        let notes = []
 
-        if (errorNotes) {
-            console.error('DEBUG: Notes error', errorNotes)
-            throw errorNotes
+        // IMPORTANT: PostgREST limite les résultats (1000 lignes par défaut).
+        // On pagine pour récupérer TOUTES les notes de la classe/semestre.
+        while (true) {
+            const { data: notesPage, error: errorNotes } = await supabaseAdmin
+                .from('notes')
+                .select('*, modules(id, code, nom, filiere_id)')
+                .eq('semestre', semestre)
+                .eq('classe_id', classeId)
+                .in('etudiant_id', etudiantIds)
+                .range(pageStart, pageStart + pageSize - 1)
+
+            if (errorNotes) {
+                console.error('DEBUG: Notes error', errorNotes)
+                throw errorNotes
+            }
+
+            const chunk = notesPage || []
+            notes = notes.concat(chunk)
+            if (chunk.length < pageSize) break
+            pageStart += pageSize
         }
 
         // 5. Récupérer les paramètres pour TOUS les modules (Locaux + Étrangers trouvés dans les notes)
@@ -324,25 +343,41 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
 
         // 2. Indexer les Notes par Étudiant -> CodeModule -> SignatureÉvaluation
         const studentNotesMap = {}
+        const rawNotesByStudentAndModuleCode = {}
+        const rawNotesByStudentAndModuleId = {}
         if (notes) {
             notes.forEach(n => {
                 const etudId = n.etudiant_id
-                const modCode = n.modules?.code
                 const modId = n.module_id
                 const evalId = n.evaluation_id
+                const moduleEmbed = Array.isArray(n.modules) ? n.modules[0] : n.modules
+                const modCode = normalizeModuleCode(moduleEmbed?.code)
 
-                if (!etudId || !modCode || !modId || !evalId) return
+                if (!etudId || !modId || !evalId) return
 
                 // Trouver la signature de cette note (selon son module d'origine)
                 const signatures = evalSignatureByModuleId[modId]
                 const signature = signatures ? signatures[evalId] : null
 
-                if (signature) {
+                if (signature && modCode) {
                     if (!studentNotesMap[etudId]) studentNotesMap[etudId] = {}
                     if (!studentNotesMap[etudId][modCode]) studentNotesMap[etudId][modCode] = {}
 
                     // On stocke la note indexée par sa signature fonctionnelle
                     studentNotesMap[etudId][modCode][signature] = n
+                }
+
+                // Fallback brut: conserver aussi toutes les valeurs par étudiant + code module
+                // pour afficher les notes existantes même si le mapping d'évaluation ne matche pas.
+                const rawValue = Number(n.valeur)
+                if (Number.isFinite(rawValue)) {
+                    if (!rawNotesByStudentAndModuleId[etudId]) rawNotesByStudentAndModuleId[etudId] = {}
+                    if (!rawNotesByStudentAndModuleId[etudId][modId]) rawNotesByStudentAndModuleId[etudId][modId] = []
+                    rawNotesByStudentAndModuleId[etudId][modId].push(rawValue)
+
+                    if (!rawNotesByStudentAndModuleCode[etudId]) rawNotesByStudentAndModuleCode[etudId] = {}
+                    if (!rawNotesByStudentAndModuleCode[etudId][modCode]) rawNotesByStudentAndModuleCode[etudId][modCode] = []
+                    rawNotesByStudentAndModuleCode[etudId][modCode].push(rawValue)
                 }
             })
         }
@@ -400,10 +435,11 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                         // Stratégie 2: Recherche intelligente (Code Module + Signature Éval)
                         // Si non trouvé (étudiant reclassé ?)
                         if (!noteEntry && module.code) {
+                            const normalizedModuleCode = normalizeModuleCode(module.code)
                             const targetSignature = evalSignatureByModuleId[module.id] ? evalSignatureByModuleId[module.id][evalId] : null
 
-                            if (targetSignature && studentNotesMap[etudiant.id] && studentNotesMap[etudiant.id][module.code]) {
-                                noteEntry = studentNotesMap[etudiant.id][module.code][targetSignature]
+                            if (targetSignature && studentNotesMap[etudiant.id] && studentNotesMap[etudiant.id][normalizedModuleCode]) {
+                                noteEntry = studentNotesMap[etudiant.id][normalizedModuleCode][targetSignature]
                             }
                         }
 
@@ -414,6 +450,20 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                         }
                     }
                 })
+
+                // Fallback: si des notes existent mais que la correspondance paramètres/IDs a échoué,
+                // calculer une moyenne simple pour éviter les cases vides sur planches/relevés.
+                if (totalCoeffModule === 0 && module.code) {
+                    const normalizedModuleCode = normalizeModuleCode(module.code)
+                    const rawByModuleId = rawNotesByStudentAndModuleId[etudiant.id]?.[module.id] || []
+                    const rawByModuleCode = rawNotesByStudentAndModuleCode[etudiant.id]?.[normalizedModuleCode] || []
+                    const rawValues = rawByModuleId.length > 0 ? rawByModuleId : rawByModuleCode
+                    if (rawValues.length > 0) {
+                        const sumRaw = rawValues.reduce((acc, value) => acc + value, 0)
+                        totalPointsModule = sumRaw / rawValues.length
+                        totalCoeffModule = 1
+                    }
+                }
 
                 const moyenneModule = totalCoeffModule > 0
                     ? parseFloat((totalPointsModule / totalCoeffModule).toFixed(2))
@@ -439,7 +489,9 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 filiereCode
             )
 
-            // Deuxième passage : UE — crédits UE entiers seulement si chaque module est ≥ 10 OU si la moyenne pondérée de l'UE est ≥ 10 (compensation intra-UE).
+            // Deuxième passage : UE — crédits UE entiers seulement si chaque module est ≥ 10
+            // OU si la moyenne pondérée de l'UE est ≥ 10 (compensation intra-UE).
+            // Règle éliminatoire : aucune compensation possible si au moins un module de l'UE est < 6.
             // Sinon : uniquement les crédits des modules ≥ 10. La validation du semestre ne compense jamais une UE.
             let totalCreditsValides = 0
             const modulesResult = []
@@ -457,7 +509,10 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
                 const tousModulesValidesIndividuellement = modsUE.every(
                     m => m.moyenneCalculee !== null && Number(m.moyenneCalculee) >= 10
                 )
-                const ueAcquiseParMoyenne = moyenneUE >= 10
+                const hasEliminatoryModule = modsUE.some(
+                    m => m.moyenneCalculee !== null && Number(m.moyenneCalculee) < 6
+                )
+                const ueAcquiseParMoyenne = moyenneUE >= 10 && !hasEliminatoryModule
                 const ueAcquise = tousModulesValidesIndividuellement || ueAcquiseParMoyenne
 
                 let totalCreditsUEValides = 0

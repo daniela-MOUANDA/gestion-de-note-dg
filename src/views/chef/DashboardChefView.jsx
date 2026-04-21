@@ -26,7 +26,7 @@ const DashboardChefView = () => {
   const navigate = useNavigate()
   const isEspaceDepartement =
     user?.role === 'CHEF_DEPARTEMENT' || user?.role === 'COORD_PEDAGOGIQUE'
-  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Département'
+  const nomComplet = user ? `${user.nom} ${user.prenom}` : 'Département'
 
   // Vérification du rôle et redirection si nécessaire
   useEffect(() => {
@@ -61,6 +61,7 @@ const DashboardChefView = () => {
   // State pour les graphes
   const [graphData, setGraphData] = useState({
     studentsData: [],
+    modulesParFiliere: [],
     levelData: [],
     genreData: [],
     tauxReussiteData: []
@@ -146,9 +147,24 @@ const DashboardChefView = () => {
 
   const departementChef = user?.departement?.nom || 'Département'
 
+  const KpiCard = ({ label, value, sub, icon, iconWrapClass }) => (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">{value}</p>
+          {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
+        </div>
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconWrapClass}`}>
+          <FontAwesomeIcon icon={icon} className="text-lg" />
+        </div>
+      </div>
+    </div>
+  )
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+      <div className="min-h-screen bg-[#f4f6f9]">
         <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <AdminHeader />
@@ -161,87 +177,65 @@ const DashboardChefView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-[#f4f6f9]">
       <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
           {/* Message de bienvenue */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               Bienvenue, {nomComplet} !
             </h1>
-            <p className="text-sm sm:text-base text-slate-600">
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
               Nous sommes ravis de vous revoir. Voici un aperçu de votre tableau de bord.
             </p>
           </div>
 
           {/* Statistiques */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
-            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Classes</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.totalClasses}</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faUsers} className="text-blue-600 text-xl" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border-l-4 border-indigo-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Enseignants</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.totalEnseignants}</p>
-                </div>
-                <div className="bg-indigo-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faChalkboardTeacher} className="text-indigo-600 text-xl" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Étudiants</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.totalEtudiants}</p>
-                </div>
-                <div className="bg-emerald-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faUserGraduate} className="text-emerald-600 text-xl" />
-                </div>
-              </div>
-            </div>
-
-            <a
-              href="/chef/messagerie"
-              className="bg-white rounded-lg border-l-4 border-purple-500 shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Messages non lus</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.messagesNonLus}</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-3 relative">
-                  <FontAwesomeIcon icon={faEnvelope} className="text-purple-600 text-xl" />
-                  {stats.messagesNonLus > 0 && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                  )}
-                </div>
-              </div>
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label="Classes"
+              value={stats.totalClasses}
+              sub="Groupes pédagogiques actifs"
+              icon={faUsers}
+              iconWrapClass="bg-sky-50 text-sky-600"
+            />
+            <KpiCard
+              label="Enseignants"
+              value={stats.totalEnseignants}
+              sub="Corps enseignant actif"
+              icon={faChalkboardTeacher}
+              iconWrapClass="bg-violet-50 text-violet-600"
+            />
+            <KpiCard
+              label="Étudiants"
+              value={stats.totalEtudiants}
+              sub="Inscriptions actives"
+              icon={faUserGraduate}
+              iconWrapClass="bg-emerald-50 text-emerald-600"
+            />
+            <a href="/chef/messagerie" className="block">
+              <KpiCard
+                label="Messages non lus"
+                value={stats.messagesNonLus}
+                sub="Boîte de réception"
+                icon={faEnvelope}
+                iconWrapClass="bg-fuchsia-50 text-fuchsia-600"
+              />
             </a>
           </div>
 
           {/* Grille des graphiques - Disposition élégante */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Répartition des étudiants par filière */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-1 flex items-center gap-2 text-base font-bold text-slate-900">
                 <span className="w-1 h-6 bg-blue-600 rounded"></span>
                 Étudiants par filière (Total: {graphData?.studentsData?.reduce((acc, curr) => acc + curr.value, 0) || 0})
               </h3>
+              <p className="mb-4 text-xs text-slate-500">Répartition des inscriptions actives</p>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -274,12 +268,91 @@ const DashboardChefView = () => {
               </div>
             </div>
 
+            {/* Modules par filière */}
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-1 flex items-center gap-2 text-base font-bold text-slate-900">
+                <span className="w-1 h-6 bg-amber-600 rounded"></span>
+                Modules par filière
+              </h3>
+              <p className="mb-4 text-xs text-slate-500">Volume de modules gérés dans votre département</p>
+              {graphData.modulesParFiliere && graphData.modulesParFiliere.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={graphData.modulesParFiliere}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="filiere" stroke="#64748b" style={{ fontSize: '12px' }} />
+                      <YAxis stroke="#64748b" style={{ fontSize: '12px' }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#fff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value, name) => {
+                          if (name === 'modules') return [`${value}`, 'Modules']
+                          if (name === 'creditsTotal') return [`${value}`, 'Crédits cumulés']
+                          return [value, name]
+                        }}
+                      />
+                      <Bar dataKey="modules" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {graphData.modulesParFiliere.slice(0, 4).map((item) => (
+                      <div
+                        key={item.filiere}
+                        className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                      >
+                        <span className="text-sm font-semibold text-slate-700">{item.filiere}</span>
+                        <span className="text-sm text-slate-600">
+                          <strong className="text-slate-900">{item.modules}</strong> modules · {item.creditsTotal} crédits
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <p>Aucune donnée de modules disponible</p>
+                  <p className="text-sm mt-2">Les modules apparaîtront ici une fois associés aux filières</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Deuxième ligne de graphiques */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Répartition par niveau */}
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-1 flex items-center gap-2 text-base font-bold text-slate-900">
+                <span className="w-1 h-6 bg-indigo-600 rounded"></span>
+                Étudiants par niveau
+              </h3>
+              <p className="mb-4 text-xs text-slate-500">Effectifs regroupés par niveau</p>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={graphData.levelData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="niveau" stroke="#64748b" style={{ fontSize: '14px' }} />
+                  <YAxis stroke="#64748b" style={{ fontSize: '14px' }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Bar dataKey="etudiants" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
             {/* Répartition par genre */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-1 flex items-center gap-2 text-base font-bold text-slate-900">
                 <span className="w-1 h-6 bg-pink-600 rounded"></span>
                 Répartition par genre
               </h3>
+              <p className="mb-4 text-xs text-slate-500">Distribution des étudiants par genre</p>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -310,96 +383,6 @@ const DashboardChefView = () => {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Deuxième ligne de graphiques */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Répartition par niveau */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <span className="w-1 h-6 bg-indigo-600 rounded"></span>
-                Étudiants par niveau
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={graphData.levelData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="niveau" stroke="#64748b" style={{ fontSize: '14px' }} />
-                  <YAxis stroke="#64748b" style={{ fontSize: '14px' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Bar dataKey="etudiants" fill="#6366f1" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Taux de réussite par filière */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <span className="w-1 h-6 bg-green-600 rounded"></span>
-                Taux de réussite par filière
-              </h3>
-              {graphData.tauxReussiteData && graphData.tauxReussiteData.length > 0 ? (
-                <div className="space-y-6 mt-8">
-                  {graphData.tauxReussiteData.map((item, idx) => {
-                    const taux = item.tauxReussite || 0
-                    const colorClass = taux >= 70 ? 'from-green-500 to-green-600' : 
-                                      taux >= 50 ? 'from-yellow-500 to-yellow-600' : 
-                                      'from-red-500 to-red-600'
-                    const textColor = taux >= 70 ? 'text-green-600' : 
-                                     taux >= 50 ? 'text-yellow-600' : 
-                                     'text-red-600'
-                    
-                    return (
-                      <div key={idx} className="space-y-2">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-slate-700">{item.filiere}</span>
-                            {item.etudiantsAvecNotes !== undefined && (
-                              <span className="text-xs text-slate-500">
-                                ({item.etudiantsAvecNotes || 0} étudiant{item.etudiantsAvecNotes !== 1 ? 's' : ''} avec notes)
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <span className={`text-2xl font-bold ${textColor}`}>{taux}%</span>
-                            {item.etudiantsReussis !== undefined && item.etudiantsAvecNotes > 0 && (
-                              <p className="text-xs text-slate-500">
-                                {item.etudiantsReussis}/{item.etudiantsAvecNotes} réussis
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="w-full bg-slate-200 rounded-full h-6 overflow-hidden relative">
-                          <div
-                            className={`bg-gradient-to-r ${colorClass} h-6 rounded-full transition-all duration-500 flex items-center justify-end pr-3`}
-                            style={{ width: `${Math.min(taux, 100)}%` }}
-                          >
-                            {taux > 10 && (
-                              <span className="text-xs font-semibold text-white">{taux}%</span>
-                            )}
-                          </div>
-                          {taux === 0 && item.etudiantsAvecNotes === 0 && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-xs text-slate-400">Aucune note disponible</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <p>Aucune donnée de taux de réussite disponible</p>
-                  <p className="text-sm mt-2">Les notes doivent être saisies pour calculer le taux de réussite</p>
-                </div>
-              )}
             </div>
           </div>
         </main>

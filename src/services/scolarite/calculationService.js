@@ -4,30 +4,17 @@
  */
 
 /**
- * Calcule la moyenne générale pour un semestre
- * 
- * @param {number} totalPoints - Somme des (MoyenneModule * CreditsModule)
- * @param {number} totalCreditsSyllabus - Somme des crédits de TOUS les modules du syllabus pour le semestre
- * @param {number} sumCoefsNotes - Somme des crédits des modules ayant au moins une note
- * @param {string} departementCode - Code du département (ex: 'RSN', 'MTIC')
- * @param {string} filiereCode - Code de la filière (ex: 'RT', 'GI', 'SRIT')
+ * Calcule la moyenne générale pour un semestre.
+ *
+ * Nouvelle règle globale :
+ * Moyenne bulletin = (UE1_credits * UE1_moyenne + UE2_credits * UE2_moyenne) / 30.
+ * Dans notre pipeline, cette expression correspond à totalPoints / 30.
+ *
+ * @param {number} totalPoints - Somme pondérée des notes (moyenne * crédit)
  * @returns {number} La moyenne générale formatée à 2 décimales
  */
-export const calculerMoyenneGenerale = (totalPoints, totalCreditsSyllabus, sumCoefsNotes, departementCode = '', filiereCode = '') => {
-    const dept = (departementCode || '').toUpperCase();
-    const filiere = (filiereCode || '').toUpperCase();
-
-    let moyenne = 0;
-
-    // Formule Spéciale : Certains départements utilisent un diviseur fixe de 30
-    if ((dept === 'RSN' && (filiere === 'RT' || filiere === 'GI')) || dept === 'MTIC') {
-        moyenne = totalPoints / 30;
-    } else {
-        // Formule Standard : Divise par le total des crédits du syllabus (ou crédits avec notes si syllabus non défini)
-        const diviseur = totalCreditsSyllabus > 0 ? totalCreditsSyllabus : (sumCoefsNotes || 1);
-        moyenne = totalPoints / diviseur;
-    }
-
+export const calculerMoyenneGenerale = (totalPoints) => {
+    const moyenne = (Number(totalPoints) || 0) / 30;
     return parseFloat(moyenne.toFixed(2));
 };
 

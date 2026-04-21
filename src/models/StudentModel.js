@@ -38,7 +38,7 @@ export class StudentModel {
   }
 
   get fullName() {
-    return `${this.prenom} ${this.nom}`.toUpperCase()
+    return `${this.nom} ${this.prenom}`.toUpperCase()
   }
 
   get identifiantComplet() {

@@ -34,6 +34,7 @@ export async function generateBulletinPDF(bulletinData, outputPath, includeStamp
 
             // Dessiner le bulletin
             drawHeader(doc)
+            drawWatermark(doc)
             drawTitle(doc, bulletinData.semestre, bulletinData.anneeUniversitaire)
             drawStudentInfo(doc, bulletinData.student, bulletinData.classe, bulletinData.semestre)
             // 4. Grades Table
@@ -56,6 +57,30 @@ export async function generateBulletinPDF(bulletinData, outputPath, includeStamp
             reject(error)
         }
     })
+}
+
+/**
+ * Dessine un filigrane logo au centre du document.
+ * Objectif: style officiel sans gêner la lisibilité.
+ */
+function drawWatermark(doc) {
+    const logoPath = path.join(__dirname, '../../public/images/logo.png')
+    if (!fs.existsSync(logoPath)) return
+
+    const centerX = doc.page.width / 2
+    const centerY = doc.page.height / 2 + 10
+    const watermarkWidth = 360
+    const watermarkHeight = 360
+    const x = centerX - (watermarkWidth / 2)
+    const y = centerY - (watermarkHeight / 2)
+
+    doc.save()
+    // Opacité faible pour préserver la lecture des notes
+    doc.opacity(0.08)
+    // Léger angle pour se rapprocher du rendu "original" fourni
+    doc.rotate(-25, { origin: [centerX, centerY] })
+    doc.image(logoPath, x, y, { width: watermarkWidth, height: watermarkHeight })
+    doc.restore()
 }
 
 /**
@@ -356,7 +381,10 @@ function drawGradesTable(doc, modules, moyenneGeneraleClasse, uesValidees = []) 
                 { width: colWidths[2], align: 'center' })
 
             // Notes
-            const noteValue = module.noteEtudiant ? module.noteEtudiant.toFixed(2) : '-'
+            const hasNote = module.noteEtudiant !== null && module.noteEtudiant !== undefined
+            const noteNumber = hasNote ? Number(module.noteEtudiant) : null
+            const noteValue = hasNote ? noteNumber.toFixed(2) : '-'
+
             doc.fillColor('#000000')
             doc.fontSize(8)
                 .text(noteValue, colPositions[3], currentY + 4, { width: colWidths[3], align: 'center' })
@@ -364,7 +392,9 @@ function drawGradesTable(doc, modules, moyenneGeneraleClasse, uesValidees = []) 
             // Moyenne classe
             doc.fillColor('#000000')
             doc.fontSize(8)
-                .text(module.moyenneClasse ? module.moyenneClasse.toFixed(2) : '-', colPositions[4], currentY + 4,
+                .text((module.moyenneClasse !== null && module.moyenneClasse !== undefined)
+                    ? Number(module.moyenneClasse).toFixed(2)
+                    : '-', colPositions[4], currentY + 4,
                     { width: colWidths[4], align: 'center' })
 
             currentY += rowHeight
@@ -495,15 +525,15 @@ function drawSummary(doc, bulletinData) {
  * Dessine le tableau de validation des crédits avec le nouveau design
  */
 function drawCreditsValidation(doc, uesValidees) {
-    const startY = doc.y + 8 // Passé de 5 à 8
-    const headerHeight = 15 // Passé de 12 à 15
-    const rowHeight = 15 // Passé de 12 à 15
+    const startY = doc.y + 8
+    const headerHeight = 15
+    const rowHeight = 15
     const MARGIN_LEFT = 40
     const TABLE_WIDTH = 515
 
     // En-tête
     doc.rect(MARGIN_LEFT, startY, TABLE_WIDTH, headerHeight).stroke()
-    doc.fontSize(8.5) // Passé de 8 à 8.5
+    doc.fontSize(8)
         .font('Helvetica-Bold')
         .fillColor('#000000')
         .text('État de la Validation des Crédits au Semestre', MARGIN_LEFT, startY + 4, { width: TABLE_WIDTH, align: 'center' })
@@ -521,26 +551,43 @@ function drawCreditsValidation(doc, uesValidees) {
 
             // Ligne 1: Nom UE (Afficher le nom si disponible, sinon le code)
             doc.rect(xPos, currentY, colWidth, rowHeight).stroke()
-            doc.fontSize(8) // Passé de 7 à 8
+            doc.fontSize(7)
                 .font('Helvetica')
                 .fillColor('#000000')
-                .text(ue.nom_ue || ue.ue || `UE ${index + 1}`, xPos + padding, currentY + 4, { width: colWidth - 10, truncate: true })
+                .text(
+                    ue.nom_ue || ue.ue || `UE ${index + 1}`,
+                    xPos + padding,
+                    currentY + 4,
+                    { width: colWidth - 10, height: rowHeight - 4, lineBreak: false, ellipsis: true }
+                )
 
             // Ligne 2: Crédits (Vrai nombre / Total)
             doc.rect(xPos, currentY + rowHeight, colWidth, rowHeight).stroke()
             const creditsText = `${ue.credits || 0} Crédits /${ue.totalCredits || 0}`
-            doc.text(creditsText, xPos + padding, currentY + rowHeight + 4)
+            doc.fontSize(7.5)
+                .font('Helvetica')
+                .text(
+                    creditsText,
+                    xPos + padding,
+                    currentY + rowHeight + 4,
+                    { width: colWidth - 10, height: rowHeight - 4, lineBreak: false, ellipsis: true }
+                )
 
             // Ligne 3: Statut (avec compensation)
             doc.rect(xPos, currentY + (rowHeight * 2), colWidth, rowHeight).stroke()
-            doc.fontSize(8)
+            doc.fontSize(7.2)
                 .font('Helvetica-Bold')
 
             let statusText = 'UE Non Acquise'
             if (ue.status === 'ACQUISE') statusText = 'UE Acquise'
             else if (ue.status === 'ACQUISE_PAR_COMPENSATION') statusText = 'UE Acquise par compensation'
 
-            doc.text(statusText, xPos + padding, currentY + (rowHeight * 2) + 4)
+            doc.text(
+                statusText,
+                xPos + padding,
+                currentY + (rowHeight * 2) + 4,
+                { width: colWidth - 10, height: rowHeight - 4, lineBreak: false, ellipsis: true }
+            )
         }
     })
 

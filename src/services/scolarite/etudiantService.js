@@ -414,7 +414,7 @@ export const getEtudiantByUserId = async (userId) => {
       matricule: etudiant.matricule,
       nom: etudiant.nom,
       prenom: etudiant.prenom,
-      fullName: `${etudiant.prenom} ${etudiant.nom}`,
+      fullName: `${etudiant.nom} ${etudiant.prenom}`,
       email: etudiant.email || utilisateur.email,
       telephone: etudiant.telephone || null,
       adresse: etudiant.adresse || null,
@@ -449,7 +449,7 @@ export const getEtudiantByUserId = async (userId) => {
       })),
       timetable,
       parents: (etudiant.parents || []).map(p => ({
-        fullName: `${p.prenom} ${p.nom}`,
+        fullName: `${p.nom} ${p.prenom}`,
         telephone: p.telephone,
         email: p.email,
         lienParente: p.lien_parente

@@ -876,7 +876,7 @@ const AttestationsView = () => {
                             <tr key={etudiant.id} className="hover:bg-blue-50 transition-colors">
                               <td className="px-6 py-4 text-sm text-slate-800 font-mono">{etudiant.matricule || 'N/A'}</td>
                               <td className="px-6 py-4 text-sm text-slate-800 font-medium">
-                                {etudiant.prenom || ''} {etudiant.nom || ''}
+                                {etudiant.nom || ''} {etudiant.prenom || ''}
                                 {dejaGeneree && (
                                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
                                     Déjà générée

@@ -659,7 +659,7 @@ router.get('/template-excel', authenticate, async (req, res) => {
 
     const wb = XLSX.utils.book_new()
 
-    const headers = ['N°', 'Nom(s)', 'Prénom(s)', 'Date de naissance', 'Lieu de naissance', 'Nationalité', 'Série du BAC', "Année d'obtention", 'Sexe', 'Email', 'Téléphone', 'Adresse']
+    const headers = ['N°', 'Nom(s)', 'Prénom(s) (optionnel)', 'Date de naissance', 'Lieu de naissance', 'Nationalité', 'Série du BAC', "Année d'obtention", 'Sexe', 'Email', 'Téléphone', 'Adresse']
     const colWidths = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 8 }, { wch: 28 }, { wch: 14 }, { wch: 25 }]
     const exemple = ['1', 'MOUANDA', 'Daniela', '10/05/2004', 'Brazzaville', 'Congolaise', 'D', '2022', 'F', 'daniela.mouanda@email.com', '074000001', 'Brazzaville']
 

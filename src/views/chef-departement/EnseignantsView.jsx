@@ -75,7 +75,7 @@ const EnseignantsView = () => {
           
           return {
             ...module,
-            affecteA: affecteA ? `${affecteA.prenom} ${affecteA.nom}` : null,
+            affecteA: affecteA ? `${affecteA.nom} ${affecteA.prenom}` : null,
             affecteAId: affecteA?.id
           }
         })
@@ -287,7 +287,7 @@ const EnseignantsView = () => {
                             <div>
                               <p className="font-semibold text-slate-800">
                                 {enseignant.grade && <span className="text-blue-600 mr-1">{enseignant.grade}</span>}
-                                {enseignant.prenom} {enseignant.nom}
+                                {enseignant.nom} {enseignant.prenom}
                               </p>
                             </div>
                           </div>

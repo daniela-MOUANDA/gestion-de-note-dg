@@ -55,7 +55,7 @@ export const createChefDepartement = async (data, createdBy) => {
     if (existingChef) {
       return {
         success: false,
-        error: `Ce département est déjà assigné à ${existingChef.prenom} ${existingChef.nom}. Un département ne peut être assigné qu'à un seul chef.`
+        error: `Ce département est déjà assigné à ${existingChef.nom} ${existingChef.prenom}. Un département ne peut être assigné qu'à un seul chef.`
       }
     }
 
@@ -122,7 +122,7 @@ export const createChefDepartement = async (data, createdBy) => {
         .insert({
           utilisateur_id: createdBy,
           action: 'Création de chef de département',
-          details: `Chef de département créé : ${prenom} ${nom} (${departement.nom})`,
+          details: `Chef de département créé : ${nom} ${prenom} (${departement.nom})`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })
@@ -299,7 +299,7 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
           if (existingChefWithDept) {
             return {
               success: false,
-              error: `Ce département est déjà assigné à ${existingChefWithDept.prenom} ${existingChefWithDept.nom}. Un département ne peut être assigné qu'à un seul chef.`
+              error: `Ce département est déjà assigné à ${existingChefWithDept.nom} ${existingChefWithDept.prenom}. Un département ne peut être assigné qu'à un seul chef.`
             }
           }
         }
@@ -338,7 +338,7 @@ export const updateChefDepartement = async (id, data, updatedBy) => {
         .insert({
           utilisateur_id: updatedBy,
           action: 'Modification de chef de département',
-          details: `Chef de département modifié : ${utilisateur.prenom} ${utilisateur.nom}`,
+          details: `Chef de département modifié : ${utilisateur.nom} ${utilisateur.prenom}`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })
@@ -415,7 +415,7 @@ export const deleteChefDepartement = async (id, deletedBy) => {
         .insert({
           utilisateur_id: deletedBy,
           action: 'Suppression de chef de département',
-          details: `Chef de département supprimé : ${existingChef.prenom} ${existingChef.nom}`,
+          details: `Chef de département supprimé : ${existingChef.nom} ${existingChef.prenom}`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })
@@ -633,7 +633,8 @@ export const getDepartementStatsGlobales = async (departementId) => {
     const [
       classesCountResult,
       enseignantsCountResult,
-      inscriptionsResult
+      inscriptionsResult,
+      modulesResult
     ] = await Promise.all([
       // Compter les classes
       supabaseAdmin
@@ -665,7 +666,13 @@ export const getDepartementStatsGlobales = async (departementId) => {
           )
         `)
         .in('filiere_id', filiereIds)
-        .eq('statut', 'INSCRIT')
+        .eq('statut', 'INSCRIT'),
+      // Modules du département pour le dashboard
+      supabaseAdmin
+        .from('modules')
+        .select('id, filiere_id, credit')
+        .in('filiere_id', filiereIds)
+        .eq('departement_id', departementId)
     ])
 
     const classesCount = classesCountResult.count || 0
@@ -673,8 +680,21 @@ export const getDepartementStatsGlobales = async (departementId) => {
 
     if (inscriptionsResult.error) throw inscriptionsResult.error
     const inscriptions = inscriptionsResult.data || []
+    if (modulesResult.error) throw modulesResult.error
+    const modulesDepartement = modulesResult.data || []
 
     const totalEtudiants = inscriptions?.length || 0
+
+    // Modules par filière (information de pilotage dashboard)
+    const modulesParFiliere = filieres.map((f) => {
+      const modules = modulesDepartement.filter((m) => m.filiere_id === f.id)
+      const creditsTotal = modules.reduce((acc, m) => acc + (Number(m.credit) || 0), 0)
+      return {
+        filiere: f.code,
+        modules: modules.length,
+        creditsTotal
+      }
+    }).sort((a, b) => b.modules - a.modules)
 
     // 5. Répartition par filière
     const studentsData = filieres.map(f => {
@@ -816,25 +836,18 @@ export const getDepartementStatsGlobales = async (departementId) => {
           continue
         }
 
-        // Grouper par étudiant et semestre
-        const notesParEtudiantSemestre = {}
+        // Grouper par étudiant puis par semestre (évite de compter 2× la même personne S1/S2)
+        const notesParEtudiant = {}
         notesFiliere.forEach(note => {
-          const key = `${note.etudiant_id}_${note.semestre}`
-          if (!notesParEtudiantSemestre[key]) {
-            notesParEtudiantSemestre[key] = []
-          }
-          notesParEtudiantSemestre[key].push(note)
+          const eid = note.etudiant_id
+          if (!notesParEtudiant[eid]) notesParEtudiant[eid] = {}
+          const sem = note.semestre
+          if (!notesParEtudiant[eid][sem]) notesParEtudiant[eid][sem] = []
+          notesParEtudiant[eid][sem].push(note)
         })
 
-        let etudiantsReussis = 0
-        let etudiantsAvecNotes = 0
-        const semestres = [...new Set(modulesFiliere.map(m => m.semestre))]
-
-        Object.keys(notesParEtudiantSemestre).forEach(key => {
-          const [etudiantId, semestre] = key.split('_')
-          const notesEtudiant = notesParEtudiantSemestre[key]
+        const moyenneSemestre = (notesEtudiant, semestre) => {
           const modulesSemestre = modulesFiliere.filter(m => m.semestre === semestre)
-
           let totalPointsSemestre = 0
           let totalCreditsSemestre = 0
 
@@ -866,17 +879,34 @@ export const getDepartementStatsGlobales = async (departementId) => {
             }
           })
 
-          if (totalCreditsSemestre > 0) {
-            const moyenneGenerale = totalPointsSemestre / totalCreditsSemestre
-            if (moyenneGenerale >= 10) {
-              etudiantsReussis++
-            }
-            etudiantsAvecNotes++
-          }
-        })
+          if (totalCreditsSemestre <= 0) return null
+          return totalPointsSemestre / totalCreditsSemestre
+        }
 
-        const tauxReussite = etudiantsAvecNotes > 0
-          ? Math.round((etudiantsReussis / etudiantsAvecNotes) * 100)
+        let etudiantsReussis = 0
+        let etudiantsAvecNotes = 0
+
+        for (const etudiantId of Object.keys(notesParEtudiant)) {
+          const parSem = notesParEtudiant[etudiantId]
+          let aDesNotesSaisies = false
+          let estReussi = true
+
+          for (const semestre of Object.keys(parSem)) {
+            const mg = moyenneSemestre(parSem[semestre], semestre)
+            if (mg === null) continue
+            aDesNotesSaisies = true
+            if (mg < 10) estReussi = false
+          }
+
+          if (aDesNotesSaisies) {
+            etudiantsAvecNotes++
+            if (estReussi) etudiantsReussis++
+          }
+        }
+
+        // Taux sur l’effectif inscrit dans les classes de la filière (pas sur le double comptage semestriel)
+        const tauxReussite = totalEtudiantsFiliere > 0
+          ? Math.round((etudiantsReussis / totalEtudiantsFiliere) * 100)
           : 0
 
         tauxReussiteData.push({
@@ -907,6 +937,7 @@ export const getDepartementStatsGlobales = async (departementId) => {
         totalEnseignants: enseignantsCount || 0,
         totalEtudiants: totalEtudiants,
         studentsData,
+        modulesParFiliere,
         levelData,
         genreData,
         tauxReussiteData

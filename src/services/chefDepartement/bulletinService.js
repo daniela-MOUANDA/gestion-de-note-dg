@@ -5,6 +5,16 @@ import {
   getCurrentAcademicYearLabel
 } from '../../utils/academicYear.js'
 
+// La table bulletins utilise un enum semestre limité à S1/S2.
+// Pour les niveaux L2/L3 (S3..S6), on projette vers le semestre relatif.
+const normalizeSemestreForBulletinEnum = (semestre) => {
+  const value = String(semestre || '').toUpperCase().trim()
+  const match = value.match(/^S([1-6])$/)
+  if (!match) return value
+  const n = Number(match[1])
+  return n % 2 === 0 ? 'S2' : 'S1'
+}
+
 // Récupérer l'état de toutes les classes pour un semestre donné
 export const getEtatBulletinsToutesClasses = async (departementId, semestre = null) => {
   try {
@@ -26,9 +36,27 @@ export const getEtatBulletinsToutesClasses = async (departementId, semestre = nu
       return { success: true, classes: [] }
     }
 
-    // Pour chaque classe, calculer l'état
-    const classesAvecEtat = await Promise.all(
-      classes.map(async (classe) => {
+    // Limiter la concurrence pour éviter de saturer Supabase
+    // (la version full Promise.all sur toutes les classes peut dépasser le timeout HTTP)
+    const runWithConcurrency = async (items, worker, limit = 3) => {
+      const results = new Array(items.length)
+      let idx = 0
+
+      const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (idx < items.length) {
+          const current = idx++
+          results[current] = await worker(items[current], current)
+        }
+      })
+
+      await Promise.all(runners)
+      return results
+    }
+
+    // Pour chaque classe, calculer l'état (avec concurrence limitée)
+    const classesAvecEtat = await runWithConcurrency(
+      classes,
+      async (classe) => {
         const niveauCode = classe.niveaux?.code
         if (!niveauCode) return null
 
@@ -42,11 +70,13 @@ export const getEtatBulletinsToutesClasses = async (departementId, semestre = nu
         // Si un semestre est spécifié, ne traiter que ce semestre
         const semestresATraiter = semestre ? [semestre] : semestresAutorises
 
-        const etatsParSemestre = await Promise.all(
-          semestresATraiter.map(async (sem) => {
-            const etat = await verifierEtatBulletins(classe.id, sem, departementId)
+        const etatsParSemestre = await runWithConcurrency(
+          semestresATraiter,
+          async (sem) => {
+            const etat = await verifierEtatBulletins(classe.id, sem, departementId, true)
             return { semestre: sem, etat }
-          })
+          },
+          2
         )
 
         // S'assurer que chaque état de semestre a le bon nombre de modules requis
@@ -80,7 +110,8 @@ export const getEtatBulletinsToutesClasses = async (departementId, semestre = nu
           nombreModulesRequis: nombreModulesRequisClasse, // Nombre de modules requis de la classe
           semestres: semestresAvecEtat
         }
-      })
+      },
+      3
     )
 
     return {
@@ -97,7 +128,7 @@ export const getEtatBulletinsToutesClasses = async (departementId, semestre = nu
 }
 
 // Vérifier l'état de préparation des bulletins pour une classe et un semestre
-export const verifierEtatBulletins = async (classeId, semestre, departementId) => {
+export const verifierEtatBulletins = async (classeId, semestre, departementId, modeRapide = false) => {
   try {
     // 1. Récupérer la classe et son nombre de modules requis
     // Utiliser .select() avec toutes les colonnes nécessaires et forcer le rechargement
@@ -238,10 +269,10 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
       }
     }
 
-    // 4. Si on a déjà les données du statut, les utiliser directement
-    // Sinon, calculer en temps réel (fallback)
-    if (!statutNotes || statutNotes.nombre_modules_avec_notes === undefined) {
-      console.log(`⚠️ Pas de statut en cache, calcul en temps réel...`)
+    // 4. Recalcul coûteux depuis les notes réelles (désactivé en mode rapide liste).
+    // En mode rapide, on s'appuie sur le cache statut_notes_classes pour éviter les timeouts.
+    if (!modeRapide) {
+      console.log('🔁 Recalcul en temps réel de l\'état des notes...')
 
       // 4. Pour chaque module, vérifier si tous les étudiants ont des notes
       modulesAvecNotesCompletes = 0
@@ -260,7 +291,7 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
         // Récupérer les notes pour ce module
         const { data: notes, error: notesError } = await supabaseAdmin
           .from('notes')
-          .select('etudiant_id, etudiantId, evaluation_id, evaluationId')
+          .select('etudiant_id, evaluation_id')
           .eq('module_id', moduleId)
           .eq('classe_id', classeId)
           .eq('semestre', semestre)
@@ -273,10 +304,10 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
 
         console.log(`📝 Module ${moduleId}: ${notes?.length || 0} notes trouvées`)
 
-        // Normaliser les notes pour gérer les deux formats
+        // Notes au format DB (snake_case)
         const notesNormalisees = (notes || []).map(note => ({
-          etudiant_id: note.etudiant_id || note.etudiantId,
-          evaluation_id: note.evaluation_id || note.evaluationId
+          etudiant_id: note.etudiant_id,
+          evaluation_id: note.evaluation_id
         }))
 
         // Compter ce module comme ayant des notes si au moins une note existe
@@ -458,7 +489,9 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
         etudiantsAvecNotesCompletes = etudiantsComplets.size
         console.log(`👥 Étudiants avec des notes pour tous les modules: ${etudiantsAvecNotesCompletes}/${nombreEtudiants}`)
       }
-    } // Fin du if (!statutNotes || ...) - calcul en temps réel
+    } else {
+      console.log(`⚡ Mode rapide: statut cache utilisé pour ${classe.code} - ${semestre}`)
+    } // Fin du recalcul en temps réel / mode rapide
 
     // 6. Calculer le pourcentage de notes saisies
     // Utiliser le nombre de modules requis de la classe (nombre_modules) comme référence principale
@@ -468,10 +501,15 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
     console.log(`   - Modules requis (depuis classe.nombre_modules): ${nombreModulesRequis}`)
     console.log(`   - Modules disponibles dans la base: ${nombreModulesDisponibles}`)
 
-    // Pour le calcul du pourcentage, utiliser le nombre de modules requis s'il est défini
-    // Sinon utiliser le nombre de modules disponibles
-    // Le pourcentage doit refléter le progrès vers l'objectif (nombre_modules)
-    const nombreModulesPourCalcul = nombreModulesRequis > 0 ? nombreModulesRequis : nombreModulesDisponibles
+    // Pourcentage/progression :
+    // - si nombre_modules est défini mais supérieur aux modules réellement disponibles,
+    //   on se base sur les modules disponibles pour éviter un faux blocage (ex: 12/12 affiché mais 60%).
+    // - sinon on garde l'objectif configuré.
+    const nombreModulesPourCalcul = nombreModulesDisponibles > 0
+      ? (nombreModulesRequis > 0
+          ? Math.min(nombreModulesRequis, nombreModulesDisponibles)
+          : nombreModulesDisponibles)
+      : nombreModulesRequis
 
     const pourcentageNotes = nombreModulesPourCalcul > 0
       ? Math.round((modulesAvecNotesCompletes / nombreModulesPourCalcul) * 100)
@@ -518,8 +556,13 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
     //   - Tous les étudiants doivent avoir toutes leurs notes
     //   - Il doit y avoir au moins un étudiant et un module
 
-    // Déterminer le nombre de modules de référence
-    const modulesReference = nombreModulesRequis > 0 ? nombreModulesRequis : nombreModulesDisponibles
+    // Déterminer le nombre de modules de référence pour autoriser la génération.
+    // Même logique que pour le pourcentage: on ne peut pas exiger plus que les modules disponibles.
+    const modulesReference = nombreModulesDisponibles > 0
+      ? (nombreModulesRequis > 0
+          ? Math.min(nombreModulesRequis, nombreModulesDisponibles)
+          : nombreModulesDisponibles)
+      : nombreModulesRequis
 
     const pretPourGeneration = modulesAvecNotesCompletes >= modulesReference &&
       modulesReference > 0 &&
@@ -532,12 +575,13 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId) =
     let bulletinsExistent = false
     let nombreBulletinsGeneres = 0
     if (promotion) {
+      const semestreBulletin = normalizeSemestreForBulletinEnum(semestre)
       const { count } = await supabaseAdmin
         .from('bulletins')
         .select('*', { count: 'exact', head: true })
         .eq('promotion_id', promotion.id)
         .eq('classe_id', classeId)
-        .eq('semestre', semestre)
+        .eq('semestre', semestreBulletin)
 
       bulletinsExistent = (count || 0) > 0
       nombreBulletinsGeneres = count || 0
@@ -650,11 +694,13 @@ export const genererBulletins = async (classeId, semestre, departementId, chefDe
     }
 
     // 4. Vérifier si des bulletins existent déjà et les supprimer pour régénérer
+    const semestreBulletin = normalizeSemestreForBulletinEnum(semestre)
+
     const { data: bulletinsExistants } = await supabaseAdmin
       .from('bulletins')
       .select('id')
       .eq('classe_id', classeId)
-      .eq('semestre', semestre)
+      .eq('semestre', semestreBulletin)
       .eq('promotion_id', promotion.id)
       .in('etudiant_id', etudiantIds)
 
@@ -672,7 +718,7 @@ export const genererBulletins = async (classeId, semestre, departementId, chefDe
       etudiant_id: etudiantId,
       promotion_id: promotion.id,
       classe_id: classeId,
-      semestre,
+      semestre: semestreBulletin,
       annee_academique: promotion.annee,
       statut_visa: 'EN_ATTENTE',
       date_generation: new Date().toISOString(),

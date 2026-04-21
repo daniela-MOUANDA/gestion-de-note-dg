@@ -102,7 +102,7 @@ const MessagerieScolareView = () => {
   if (messageSent) {
     let destinataires = ''
     if (typeMessage === 'individuel') {
-      destinataires = `${selectedEtudiant.prenom} ${selectedEtudiant.nom}`
+      destinataires = `${selectedEtudiant.nom} ${selectedEtudiant.prenom}`
     } else if (typeMessage === 'groupe') {
       const classes = getClasses(selectedFiliere, selectedClasse.split('-')[1].charAt(0))
       const classe = classes.find(c => c.id === selectedClasse)
@@ -377,7 +377,7 @@ const MessagerieScolareView = () => {
                       </div>
                       <div className="flex-1">
                         <div className="font-bold text-slate-800 group-hover:text-blue-600">
-                          {etudiant.prenom} {etudiant.nom}
+                          {etudiant.nom} {etudiant.prenom}
                         </div>
                         <div className="text-sm text-slate-600">{etudiant.matricule}</div>
                         <div className="text-xs text-slate-500">{etudiant.email}</div>
@@ -397,7 +397,7 @@ const MessagerieScolareView = () => {
   const getDestinatairesInfo = () => {
     if (typeMessage === 'individuel' && selectedEtudiant) {
       return {
-        titre: `Message à ${selectedEtudiant.prenom} ${selectedEtudiant.nom}`,
+        titre: `Message à ${selectedEtudiant.nom} ${selectedEtudiant.prenom}`,
         description: `Classe ${selectedClasse} • ${selectedEtudiant.email}`
       }
     } else if (typeMessage === 'groupe' && selectedClasse) {

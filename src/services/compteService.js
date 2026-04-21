@@ -120,7 +120,7 @@ export const createCompte = async (data, createdBy) => {
         .insert({
           utilisateur_id: createdBy,
           action: 'Création de compte',
-          details: `Compte créé pour ${prenom} ${nom} (${roleCode})`,
+          details: `Compte créé pour ${nom} ${prenom} (${roleCode})`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })
@@ -304,7 +304,7 @@ export const updateCompte = async (id, data, updatedBy) => {
         .insert({
           utilisateur_id: updatedBy,
           action: 'Modification de compte',
-          details: `Compte modifié pour ${utilisateur.prenom} ${utilisateur.nom}`,
+          details: `Compte modifié pour ${utilisateur.nom} ${utilisateur.prenom}`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })
@@ -368,7 +368,7 @@ export const deleteCompte = async (id, deletedBy) => {
         .insert({
           utilisateur_id: deletedBy,
           action: 'Suppression de compte',
-          details: `Compte supprimé pour ${existingCompte.prenom} ${existingCompte.nom}`,
+          details: `Compte supprimé pour ${existingCompte.nom} ${existingCompte.prenom}`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })
@@ -406,7 +406,7 @@ export const toggleActif = async (id, actif, updatedBy) => {
         .insert({
           utilisateur_id: updatedBy,
           action: actif ? 'Activation de compte' : 'Désactivation de compte',
-          details: `Compte ${actif ? 'activé' : 'désactivé'} pour ${utilisateur.prenom} ${utilisateur.nom}`,
+          details: `Compte ${actif ? 'activé' : 'désactivé'} pour ${utilisateur.nom} ${utilisateur.prenom}`,
           type_action: 'CONNEXION',
           date_action: new Date().toISOString()
         })

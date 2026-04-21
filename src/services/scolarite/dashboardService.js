@@ -163,7 +163,7 @@ export const getChefDashboardStats = async () => {
       connexionsAujourdhui: [],
       dernieresConnexions: (dernieresConnexions || []).map(u => ({
         id: u.id,
-        nom: `${u.prenom} ${u.nom}`,
+        nom: `${u.nom} ${u.prenom}`,
         role: u.roles?.code === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité',
         date: u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleDateString('fr-FR') : 'N/A',
         heure: u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'N/A',
@@ -428,36 +428,74 @@ export const getAgentDashboardStats = async () => {
     const inscrits = etudiantsInscrits || 0
     const tauxInscription = total > 0 ? Math.round((inscrits / total) * 100) : 0
 
-    // Répartition par filière
+    // Données inscriptions pour analyses croisées
+    const { data: inscriptionsRaw } = await supabaseAdmin
+      .from('inscriptions')
+      .select('filiere_id, statut, type_inscription')
+      .eq('type_inscription', 'INSCRIPTION')
+
+    // Référentiel filières
     const { data: filieres } = await supabaseAdmin
       .from('filieres')
-      .select('id, nom')
+      .select('id, nom, code')
 
     const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4']
     const dataParFiliere = []
+    const filiereStatusMatrix = []
     
     for (let i = 0; i < (filieres || []).length; i++) {
       const filiere = filieres[i]
-      const { count } = await supabaseAdmin
-        .from('inscriptions')
-        .select('*', { count: 'exact', head: true })
-        .eq('statut', 'INSCRIT')
-        .eq('filiere_id', filiere.id)
-      
-      if (count && count > 0) {
+      const inscriptionsFiliere = (inscriptionsRaw || []).filter((i) => i.filiere_id === filiere.id)
+      const totalFiliere = inscriptionsFiliere.length
+      const inscritsFiliere = inscriptionsFiliere.filter((i) => i.statut === 'INSCRIT').length
+      const attenteFiliere = inscriptionsFiliere.filter((i) => i.statut === 'EN_ATTENTE').length
+      const tauxConversion = totalFiliere > 0 ? Math.round((inscritsFiliere / totalFiliere) * 100) : 0
+
+      if (inscritsFiliere > 0) {
         dataParFiliere.push({
-          name: filiere.nom,
-          value: count,
+          name: filiere.code || filiere.nom,
+          value: inscritsFiliere,
           color: colors[i % colors.length]
+        })
+      }
+
+      if (totalFiliere > 0 || inscritsFiliere > 0 || attenteFiliere > 0) {
+        filiereStatusMatrix.push({
+          filiere: filiere.code || filiere.nom,
+          admis: totalFiliere,
+          inscrits: inscritsFiliere,
+          enAttente: attenteFiliere,
+          tauxConversion
         })
       }
     }
     dataParFiliere.sort((a, b) => b.value - a.value)
+    filiereStatusMatrix.sort((a, b) => b.admis - a.admis)
 
-    // Statut des candidats
-    const dataStatut = [
-      { name: 'Inscrits', value: inscrits, color: '#10B981' },
-      { name: 'En attente', value: enAttente || 0, color: '#F59E0B' }
+    // Répartition par genre (sur inscrits)
+    const { data: inscritsAvecSexe } = await supabaseAdmin
+      .from('inscriptions')
+      .select('etudiants(sexe)')
+      .eq('statut', 'INSCRIT')
+
+    let masculin = 0
+    let feminin = 0
+    ;(inscritsAvecSexe || []).forEach((row) => {
+      const sexe = row?.etudiants?.sexe
+      if (sexe === 'M') masculin++
+      if (sexe === 'F') feminin++
+    })
+    const dataGenre = [
+      { name: 'Masculin', value: masculin, color: '#3B82F6' },
+      { name: 'Féminin', value: feminin, color: '#EC4899' }
+    ].filter((g) => g.value > 0)
+
+    // Funnel opérationnel
+    const dossiersComplets = inscrits + (enAttente || 0)
+    const funnelData = [
+      { step: 'Candidats admis', value: total },
+      { step: 'Dossiers traités', value: dossiersComplets },
+      { step: 'Inscriptions finalisées', value: inscrits }
     ]
 
     // Inscriptions par mois (6 derniers mois)
@@ -485,6 +523,26 @@ export const getAgentDashboardStats = async () => {
       })
     }
 
+    // Alertes rapides
+    const filiereAttenteMax = [...filiereStatusMatrix].sort((a, b) => b.enAttente - a.enAttente)[0]
+    const filiereFaibleConversion = [...filiereStatusMatrix].sort((a, b) => a.tauxConversion - b.tauxConversion)[0]
+    const alertes = [
+      filiereAttenteMax && filiereAttenteMax.enAttente > 0
+        ? {
+          type: 'warning',
+          titre: `Attente élevée: ${filiereAttenteMax.filiere}`,
+          detail: `${filiereAttenteMax.enAttente} dossier(s) en attente`
+        }
+        : null,
+      filiereFaibleConversion
+        ? {
+          type: 'info',
+          titre: `Conversion faible: ${filiereFaibleConversion.filiere}`,
+          detail: `Taux conversion ${filiereFaibleConversion.tauxConversion}%`
+        }
+        : null
+    ].filter(Boolean)
+
     return {
       stats: {
         candidatsAdmis: total,
@@ -494,8 +552,11 @@ export const getAgentDashboardStats = async () => {
         tauxInscription
       },
       dataParFiliere,
-      dataStatut,
-      inscriptionsParSemaine: inscriptionsParMois
+      dataGenre,
+      inscriptionsParSemaine: inscriptionsParMois,
+      funnelData,
+      filiereStatusMatrix,
+      alertes
     }
   } catch (error) {
     console.error('Erreur lors de la récupération des statistiques du dashboard agent:', error)

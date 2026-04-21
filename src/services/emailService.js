@@ -2,40 +2,78 @@ import nodemailer from 'nodemailer'
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import dns from 'node:dns'
 
-// Charger les variables d'environnement
+// Charger les variables d'environnement (même logique que server/index.js)
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-// Charger .env depuis la racine du projet (2 niveaux au-dessus de src/services)
-dotenv.config({ path: path.resolve(__dirname, '../../.env') })
+const projectRoot = path.resolve(__dirname, '../..')
+dotenv.config({ path: path.join(projectRoot, '.env') })
+dotenv.config({ path: path.join(projectRoot, 'server', '.env') })
+
+/** Réduit les blocages si la route IPv6 vers SMTP est cassée (timeouts bizarres vers Gmail). */
+if (process.env.SMTP_IPV4_FIRST === '1' || process.env.SMTP_IPV4_FIRST === 'true') {
+  try {
+    dns.setDefaultResultOrder('ipv4first')
+    console.log('📧 SMTP : priorité IPv4 (SMTP_IPV4_FIRST)')
+  } catch (e) {
+    console.warn('📧 SMTP : SMTP_IPV4_FIRST ignoré —', e.message)
+  }
+}
+
+function escapeHtml(s) {
+  if (s == null || s === '') return ''
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 
 // Configuration du transporteur email
 const createTransporter = () => {
   const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER
   const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD
   const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com'
-  const smtpPort = parseInt(process.env.SMTP_PORT || '587')
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10)
   const isSecure = smtpPort === 465
 
   if (!smtpUser || !smtpPass) {
     throw new Error('Configuration SMTP incomplète: SMTP_USER et SMTP_PASS sont requis')
   }
 
+  const connectionTimeout = parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || '45000', 10)
+  const greetingTimeout = parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || String(connectionTimeout), 10)
+  const socketTimeout = parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || String(connectionTimeout), 10)
+
   // Configuration du transporteur
   return nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
-    secure: isSecure, // true pour 465, false pour les autres ports
+    secure: isSecure, // true pour 465 (SSL direct), false pour 587 (STARTTLS)
     auth: {
       user: smtpUser,
       pass: smtpPass
     },
+    connectionTimeout,
+    greetingTimeout,
+    socketTimeout,
     tls: {
       rejectUnauthorized: false
     },
-    debug: process.env.NODE_ENV === 'development', // Activer le debug en développement
-    logger: process.env.NODE_ENV === 'development' // Logger les actions en développement
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development'
   })
+}
+
+/** Message d’aide si le réseau bloque la sortie vers Gmail */
+export function formatSmtpTimeoutHint(err) {
+  const msg = err?.message || String(err)
+  if (!/ETIMEDOUT|ESOCKET|ECONNREFUSED/i.test(msg)) return null
+  return (
+    'Connexion SMTP impossible (réseau / pare-feu). Essayez : (1) SMTP_PORT=465 avec smtp.gmail.com, ' +
+    '(2) ajoutez SMTP_IPV4_FIRST=1 dans .env, (3) autre réseau / désactiver VPN / autoriser Node en sortie sur le port choisi.'
+  )
 }
 
 /**
@@ -86,7 +124,7 @@ export const sendDocumentRejectionNotification = async (etudiant, documentsRejet
     </div>
     
     <div class="content">
-      <p style="font-size: 16px;">Bonjour <strong>${etudiant.prenom} ${etudiant.nom}</strong>,</p>
+      <p style="font-size: 16px;">Bonjour <strong>${etudiant.nom} ${etudiant.prenom}</strong>,</p>
       
       <p style="font-size: 15px; line-height: 1.7;">
         Après vérification de votre dossier d'inscription, notre service de scolarité a identifié que 
@@ -328,7 +366,7 @@ export const sendStudentCredentials = async (etudiant, password, matricule) => {
     </div>
     
     <div class="content">
-      <p class="welcome-text">Bonjour <strong>${etudiant.prenom} ${etudiant.nom}</strong>,</p>
+      <p class="welcome-text">Bonjour <strong>${etudiant.nom} ${etudiant.prenom}</strong>,</p>
       
       <p class="welcome-text">
         Nous sommes ravis de vous confirmer votre inscription. Votre compte étudiant a été créé avec succès.
@@ -401,7 +439,7 @@ export const sendStudentCredentials = async (etudiant, password, matricule) => {
       subject: '🎓 INPTIC - Vos identifiants de connexion',
       html: emailContent,
       text: `
-Bonjour ${etudiant.prenom} ${etudiant.nom},
+Bonjour ${etudiant.nom} ${etudiant.prenom},
 
 Votre inscription à l'INPTIC a été finalisée avec succès.
 
@@ -446,6 +484,156 @@ Service de Scolarité - INPTIC
         response: error.response
       }
     }
+  }
+}
+
+/**
+ * Email de bienvenue + identifiants pour un coordinateur pédagogique (espace département).
+ */
+export const sendCoordinatorWelcomeEmail = async ({
+  prenom,
+  nom,
+  email: toEmail,
+  motDePasse,
+  departementNom,
+  chefPrenom,
+  chefNom
+}) => {
+  try {
+    if (!toEmail) {
+      return { success: false, error: 'Adresse email destinataire manquante' }
+    }
+
+    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER
+    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')
+    const loginUrl = `${frontendUrl}/login`
+
+    if (!smtpUser || !smtpPass) {
+      console.warn('⚠️ SMTP non configuré — email coordinateur non envoyé (compte créé quand même).')
+      console.log(`   Destinataire: ${toEmail} | Mot de passe communiqué hors email uniquement.`)
+      return { success: false, error: 'SMTP non configuré' }
+    }
+
+    let transporter
+    try {
+      transporter = createTransporter()
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
+
+    try {
+      await transporter.verify()
+      console.log('✅ SMTP (coordinateur) : connexion vérifiée')
+    } catch (verifyErr) {
+      console.warn('⚠️ SMTP verify coordinateur:', verifyErr.message)
+    }
+
+    const dept = escapeHtml(departementNom || 'votre département')
+    const prenomH = escapeHtml(prenom)
+    const nomH = escapeHtml(nom)
+    const toEmailH = escapeHtml(toEmail)
+    const passH = escapeHtml(motDePasse)
+    const chefLigne =
+      chefPrenom && chefNom
+        ? `par <strong>${escapeHtml(chefNom)} ${escapeHtml(chefPrenom)}</strong>, chef de département`
+        : 'par le chef de votre département'
+
+    const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.12);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:#fff;padding:28px 24px;text-align:center;">
+            <h1 style="margin:0;font-size:22px;font-weight:700;">Votre accès coordinateur pédagogique</h1>
+            <p style="margin:12px 0 0;font-size:14px;opacity:0.95;">Plateforme de gestion des notes — INPTIC</p>
+          </td>
+        </tr>
+        <tr><td style="padding:28px 24px;">
+          <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Bonjour <strong>${nomH} ${prenomH}</strong>,</p>
+          <p style="font-size:15px;line-height:1.7;color:#334155;margin:0 0 20px;">
+            Un compte <strong>coordinateur pédagogique</strong> vient d’être créé pour vous sur le département
+            <strong>${dept}</strong>, ${chefLigne}. Vous disposez des mêmes accès opérationnels que le chef sur cet espace
+            (saisie des notes, bulletins, planches, etc.), avec <strong>votre propre identifiant</strong> pour la traçabilité et des sessions distinctes.
+          </p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #3b82f6;border-radius:8px;padding:20px;margin:24px 0;">
+            <h2 style="margin:0 0 14px;font-size:17px;color:#1e3a8a;">Identifiants de connexion</h2>
+            <p style="margin:8px 0;font-size:14px;"><span style="color:#64748b;width:140px;display:inline-block;">Adresse e-mail</span>
+              <strong style="font-family:Consolas,monospace;">${toEmailH}</strong></p>
+            <p style="margin:8px 0;font-size:14px;"><span style="color:#64748b;width:140px;display:inline-block;">Mot de passe</span>
+              <strong style="font-family:Consolas,monospace;background:#e2e8f0;padding:2px 8px;border-radius:4px;">${passH}</strong></p>
+          </div>
+          <p style="font-size:14px;color:#64748b;margin:0 0 20px;">
+            Connectez-vous via la page <strong>administration</strong> (même page que les personnels) :
+          </p>
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${loginUrl}" style="display:inline-block;background:#2563eb;color:#fff!important;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px;">
+              Ouvrir la page de connexion
+            </a>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;font-size:13px;color:#92400e;margin-top:24px;">
+            <strong>Sécurité :</strong> gardez ces identifiants confidentiels. Changez votre mot de passe après la première connexion
+            (Profil / Paramètres). Ne partagez pas le compte du chef : chaque personne doit utiliser son propre accès.
+          </div>
+        </td></tr>
+        <tr><td style="background:#f8fafc;padding:18px 24px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;">
+          <p style="margin:4px 0;"><strong>INPTIC</strong> — Institut National de la Poste, des Technologies de l’Information et de la Communication</p>
+          <p style="margin:4px 0;">Message automatique, merci de ne pas répondre directement à cet e-mail.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+    const deptPlain = String(departementNom || 'votre département')
+    const text = `
+Bonjour ${nom} ${prenom},
+
+Votre compte coordinateur pédagogique pour le département ${deptPlain} a été créé sur la plateforme INPTIC.
+
+Identifiants :
+- E-mail (connexion) : ${toEmail}
+- Mot de passe : ${motDePasse}
+
+Page de connexion (administration) : ${loginUrl}
+
+Sécurité : changez votre mot de passe après la première connexion et ne communiquez pas ce message.
+
+INPTIC
+`.trim()
+
+    const fromName = process.env.SMTP_FROM_NAME || 'INPTIC - Plateforme pédagogique'
+    const info = await transporter.sendMail({
+      from: `"${fromName}" <${smtpUser}>`,
+      to: toEmail,
+      subject: 'INPTIC - Vos acces coordinateur pedagogique',
+      text,
+      html,
+      encoding: 'utf-8'
+    })
+
+    if (info.rejected && info.rejected.length > 0) {
+      console.error('❌ Email coordinateur refusé pour:', info.rejected)
+      return { success: false, error: `Envoi refusé pour : ${info.rejected.join(', ')}` }
+    }
+
+    console.log(`✅ Email coordinateur envoyé à ${toEmail}`, info.messageId || '')
+    return { success: true }
+  } catch (error) {
+    const detail =
+      error.response ||
+      error.responseCode ||
+      error.code ||
+      ''
+    const hint = formatSmtpTimeoutHint(error)
+    console.error('❌ Erreur envoi email coordinateur:', error.message, detail, hint || '')
+    const msg = error.message || String(detail) || 'Erreur SMTP'
+    return { success: false, error: hint ? `${msg} — ${hint}` : msg }
   }
 }
 

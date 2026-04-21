@@ -95,7 +95,7 @@ export const getAllEtudiantsAvecMoyennes = async (page = 1, limit = 10, filters 
           etudiant.matricule?.toLowerCase().includes(searchLower) ||
           etudiant.nom?.toLowerCase().includes(searchLower) ||
           etudiant.prenom?.toLowerCase().includes(searchLower) ||
-          `${etudiant.prenom} ${etudiant.nom}`.toLowerCase().includes(searchLower)
+          `${etudiant.nom} ${etudiant.prenom}`.toLowerCase().includes(searchLower)
         )
       })
     }

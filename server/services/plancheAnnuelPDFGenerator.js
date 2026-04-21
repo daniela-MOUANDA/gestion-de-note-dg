@@ -163,7 +163,7 @@ function drawAnnualTable(doc, data, startX, startY, totalWidth) {
         lx += subWidth
 
         doc.rect(lx, currentY, subWidth, rowH).stroke()
-        doc.fontSize(6).text(s.annuel.decision.toUpperCase(), lx, currentY + 8, { width: subWidth, align: 'center' }).fontSize(8)
+        doc.fontSize(5).text(String(s.annuel.decision || ''), lx, currentY + 4, { width: subWidth, align: 'center' }).fontSize(8)
 
         currentY += rowH
         if (currentY > 780) {

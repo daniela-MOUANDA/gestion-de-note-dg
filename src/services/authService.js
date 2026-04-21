@@ -61,7 +61,7 @@ export const authenticateUser = async (email, password, matricule = null) => {
           .single()
 
         if (etudSeul) {
-          console.log(`💡 Note: L'étudiant ${etudSeul.prenom} ${etudSeul.nom} existe mais n'a pas d'inscription valide.`)
+          console.log(`💡 Note: L'étudiant ${etudSeul.nom} ${etudSeul.prenom} existe mais n'a pas d'inscription valide.`)
           return {
             success: false,
             error: "Votre inscription n'est pas encore activée. Veuillez contacter la scolarité."
@@ -515,10 +515,20 @@ export const verifyToken = async (token, shouldRefresh = false) => {
         }
       }
 
-      console.error('❌ Token mismatch pour l\'utilisateur:', utilisateur.email)
-      return {
-        valid: false,
-        error: 'Token invalide. Une autre session est active. Veuillez vous reconnecter.'
+      // Auto-résolution de session : si le JWT est valide et correspond à l'utilisateur,
+      // on rattache cette session au token courant au lieu de bloquer l'accès.
+      console.warn('⚠️ Token mismatch détecté, rattachement automatique de la session pour:', utilisateur.email)
+      const { error: tokenUpdateError } = await supabaseAdmin
+        .from('utilisateurs')
+        .update({ token })
+        .eq('id', utilisateur.id)
+
+      if (tokenUpdateError) {
+        console.error('❌ Échec du rattachement de session:', tokenUpdateError)
+        return {
+          valid: false,
+          error: 'Token invalide. Une autre session est active. Veuillez vous reconnecter.'
+        }
       }
     }
 

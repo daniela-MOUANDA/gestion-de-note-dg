@@ -150,7 +150,7 @@ const AdminSidebar = () => {
                 onClose={() => !isLoggingOut && setShowLogoutModal(false)}
                 type="warning"
                 title="Confirmer la déconnexion"
-                message={`Êtes-vous sûr de vouloir vous déconnecter${user ? `, ${user.prenom} ${user.nom}` : ''} ?`}
+                message={`Êtes-vous sûr de vouloir vous déconnecter${user ? `, ${user.nom} ${user.prenom}` : ''} ?`}
             >
                 <div className="flex gap-3 justify-end mt-4">
                     <button

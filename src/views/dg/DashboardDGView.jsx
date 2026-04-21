@@ -70,7 +70,7 @@ const DashboardDGView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-[#f4f6f9]">
       {/* Sidebar simplifié pour prévisualisation */}
       <div className="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-900 to-slate-800 text-white z-50">
         <div className="p-6 border-b border-slate-700">

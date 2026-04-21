@@ -205,7 +205,7 @@ const MeilleursEtudiantsView = () => {
                         </div>
                         <div className="text-4xl font-bold text-slate-600 mb-2">#2</div>
                         <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">
-                          {top3[1].prenom} {top3[1].nom}
+                          {top3[1].nom} {top3[1].prenom}
                         </h3>
                         <div className="text-sm text-slate-600 mb-3">{top3[1].matricule}</div>
                         <div className="flex items-center gap-2 mb-3">
@@ -242,7 +242,7 @@ const MeilleursEtudiantsView = () => {
                         </div>
                         <div className="text-5xl font-bold text-yellow-700 mb-2">#1</div>
                         <h3 className="text-2xl font-bold text-slate-800 mb-1 text-center">
-                          {top3[0].prenom} {top3[0].nom}
+                          {top3[0].nom} {top3[0].prenom}
                         </h3>
                         <div className="text-sm text-slate-600 mb-3">{top3[0].matricule}</div>
                         <div className="flex items-center gap-2 mb-3">
@@ -274,7 +274,7 @@ const MeilleursEtudiantsView = () => {
                         </div>
                         <div className="text-4xl font-bold text-amber-700 mb-2">#3</div>
                         <h3 className="text-xl font-bold text-slate-800 mb-1 text-center">
-                          {top3[2].prenom} {top3[2].nom}
+                          {top3[2].nom} {top3[2].prenom}
                         </h3>
                         <div className="text-sm text-slate-600 mb-3">{top3[2].matricule}</div>
                         <div className="flex items-center gap-2 mb-3">
@@ -339,7 +339,7 @@ const MeilleursEtudiantsView = () => {
                                   <FontAwesomeIcon icon={faUser} className="text-white" />
                                 </div>
                                 <div>
-                                  <p className="font-semibold text-slate-800">{etudiant.prenom} {etudiant.nom}</p>
+                                  <p className="font-semibold text-slate-800">{etudiant.nom} {etudiant.prenom}</p>
                                   <p className="text-xs text-slate-500">{etudiant.matricule}</p>
                                 </div>
                               </div>

@@ -476,7 +476,7 @@ const BulletinsView = () => {
                         className={`${estRecupere ? 'bg-slate-50 opacity-60' : 'hover:bg-blue-50'} transition-colors`}>
                         <td className="px-6 py-4 text-sm text-slate-800 font-medium">{etudiant.matricule}</td>
                         <td className="px-6 py-4 text-sm text-slate-800">
-                          {etudiant.prenom} {etudiant.nom}
+                          {etudiant.nom} {etudiant.prenom}
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm font-bold text-slate-800">{etudiant.moyenne.toFixed(2)}</span>
@@ -538,7 +538,7 @@ const BulletinsView = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-slate-800 mb-4">Confirmer la récupération</h3>
             <p className="text-slate-600 mb-6">
-              Confirmez-vous que <strong>{selectedEtudiant?.prenom} {selectedEtudiant?.nom}</strong> a récupéré son bulletin physiquement ?
+              Confirmez-vous que <strong>{selectedEtudiant?.nom} {selectedEtudiant?.prenom}</strong> a récupéré son bulletin physiquement ?
             </p>
             <div className="flex gap-3">
               <button

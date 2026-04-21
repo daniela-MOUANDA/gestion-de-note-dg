@@ -10,6 +10,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useAlert } from '../../contexts/AlertContext'
 import { getClasses, getBulletinData } from '../../api/chefDepartement.js'
 import * as XLSX from 'xlsx'
+import { abbreviateClasseLabel } from '../../utils/classeLabel'
+import { buildExportFilename } from '../../utils/plancheFileName'
 
 const RelevesNotesView = () => {
     const { user } = useAuth()
@@ -108,13 +110,29 @@ const RelevesNotesView = () => {
                 default: return status?.replace(/_/g, ' ') || 'UE non Acquise'
             }
         } else {
-            return status === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'
+            const semestreLabel = selectedSemestre?.startsWith('S')
+                ? `Semestre ${selectedSemestre.replace('S', '')}`
+                : 'Semestre'
+            return status === 'VALIDE'
+                ? `${semestreLabel} valide`
+                : `${semestreLabel} non valide`
         }
     }
 
     const getJuryAvisText = (row) => {
-        const t = row.avisJury || getStatusText(row.statut, 'semestre')
-        return typeof t === 'string' ? t.toUpperCase() : t
+        const statusText = getStatusText(row.statut, 'semestre')
+        const raw = row.avisJury
+
+        // Remplacer les anciens libellés génériques par la version avec numéro de semestre.
+        if (
+            !raw ||
+            /semestre\s+valide/i.test(raw) ||
+            /semestre\s+non\s+valide/i.test(raw)
+        ) {
+            return statusText.toUpperCase()
+        }
+
+        return typeof raw === 'string' ? raw.toUpperCase() : statusText.toUpperCase()
     }
 
     const getJuryAvisClassName = (row) => {
@@ -169,8 +187,7 @@ const RelevesNotesView = () => {
         const ws = XLSX.utils.json_to_sheet(data)
         const wb = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(wb, ws, "Relevé")
-        const classeNom = getSelectedClasseInfo()?.nom || 'Classe'
-        XLSX.writeFile(wb, `Releve_${classeNom}_${selectedSemestre}.xlsx`)
+        XLSX.writeFile(wb, buildExportFilename('Releve', getSelectedClasseInfo(), selectedSemestre, 'xlsx'))
     }
 
     return (
@@ -208,7 +225,14 @@ const RelevesNotesView = () => {
                                 <option value="">Sélectionner une classe</option>
                                 {classes.map(c => (
                                     <option key={c.id} value={c.id}>
-                                        {c.nom} {c.filieres?.code ? `(${c.filieres.code})` : ''}
+                                        {(() => {
+                                            const classeNom = abbreviateClasseLabel(c.nom, c)
+                                            const filiereCode = c.filieres?.code
+                                            if (filiereCode && !classeNom.includes(`(${filiereCode})`)) {
+                                                return `${classeNom} (${filiereCode})`
+                                            }
+                                            return classeNom
+                                        })()}
                                     </option>
                                 ))}
                             </select>
@@ -255,7 +279,7 @@ const RelevesNotesView = () => {
                                             <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">RELEVÉ DE NOTES</h2>
                                             <p className="text-xl font-bold text-blue-800 uppercase">
                                                 {getSelectedClasseInfo()?.filieres?.nom || getSelectedClasseInfo()?.nom}
-                                                ({getSelectedClasseInfo()?.nom || ''})
+                                                ({abbreviateClasseLabel(getSelectedClasseInfo()?.nom || '', getSelectedClasseInfo())})
                                             </p>
                                             <p className="text-lg font-bold text-slate-600 uppercase">
                                                 {selectedSemestre?.replace('S', 'Semestre ')}
@@ -273,8 +297,9 @@ const RelevesNotesView = () => {
                                         <thead className="sticky top-0 z-20 bg-slate-50 uppercase tracking-tighter">
                                             {/* Row 1: UE Headers */}
                                             <tr>
-                                                <th rowSpan={2} className="border border-slate-300 p-1 min-w-[40px] sticky left-0 z-30 bg-slate-100 font-black">N°</th>
-                                                <th rowSpan={2} className="border border-slate-300 p-2 min-w-[250px] sticky left-10 z-30 bg-slate-100 font-black">Nom et Prénom</th>
+                                                <th rowSpan={4} className="border border-slate-300 p-1 min-w-[40px] sticky left-0 z-30 bg-slate-100 font-black">N°</th>
+                                                <th rowSpan={4} className="border border-slate-300 p-2 min-w-[250px] sticky left-10 z-30 bg-slate-100 font-black">Nom et Prénom</th>
+                                                <th className="border border-slate-300 p-1 min-w-[72px] bg-white"></th>
                                                 {ueGroups.map((ue, idx) => (
                                                     <th
                                                         key={ue.code}
@@ -289,6 +314,13 @@ const RelevesNotesView = () => {
 
                                             {/* Row 2: Module Names (Vertical) */}
                                             <tr className="bg-white">
+                                                <th className="border border-slate-300 p-1 min-w-[72px] h-32 relative overflow-hidden bg-white">
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <span className="block w-20 text-[10px] font-bold text-center transform -rotate-90 leading-tight uppercase">
+                                                            Matières
+                                                        </span>
+                                                    </div>
+                                                </th>
                                                 {ueGroups.map(ue => (
                                                     <>
                                                         {ue.modules.map(m => (
@@ -310,16 +342,72 @@ const RelevesNotesView = () => {
                                                 <th className="border border-slate-300 p-1 min-w-[60px] bg-slate-100 text-[9px] uppercase">RANG</th>
                                                 <th className="border border-slate-300 p-1 min-w-[120px] bg-white text-[9px] uppercase font-bold text-center">DÉCISION DU JURY</th>
                                             </tr>
+
+                                            {/* Row 3: Credits values per module + sums */}
+                                            <tr className="bg-white font-bold text-[10px]">
+                                                <th className="border border-slate-300 p-1 text-center font-bold text-slate-700 bg-white">
+                                                    Crédits
+                                                </th>
+                                                {ueGroups.map(ue => {
+                                                    const totalCredits = ue.modules.reduce((sum, m) => sum + (m.credit || 0), 0)
+                                                    return (
+                                                        <>
+                                                            {ue.modules.map(m => (
+                                                                <th key={`cr-${m.id}`} className="border border-slate-300 p-1 text-center font-bold text-slate-600">
+                                                                    {m.credit}
+                                                                </th>
+                                                            ))}
+                                                            <th className="border border-slate-300 p-1 bg-blue-100/50"></th>
+                                                            <th className="border border-slate-300 p-1 text-center bg-slate-50">{totalCredits}</th>
+                                                            <th className="border border-slate-300 p-1 bg-slate-50"></th>
+                                                        </>
+                                                    )
+                                                })}
+                                                <th className="border border-slate-300 p-1 text-center bg-slate-100">30</th>
+                                                <th className="border border-slate-300 p-1 text-center bg-blue-600/10">30</th>
+                                                <th className="border border-slate-300 p-1 bg-slate-100"></th>
+                                                <th className="border border-slate-300 p-1 bg-white"></th>
+                                            </tr>
+
+                                            {/* Row 4: Coefficients values per module + sums */}
+                                            <tr className="bg-white font-bold text-[10px]">
+                                                <th className="border border-slate-300 p-1 text-center font-bold text-slate-700 bg-white">
+                                                    Coefficients
+                                                </th>
+                                                {ueGroups.map(ue => {
+                                                    const totalCoeff = ue.modules.reduce((sum, m) => sum + (m.credit || 0), 0)
+                                                    return (
+                                                        <>
+                                                            {ue.modules.map(m => (
+                                                                <th key={`co-${m.id}`} className="border border-slate-300 p-1 text-center text-slate-500 font-medium">
+                                                                    {m.credit?.toFixed(2).replace('.', ',')}
+                                                                </th>
+                                                            ))}
+                                                            <th className="border border-slate-300 p-1 text-center bg-blue-50 font-black">{totalCoeff.toFixed(2).replace('.', ',')}</th>
+                                                            <th className="border border-slate-300 p-1 bg-slate-50"></th>
+                                                            <th className="border border-slate-300 p-1 bg-slate-50"></th>
+                                                        </>
+                                                    )
+                                                })}
+                                                <th className="border border-slate-300 p-1 text-center bg-slate-100/50">30,00</th>
+                                                <th className="border border-slate-300 p-1 text-center bg-blue-600/20 font-black">30,00</th>
+                                                <th className="border border-slate-300 p-1 bg-slate-100"></th>
+                                                <th className="border border-slate-300 p-1 bg-white"></th>
+                                            </tr>
                                         </thead>
 
                                         <tbody className="divide-y divide-slate-200">
                                             {bulletinData.map((row, idx) => (
-                                                <tr key={row.etudiant.id} className="hover:bg-blue-50/30 transition-colors h-10 border-b border-slate-200">
+                                                <tr
+                                                    key={row.etudiant.id}
+                                                    className="table-row-hover transition-all duration-150 h-10 border-b border-slate-200"
+                                                >
                                                     <td className="border border-slate-200 p-1 text-center font-bold sticky left-0 z-10 bg-white">{idx + 1}</td>
                                                     <td className="border border-slate-200 p-2 font-bold sticky left-10 z-10 bg-white">
                                                         <div className="truncate uppercase text-[9px]">{row.etudiant.nom} {row.etudiant.prenom}</div>
                                                         <div className="text-[8px] text-slate-400 font-normal">{row.etudiant.matricule}</div>
                                                     </td>
+                                                    <td className="border border-slate-200 p-1 bg-white"></td>
 
                                                     {ueGroups.map(ueGroup => {
                                                         const ueData = row.uesValidees?.find(u => u.ue === ueGroup.code) || {}
@@ -331,7 +419,15 @@ const RelevesNotesView = () => {
                                                                     return (
                                                                         <td
                                                                             key={m.id}
-                                                                            className={`border border-slate-200 p-1 text-center font-medium ${val != null && val < 10 ? 'bg-red-50 text-red-700' : 'text-slate-700'}`}
+                                                                            className={`border border-slate-200 p-1 text-center font-medium ${
+                                                                                val == null
+                                                                                    ? 'text-slate-700'
+                                                                                    : val < 6
+                                                                                        ? 'bg-red-50 text-red-700'
+                                                                                        : val < 10
+                                                                                            ? 'bg-yellow-50 text-yellow-700'
+                                                                                            : 'bg-white text-slate-700'
+                                                                            }`}
                                                                         >
                                                                             {typeof val === 'number'
                                                                                 ? val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
@@ -339,11 +435,19 @@ const RelevesNotesView = () => {
                                                                         </td>
                                                                     )
                                                                 })}
-                                                                <td className={`border border-slate-300 p-1 text-center font-black bg-blue-50/30 text-[10px] ${typeof ueData.moyenne === 'number' && ueData.moyenne < 10 ? 'text-red-700' : 'text-slate-900'}`}>
+                                                                <td className={`border border-slate-300 p-1 text-center font-black text-[10px] ${
+                                                                    typeof ueData.moyenne !== 'number'
+                                                                        ? 'bg-white text-slate-900'
+                                                                        : ueData.moyenne < 6
+                                                                            ? 'bg-red-50 text-red-700'
+                                                                            : ueData.moyenne < 10
+                                                                                ? 'bg-yellow-50 text-yellow-700'
+                                                                                : 'bg-white text-slate-900'
+                                                                }`}>
                                                                     <div className="flex items-center justify-center gap-1">
                                                                         <span className={`w-2 h-2 rounded-full ${getStatusDot(ueData.status)}`}></span>
                                                                         {typeof ueData.moyenne === 'number'
-                                                                            ? ueData.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2 })
+                                                                            ? ueData.moyenne.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                                                             : '-'}
                                                                     </div>
                                                                 </td>
@@ -356,7 +460,15 @@ const RelevesNotesView = () => {
                                                     })}
 
                                                     <td className="border border-slate-300 p-1 text-center font-bold bg-slate-50 text-[10px]">{row.totalCreditsValides || 0}</td>
-                                                    <td className={`border border-slate-300 p-1 text-center font-black text-[11px] bg-blue-600/5 ${typeof row.moyenneGenerale === 'number' && row.moyenneGenerale < 10 ? 'text-red-700' : 'text-blue-900'}`}>
+                                                    <td className={`border border-slate-300 p-1 text-center font-black text-[11px] ${
+                                                        typeof row.moyenneGenerale !== 'number'
+                                                            ? 'bg-white text-blue-900'
+                                                            : row.moyenneGenerale < 6
+                                                                ? 'bg-red-50 text-red-700'
+                                                                : row.moyenneGenerale < 10
+                                                                    ? 'bg-yellow-50 text-yellow-700'
+                                                                    : 'bg-white text-blue-900'
+                                                    }`}>
                                                         <div className="flex items-center justify-center gap-1">
                                                             <span className={`w-2 h-2 rounded-full ${typeof row.moyenneGenerale === 'number' && row.moyenneGenerale >= 10 ? 'bg-green-500' : 'bg-red-500'}`}></span>
                                                             {typeof row.moyenneGenerale === 'number'

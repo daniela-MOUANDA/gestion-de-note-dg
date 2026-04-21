@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faGraduationCap, faSave, faEdit, faTrash, faSpinner, faFileExcel,
-  faUpload, faPlus, faCog, faCheckCircle, faTimes, faChartLine, faDownload, faSearch
+  faUpload, faPlus, faCog, faCheckCircle, faTimes, faChartLine, faDownload, faSearch,
+  faUsers
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
@@ -20,6 +21,8 @@ import {
   saveNotes,
   deleteNote
 } from '../../api/chefDepartement.js'
+import { abbreviateClasseLabel } from '../../utils/classeLabel'
+import { buildNotesExportFilename } from '../../utils/plancheFileName'
 
 const NotesView = () => {
   const { user } = useAuth()
@@ -39,6 +42,8 @@ const NotesView = () => {
   const [showImportModal, setShowImportModal] = useState(false)
   const [selectedEtudiant, setSelectedEtudiant] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [bulkEvalSlot, setBulkEvalSlot] = useState('')
+  const [bulkNoteValue, setBulkNoteValue] = useState('')
 
   const [formParametres, setFormParametres] = useState({
     evaluations: [
@@ -136,6 +141,11 @@ const NotesView = () => {
     loadModules()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClasse, selectedSemestre, classes])
+
+  useEffect(() => {
+    setBulkEvalSlot('')
+    setBulkNoteValue('')
+  }, [selectedClasse, selectedModule, selectedSemestre])
 
   useEffect(() => {
     if (selectedClasse && selectedModule && selectedSemestre) {
@@ -398,7 +408,7 @@ const NotesView = () => {
 
       Object.entries(notes).forEach(([etudiantId, notesEtudiant]) => {
         const etudiant = etudiants.find(e => e.id === etudiantId)
-        const nomEtudiant = etudiant ? `${etudiant.prenom} ${etudiant.nom}` : etudiantId
+        const nomEtudiant = etudiant ? `${etudiant.nom} ${etudiant.prenom}` : etudiantId
 
         Object.entries(notesEtudiant).forEach(([evaluationId, valeur]) => {
           if (valeur !== undefined && valeur !== null && valeur !== '') {
@@ -497,6 +507,65 @@ const NotesView = () => {
     })
 
     return totalCoefficients > 0 ? (sommeNotesPonderees / totalCoefficients).toFixed(2) : null
+  }
+
+  const getEvaluationSlotMeta = (slotId) => {
+    if (!parametres || !slotId) return null
+    for (const evalItem of parametres.evaluations || []) {
+      for (let i = 1; i <= evalItem.nombreEvaluations; i++) {
+        if (`${evalItem.id}_${i}` === slotId) {
+          const typeLabel = typesEvaluation.find(t => t.value === evalItem.type)?.label || evalItem.type
+          return { evaluation: evalItem, index: i, typeLabel }
+        }
+      }
+    }
+    return null
+  }
+
+  const handleBulkApplyNoteToClass = () => {
+    if (!parametres || etudiants.length === 0) {
+      showAlert('Aucun étudiant dans cette classe.', 'warning')
+      return
+    }
+    if (!bulkEvalSlot) {
+      showAlert('Sélectionnez une évaluation (colonne) à remplir.', 'warning')
+      return
+    }
+    const raw = String(bulkNoteValue ?? '').trim().replace(',', '.')
+    if (raw === '') {
+      showAlert('Saisissez une note.', 'warning')
+      return
+    }
+    const num = parseFloat(raw)
+    if (Number.isNaN(num)) {
+      showAlert('La note doit être un nombre valide.', 'error')
+      return
+    }
+    const meta = getEvaluationSlotMeta(bulkEvalSlot)
+    if (!meta) {
+      showAlert('Évaluation invalide.', 'error')
+      return
+    }
+    const { evaluation, index, typeLabel } = meta
+    if (num < 0 || num > evaluation.noteMax) {
+      showAlert(
+        `La note doit être entre 0 et ${evaluation.noteMax} pour ${typeLabel} ${index} (barème /${evaluation.noteMax}).`,
+        'error'
+      )
+      return
+    }
+    const valeurStr = String(num)
+    setNotes((prev) => {
+      const next = { ...prev }
+      etudiants.forEach((etu) => {
+        next[etu.id] = { ...(next[etu.id] || {}), [bulkEvalSlot]: valeurStr }
+      })
+      return next
+    })
+    showAlert(
+      `Note ${valeurStr}/${evaluation.noteMax} appliquée à ${etudiants.length} étudiant(s) pour « ${typeLabel} ${index} ». Cliquez sur « Tout Enregistrer » pour enregistrer en base.`,
+      'success'
+    )
   }
 
   const getTotalCoefficients = () => {
@@ -609,7 +678,9 @@ const NotesView = () => {
     XLSX.utils.book_append_sheet(wb, ws, "Notes")
 
     // 4. Télécharger
-    XLSX.writeFile(wb, `Notes_${classes.find(c => c.id === selectedClasse)?.nom}_${selectedModule}_${selectedSemestre}.xlsx`)
+    const classeObj = classes.find(c => c.id === selectedClasse)
+    const modKey = modules.find(m => m.id === selectedModule)?.code || selectedModule
+    XLSX.writeFile(wb, buildNotesExportFilename(classeObj, modKey, selectedSemestre, 'xlsx'))
   }
 
   const processExcelData = (jsonData) => {
@@ -914,21 +985,7 @@ const NotesView = () => {
                 >
                   <option value="">Sélectionner une classe</option>
                   {classes.map((classe) => (
-                    <option key={classe.id} value={classe.id}>{classe.nom}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Module *</label>
-                <select
-                  value={selectedModule}
-                  onChange={(e) => setSelectedModule(e.target.value)}
-                  disabled={!selectedClasse}
-                  className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">Sélectionner un module</option>
-                  {modules.map((module) => (
-                    <option key={module.id} value={module.id}>{module.code} - {module.nom}</option>
+                    <option key={classe.id} value={classe.id}>{abbreviateClasseLabel(classe.nom, classe)}</option>
                   ))}
                 </select>
               </div>
@@ -952,6 +1009,20 @@ const NotesView = () => {
                     ⚠️ Niveau de la classe non reconnu
                   </p>
                 )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Module *</label>
+                <select
+                  value={selectedModule}
+                  onChange={(e) => setSelectedModule(e.target.value)}
+                  disabled={!selectedClasse}
+                  className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Sélectionner un module</option>
+                  {modules.map((module) => (
+                    <option key={module.id} value={module.id}>{module.code} - {module.nom}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -1009,6 +1080,59 @@ const NotesView = () => {
                   </div>
                 </div>
 
+                {/* Attribution d'une même note à toute la classe */}
+                <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:flex-wrap">
+                    <div className="flex items-center gap-2 text-slate-800 font-semibold text-sm lg:w-full">
+                      <FontAwesomeIcon icon={faUsers} className="text-indigo-600" />
+                      Note pour toute la classe
+                    </div>
+                    <p className="text-xs text-slate-600 lg:w-full -mt-1">
+                      Choisissez la colonne d&apos;évaluation, saisissez la note, puis appliquez à tous les étudiants. Enregistrez ensuite avec « Tout Enregistrer ».
+                    </p>
+                    <div className="w-full sm:flex-1 sm:min-w-[200px]">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Évaluation</label>
+                      <select
+                        value={bulkEvalSlot}
+                        onChange={(e) => setBulkEvalSlot(e.target.value)}
+                        className="w-full px-3 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                      >
+                        <option value="">— Choisir une colonne —</option>
+                        {(parametres.evaluations || []).flatMap((evaluation) =>
+                          Array.from({ length: evaluation.nombreEvaluations || 0 }).map((_, i) => {
+                            const n = i + 1
+                            const slotId = `${evaluation.id}_${n}`
+                            const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
+                            return (
+                              <option key={slotId} value={slotId}>
+                                {typeLabel} {n} (max {evaluation.noteMax})
+                              </option>
+                            )
+                          })
+                        )}
+                      </select>
+                    </div>
+                    <div className="w-full sm:w-32">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Note</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={bulkNoteValue}
+                        onChange={(e) => setBulkNoteValue(e.target.value)}
+                        placeholder="ex. 14.5"
+                        className="w-full px-3 py-2 border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleBulkApplyNoteToClass}
+                      className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      Appliquer à la classe
+                    </button>
+                  </div>
+                </div>
+
                 {/* Tableau des notes */}
                 <div className="bg-white rounded-xl shadow-md overflow-hidden">
                   <div className="overflow-x-auto">
@@ -1045,7 +1169,7 @@ const NotesView = () => {
                             const nom = (etudiant.nom || '').toLowerCase()
                             const prenom = (etudiant.prenom || '').toLowerCase()
                             const matricule = (etudiant.matricule || '').toLowerCase()
-                            const fullName = `${prenom} ${nom}`.toLowerCase()
+                            const fullName = `${nom} ${prenom}`.toLowerCase()
                             return nom.includes(query) || prenom.includes(query) || matricule.includes(query) || fullName.includes(query)
                           })
 
@@ -1081,7 +1205,7 @@ const NotesView = () => {
                                       <FontAwesomeIcon icon={faGraduationCap} className="text-blue-600 text-sm" />
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-sm text-slate-800">{etudiant.prenom} {etudiant.nom}</p>
+                                      <p className="font-semibold text-sm text-slate-800">{etudiant.nom} {etudiant.prenom}</p>
                                       <p className="text-xs text-slate-500">{etudiant.matricule}</p>
                                     </div>
                                   </div>
@@ -1309,7 +1433,7 @@ const NotesView = () => {
           <Modal
             isOpen={showNotesModal}
             onClose={() => setShowNotesModal(false)}
-            title={`Saisir les notes - ${selectedEtudiant?.prenom} ${selectedEtudiant?.nom}`}
+            title={`Saisir les notes - ${selectedEtudiant?.nom} ${selectedEtudiant?.prenom}`}
             size="6xl"
           >
             <div className="p-4 space-y-3">
@@ -1321,7 +1445,7 @@ const NotesView = () => {
                         <FontAwesomeIcon icon={faGraduationCap} className="text-white text-lg" />
                       </div>
                       <div>
-                        <p className="font-bold text-slate-800">{selectedEtudiant.prenom} {selectedEtudiant.nom}</p>
+                        <p className="font-bold text-slate-800">{selectedEtudiant.nom} {selectedEtudiant.prenom}</p>
                         <p className="text-xs text-slate-600">Matricule: {selectedEtudiant.matricule}</p>
                       </div>
                       <div className="ml-auto">

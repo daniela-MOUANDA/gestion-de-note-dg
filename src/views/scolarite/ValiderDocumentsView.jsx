@@ -244,7 +244,7 @@ const ValiderDocumentsView = () => {
                                 <div className="student-info">
                                     <FontAwesomeIcon icon={faUser} className="student-icon" />
                                     <div>
-                                        <h3>{dossier.etudiant.prenom} {dossier.etudiant.nom}</h3>
+                                        <h3>{dossier.etudiant.nom} {dossier.etudiant.prenom}</h3>
                                         <p className="matricule">{dossier.etudiant.matricule}</p>
                                     </div>
                                 </div>
@@ -290,7 +290,7 @@ const ValiderDocumentsView = () => {
 
                         <div className="modal-body">
                             <div className="student-details">
-                                <strong>{currentInscription.etudiant.prenom} {currentInscription.etudiant.nom}</strong>
+                                <strong>{currentInscription.etudiant.nom} {currentInscription.etudiant.prenom}</strong>
                                 <span>({currentInscription.etudiant.matricule})</span>
                             </div>
 

@@ -15,7 +15,7 @@ import {
   faAward,
   faSpinner
 } from '@fortawesome/free-solid-svg-icons'
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
 import { useAuth } from '../../contexts/AuthContext'
@@ -25,7 +25,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 const DashboardScolariteView = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Agent Scolarité'
+  const nomComplet = user ? `${user.nom} ${user.prenom}` : 'Agent Scolarité'
 
   // Vérifier que l'utilisateur a le bon rôle
   useEffect(() => {
@@ -65,7 +65,7 @@ const DashboardScolariteView = () => {
   })
   const [dataParFiliere, setDataParFiliere] = useState([])
   const [inscriptionsParSemaine, setInscriptionsParSemaine] = useState([])
-  const [dataStatut, setDataStatut] = useState([])
+  const [dataGenre, setDataGenre] = useState([])
 
   useEffect(() => {
     const loadStats = async () => {
@@ -75,7 +75,7 @@ const DashboardScolariteView = () => {
         setStats(data.stats)
         setDataParFiliere(data.dataParFiliere || [])
         setInscriptionsParSemaine(data.inscriptionsParSemaine || [])
-        setDataStatut(data.dataStatut || [])
+        setDataGenre(data.dataGenre || [])
       } catch (error) {
         console.error('Erreur lors du chargement des statistiques:', error)
         // En cas d'erreur, garder les valeurs par défaut (0)
@@ -99,9 +99,24 @@ const DashboardScolariteView = () => {
     )
   }
 
+  const KpiCard = ({ label, value, sub, icon, iconWrapClass }) => (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">{value}</p>
+          {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
+        </div>
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconWrapClass}`}>
+          <FontAwesomeIcon icon={icon} className="text-lg" />
+        </div>
+      </div>
+    </div>
+  )
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+      <div className="min-h-screen bg-[#f4f6f9]">
         <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <AdminHeader />
@@ -114,78 +129,61 @@ const DashboardScolariteView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-[#f4f6f9]">
       <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-32 lg:pt-32">
+        <main className="flex-1 p-4 pt-28 sm:p-6 sm:pt-28 lg:p-8 lg:pt-32">
           {/* Message de bienvenue */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 text-slate-800">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               Bienvenue, {nomComplet} !
             </h1>
-            <p className="text-sm sm:text-base text-slate-600">
-              Nous sommes ravis de vous revoir. Voici un aperçu de votre tableau de bord.
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              Suivi en temps réel des inscriptions, des dossiers en attente et de la répartition des candidats.
             </p>
           </div>
 
           {/* Statistiques */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
-            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Candidats admis</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.candidatsAdmis}</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faUsers} className="text-blue-600 text-xl" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Étudiants inscrits</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.etudiantsInscrits}</p>
-                </div>
-                <div className="bg-emerald-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faUserCheck} className="text-emerald-600 text-xl" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border-l-4 border-amber-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">En attente</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.enAttenteInscription}</p>
-                </div>
-                <div className="bg-amber-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faClock} className="text-amber-600 text-xl" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border-l-4 border-purple-500 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-slate-500 mb-1">Aujourd'hui</p>
-                  <p className="text-3xl font-bold text-slate-800">{stats.inscriptionsAujourdhui}</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-3">
-                  <FontAwesomeIcon icon={faCheckCircle} className="text-purple-600 text-xl" />
-                </div>
-              </div>
-            </div>
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label="Candidats admis"
+              value={stats.candidatsAdmis}
+              sub="Dossiers validés"
+              icon={faUsers}
+              iconWrapClass="bg-sky-50 text-sky-600"
+            />
+            <KpiCard
+              label="Étudiants inscrits"
+              value={stats.etudiantsInscrits}
+              sub="Inscrits confirmés"
+              icon={faUserCheck}
+              iconWrapClass="bg-emerald-50 text-emerald-600"
+            />
+            <KpiCard
+              label="En attente"
+              value={stats.enAttenteInscription}
+              sub="À traiter"
+              icon={faClock}
+              iconWrapClass="bg-amber-50 text-amber-600"
+            />
+            <KpiCard
+              label="Aujourd'hui"
+              value={stats.inscriptionsAujourdhui}
+              sub="Nouvelles inscriptions"
+              icon={faCheckCircle}
+              iconWrapClass="bg-violet-50 text-violet-600"
+            />
           </div>
 
+
           {/* Graphiques et statistiques */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-2">
             {/* Graphique en camembert - Répartition par filière */}
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Répartition par filière</h2>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-1 text-base font-bold text-slate-900">Répartition par filière</h2>
+              <p className="mb-4 text-xs text-slate-500">Répartition des candidats admis par filière</p>
               {dataParFiliere.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={350}>
@@ -209,7 +207,7 @@ const DashboardScolariteView = () => {
                   </ResponsiveContainer>
                   <div className="mt-4 space-y-2">
                     {dataParFiliere.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm">
+                      <div key={index} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
                           <span className="text-slate-600">{item.name}</span>
@@ -226,57 +224,41 @@ const DashboardScolariteView = () => {
               )}
             </div>
 
-            {/* Graphique en camembert - Statut */}
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Statut des candidats</h2>
-              {dataStatut.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <PieChart>
-                      <Pie
-                        data={dataStatut}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={renderCustomizedLabel}
-                        outerRadius={120}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {dataStatut.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-4 space-y-2">
-                    {dataStatut.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
-                          <span className="text-slate-600">{item.name}</span>
-                        </div>
-                        <span className="font-semibold text-slate-800">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+            {/* Inscriptions par filière */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-900">Inscriptions par filière</h2>
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <FontAwesomeIcon icon={faChartLine} className="text-indigo-600" />
+                  <span>Volume des inscrits</span>
+                </div>
+              </div>
+              {dataParFiliere.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={dataParFiliere}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="name" stroke="#64748b" />
+                    <YAxis stroke="#64748b" />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-96 text-slate-500">
+                <div className="flex h-72 items-center justify-center text-slate-500">
                   <p>Aucune donnée disponible</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Graphique en barres - Évolution des inscriptions */}
-          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-slate-200 mb-6">
+          {/* Bas de dashboard: évolution + genre */}
+          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-800">Évolution des inscriptions</h2>
+              <h2 className="text-base font-bold text-slate-900">Évolution des inscriptions</h2>
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <FontAwesomeIcon icon={faArrowTrendUp} className="text-green-600" />
-                <span>Taux d'inscription: <span className="font-semibold text-slate-800">{stats.tauxInscription}%</span></span>
+                <span>Taux actuel: <span className="font-semibold text-slate-800">{stats.tauxInscription}%</span></span>
               </div>
             </div>
             {inscriptionsParSemaine.length > 0 ? (
@@ -301,6 +283,49 @@ const DashboardScolariteView = () => {
                 <p>Aucune donnée disponible</p>
               </div>
             )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="mb-1 text-base font-bold text-slate-900">Répartition par genre</h2>
+              <p className="mb-4 text-xs text-slate-500">Distribution des étudiants inscrits par genre</p>
+              {dataGenre.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={dataGenre}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={renderCustomizedLabel}
+                        outerRadius={105}
+                        dataKey="value"
+                      >
+                        {dataGenre.map((entry, index) => (
+                          <Cell key={`genre-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 space-y-2">
+                    {dataGenre.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-slate-600">{item.name}</span>
+                        </div>
+                        <span className="font-semibold text-slate-800">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex h-72 items-center justify-center text-slate-500">
+                  <p>Aucune donnée de genre disponible</p>
+                </div>
+              )}
+            </div>
           </div>
         </main>
       </div>

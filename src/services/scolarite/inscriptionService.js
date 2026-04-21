@@ -348,7 +348,7 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
 
     // Générer un mot de passe automatique
     const generatedPassword = generatePassword()
-    console.log(`🔑 Mot de passe généré pour ${etudiant.prenom} ${etudiant.nom}: ${generatedPassword}`)
+    console.log(`🔑 Mot de passe généré pour ${[etudiant.prenom, etudiant.nom].filter(Boolean).join(' ').trim()}: ${generatedPassword}`)
 
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(generatedPassword, 10)
@@ -397,7 +397,9 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
         .from('utilisateurs')
         .insert({
           nom: etudiant.nom,
-          prenom: etudiant.prenom,
+          prenom: (etudiant.prenom != null && String(etudiant.prenom).trim() !== '')
+            ? String(etudiant.prenom).trim()
+            : '',
           email: etudiant.email.trim().toLowerCase(),
           username: etudiant.matricule.trim().toLowerCase(),
           password: hashedPassword,
@@ -433,7 +435,7 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('✅ INSCRIPTION FINALISÉE AVEC SUCCÈS')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log(`📧 Étudiant: ${etudiant.prenom} ${etudiant.nom}`)
+    console.log(`📧 Étudiant: ${[etudiant.prenom, etudiant.nom].filter(Boolean).join(' ').trim()}`)
     console.log(`📧 Email: ${etudiant.email}`)
     console.log(`🆔 Matricule: ${etudiant.matricule}`)
     console.log(`🔑 Mot de passe: ${generatedPassword}`)
@@ -455,7 +457,7 @@ export const finaliserInscription = async (inscriptionId, agentId) => {
       password: generatedPassword,
       etudiantEmail: etudiant.email,
       etudiantMatricule: etudiant.matricule,
-      etudiantNom: `${etudiant.prenom} ${etudiant.nom}`
+      etudiantNom: [etudiant.prenom, etudiant.nom].filter(Boolean).join(' ').trim()
     }
   } catch (error) {
     console.error('Erreur lors de la finalisation de l\'inscription:', error)
@@ -478,7 +480,6 @@ const etudiantInfosComplete = (e) =>
   !!(
     e &&
     e.nom &&
-    e.prenom &&
     e.date_naissance &&
     e.lieu_naissance &&
     e.nationalite &&

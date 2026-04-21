@@ -74,7 +74,7 @@ const LoginStudentView = () => {
 
       if (result.success && result.user) {
         // Afficher le modal de succès
-        const userName = `${result.user.prenom} ${result.user.nom}`
+        const userName = `${result.user.nom} ${result.user.prenom}`
         setSuccessMessage(`Bienvenue ${userName} ! Connexion réussie.`)
         setShowSuccessModal(true)
         success(`Connexion réussie ! Bienvenue ${userName}`)

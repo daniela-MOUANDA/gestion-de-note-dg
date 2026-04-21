@@ -309,9 +309,9 @@ const ImporterCandidatsView = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // Validation
-    if (!formData.nom || !formData.prenom) {
-      alertError('Le nom et le prénom sont obligatoires')
+    // Validation — seul le nom est obligatoire (certains étudiants n'ont pas de prénom)
+    if (!formData.nom?.trim()) {
+      alertError('Le nom est obligatoire')
       return
     }
     
@@ -331,7 +331,7 @@ const ImporterCandidatsView = () => {
         anneeAcademique
       })
       
-      success(`Étudiant ${formData.nom} ${formData.prenom} créé avec succès !`)
+      success(`Étudiant ${[formData.nom, formData.prenom].filter(Boolean).join(' ').trim()} créé avec succès !`)
       handleCloseModal()
       
       // Réinitialiser le formulaire
@@ -393,7 +393,7 @@ const ImporterCandidatsView = () => {
                     Le nom de chaque onglet sert à reconnaître la filière (mappage automatique vers les codes en base).
                   </li>
                   <li>
-                    <strong>Colonnes obligatoires :</strong> en-têtes reconnaissables pour <strong>Nom</strong> et <strong>Prénom</strong> (ex. « Nom(s) », « Prénom(s) »).
+                    <strong>Colonne obligatoire :</strong> en-tête reconnaissable pour <strong>Nom</strong> (ex. « Nom(s) »). <strong>Prénom</strong> est <strong>optionnel</strong> (colonne vide ou absente acceptée).
                     Toutes les autres colonnes du modèle sont <strong>facultatives</strong> : vous pouvez les laisser vides ou les retirer du fichier pour compléter les dossiers plus tard.
                   </li>
                   <li>En L3, utilisez des onglets d&apos;option explicites (ex: GI-DAR, RT-AZUR, MMI-WM, MTIC-EMCD), pas seulement le tronc (GI/RT/MMI/MTIC).</li>
@@ -625,13 +625,13 @@ const ImporterCandidatsView = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Prénom *</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Prénom <span className="text-slate-400 font-normal">(optionnel)</span></label>
                     <input
                       type="text"
                       name="prenom"
                       value={formData.prenom}
                       onChange={handleInputChange}
-                      required
+                      placeholder="Laisser vide si l&apos;étudiant n&apos;a pas de prénom"
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

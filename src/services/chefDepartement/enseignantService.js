@@ -309,7 +309,7 @@ export const affecterModules = async (enseignantId, moduleIds, departementId) =>
       
       return {
         success: false,
-        error: `Les module(s) ${nomModules} sont déjà affectés à un autre enseignant (${enseignant?.prenom} ${enseignant?.nom}). Un module ne peut être affecté qu'à un seul enseignant à la fois.`
+        error: `Les module(s) ${nomModules} sont déjà affectés à un autre enseignant (${enseignant?.nom} ${enseignant?.prenom}). Un module ne peut être affecté qu'à un seul enseignant à la fois.`
       }
     }
 

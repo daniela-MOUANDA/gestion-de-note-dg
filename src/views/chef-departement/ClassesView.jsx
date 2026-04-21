@@ -339,7 +339,7 @@ const ClassesView = () => {
         const result = await getEtudiantsByClasse(classe.id)
         if (result.success && result.etudiants) {
           const found = result.etudiants.find(etudiant => {
-            const fullName = `${etudiant.prenom} ${etudiant.nom}`.toLowerCase()
+            const fullName = `${etudiant.nom} ${etudiant.prenom}`.toLowerCase()
             const matricule = etudiant.matricule?.toLowerCase() || ''
             return fullName.includes(searchTerm) || matricule.includes(searchTerm)
           })
@@ -350,7 +350,7 @@ const ClassesView = () => {
             setTimeout(() => {
               handleViewStudents(classe, found.id)
             }, 100)
-            showAlert(`Étudiant trouvé : ${found.prenom} ${found.nom} dans la classe ${classe.code}`, 'success')
+            showAlert(`Étudiant trouvé : ${found.nom} ${found.prenom} dans la classe ${classe.code}`, 'success')
             setSearchingStudent(false)
             return
           }

@@ -71,7 +71,19 @@ const CoordinateursPedagogiquesView = () => {
         telephone: form.telephone || undefined
       })
       if (res.success) {
-        showAlert('Compte coordinateur créé. Communiquez l’email et le mot de passe à la personne.', 'success')
+        if (res.emailEnvoye) {
+          showAlert(
+            'Compte créé. Un e-mail de confirmation avec les identifiants a été envoyé à l’adresse indiquée.',
+            'success'
+          )
+        } else {
+          showAlert(
+            res.avertissementEmail === 'SMTP non configuré'
+              ? 'Compte créé. La messagerie (SMTP) n’est pas configurée sur le serveur : transmettez les identifiants manuellement.'
+              : `Compte créé, mais l’e-mail n’a pas pu être envoyé : ${res.avertissementEmail || 'erreur inconnue'}. Communiquez les accès manuellement.`,
+            'warning'
+          )
+        }
         setForm(emptyForm())
         await load()
       } else showAlert(res.error || 'Création impossible', 'error')
@@ -153,7 +165,7 @@ const CoordinateursPedagogiquesView = () => {
         title="Supprimer ce coordinateur ?"
         message={
           confirmDeleteRow
-            ? `Le compte de ${confirmDeleteRow.prenom} ${confirmDeleteRow.nom} (${confirmDeleteRow.email}) sera supprimé définitivement. Cette action est irréversible.`
+            ? `Le compte de ${confirmDeleteRow.nom} ${confirmDeleteRow.prenom} (${confirmDeleteRow.email}) sera supprimé définitivement. Cette action est irréversible.`
             : ''
         }
       >
@@ -329,7 +341,7 @@ const CoordinateursPedagogiquesView = () => {
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div>
                             <p className="font-medium text-slate-800">
-                              {r.prenom} {r.nom}
+                              {r.nom} {r.prenom}
                               {!r.actif && (
                                 <span className="ml-2 text-xs font-normal text-amber-700">(désactivé)</span>
                               )}

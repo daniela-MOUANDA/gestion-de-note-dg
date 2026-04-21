@@ -505,7 +505,7 @@ const DiplomesView = () => {
                         <td className="px-6 py-4 text-sm text-slate-600 font-mono">{etudiant.numeroDiplome}</td>
                         <td className="px-6 py-4 text-sm text-slate-800 font-medium">{etudiant.matricule}</td>
                         <td className="px-6 py-4 text-sm text-slate-800">
-                          {etudiant.prenom} {etudiant.nom}
+                          {etudiant.nom} {etudiant.prenom}
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm font-bold text-slate-800">{etudiant.moyenne.toFixed(2)}</span>
@@ -572,7 +572,7 @@ const DiplomesView = () => {
               <h3 className="text-xl font-bold text-slate-800 mb-2">Confirmer la récupération</h3>
             </div>
             <p className="text-slate-600 mb-6 text-center">
-              Confirmez-vous que <strong>{selectedEtudiant?.prenom} {selectedEtudiant?.nom}</strong> a récupéré son diplôme <strong>{selectedTypeDiplome}</strong> physiquement ?
+              Confirmez-vous que <strong>{selectedEtudiant?.nom} {selectedEtudiant?.prenom}</strong> a récupéré son diplôme <strong>{selectedTypeDiplome}</strong> physiquement ?
             </p>
             <div className="flex gap-3">
               <button

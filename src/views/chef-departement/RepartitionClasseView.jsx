@@ -90,7 +90,7 @@ const RepartitionClasseView = () => {
       const result = await repartirEtudiant(selectedEtudiant.inscriptionId, selectedClasse)
       
       if (result.success) {
-        showAlert(`Étudiant ${selectedEtudiant.prenom} ${selectedEtudiant.nom} réparti dans ${classe.code}`, 'success')
+        showAlert(`Étudiant ${selectedEtudiant.nom} ${selectedEtudiant.prenom} réparti dans ${classe.code}`, 'success')
         setShowModal(false)
         loadData()
       } else {
@@ -151,7 +151,7 @@ const RepartitionClasseView = () => {
                         <FontAwesomeIcon icon={faGraduationCap} className="text-blue-600" />
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-800">{etudiant.prenom} {etudiant.nom}</p>
+                        <p className="font-semibold text-slate-800">{etudiant.nom} {etudiant.prenom}</p>
                         <p className="text-sm text-slate-600">Matricule: {etudiant.matricule} | Niveau: {etudiant.niveau}</p>
                       </div>
                     </div>
@@ -216,7 +216,7 @@ const RepartitionClasseView = () => {
                         {etudiantsClasse.map((etudiant) => (
                           <div key={etudiant.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded text-sm">
                             <FontAwesomeIcon icon={faGraduationCap} className="text-blue-600 text-xs" />
-                            <span className="text-slate-700">{etudiant.prenom} {etudiant.nom}</span>
+                            <span className="text-slate-700">{etudiant.nom} {etudiant.prenom}</span>
                           </div>
                         ))}
                       </div>
@@ -238,7 +238,7 @@ const RepartitionClasseView = () => {
             <div className="p-6 space-y-4">
               {selectedEtudiant && (
                 <div className="bg-slate-50 rounded-lg p-4 mb-4">
-                  <p className="font-semibold text-slate-800">{selectedEtudiant.prenom} {selectedEtudiant.nom}</p>
+                  <p className="font-semibold text-slate-800">{selectedEtudiant.nom} {selectedEtudiant.prenom}</p>
                   <p className="text-sm text-slate-600">Matricule: {selectedEtudiant.matricule} | Niveau: {selectedEtudiant.niveau}</p>
                 </div>
               )}

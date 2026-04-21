@@ -120,7 +120,7 @@ export const getAgentsPourFiltre = async () => {
 
     return (utilisateurs || []).map(u => ({
       id: u.id,
-      nom: `${u.prenom} ${u.nom}`,
+      nom: `${u.nom} ${u.prenom}`,
       role: u.roles?.code === 'AGENT_SCOLARITE' ? 'Agent' : 'SP-Scolarité'
     }))
   } catch (error) {

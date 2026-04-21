@@ -273,9 +273,11 @@ export const creerEtudiantManuel = async (data, agentId) => {
       anneeAcademique
     } = data
 
-    // Validation des champs obligatoires
-    if (!nom || !prenom) {
-      throw new Error('Le nom et le prénom sont obligatoires')
+    const prenomClean = (prenom ?? '').trim()
+
+    // Validation des champs obligatoires (seul le nom est requis — certains étudiants n'ont pas de prénom)
+    if (!nom || !String(nom).trim()) {
+      throw new Error('Le nom est obligatoire')
     }
 
     if (!promotionId || !formationId || !filiereId || !niveauId) {
@@ -339,11 +341,12 @@ export const creerEtudiantManuel = async (data, agentId) => {
       .from('etudiants')
       .select('id')
       .eq('nom', nom.trim())
-      .eq('prenom', prenom.trim())
+      .eq('prenom', prenomClean)
       .single()
 
     if (etudiantExistant) {
-      throw new Error(`Un étudiant avec le nom ${nom} ${prenom} existe déjà`)
+      const identite = prenomClean ? `${nom.trim()} ${prenomClean}` : nom.trim()
+      throw new Error(`Un étudiant avec l'identité « ${identite} » existe déjà`)
     }
 
     // Vérifier l'email unique si fourni
@@ -371,7 +374,7 @@ export const creerEtudiantManuel = async (data, agentId) => {
       .insert({
         matricule,
         nom: nom.trim(),
-        prenom: prenom.trim(),
+        prenom: prenomClean,
         date_naissance: dateNaissanceFormatee,
         lieu_naissance: lieuNaissance?.trim() || null,
         nationalite: nationalite?.trim() || null,
@@ -445,7 +448,7 @@ export const creerEtudiantManuel = async (data, agentId) => {
           .from('utilisateurs')
           .insert({
             nom: nom.trim(),
-            prenom: prenom.trim(),
+            prenom: prenomClean,
             email: email?.trim() || `${matricule}@etudiant.inptic.ga`,
             username: username,
             password: hashedPassword,
@@ -459,12 +462,12 @@ export const creerEtudiantManuel = async (data, agentId) => {
           .single()
 
         if (newUser && !userError) {
-          console.log(`✅ Compte utilisateur créé pour ${nom} ${prenom} (${matricule})`)
+          console.log(`✅ Compte utilisateur créé pour ${nom.trim()} ${prenomClean || ''} (${matricule})`.trim())
 
           // 5. Envoyer l'email de bienvenue avec les identifiants
           if (email && email.trim() !== '') {
             // Envoyer de manière asynchrone sans bloquer
-            sendStudentCredentials({ nom: nom.trim(), prenom: prenom.trim(), email: email.trim() }, password, matricule)
+            sendStudentCredentials({ nom: nom.trim(), prenom: prenomClean, email: email.trim() }, password, matricule)
               .then(res => {
                 if (res.success) console.log(`📧 Email envoyé à ${email}`)
                 else console.error(`❌ Échec envoi email à ${email}:`, res.error)
@@ -484,7 +487,7 @@ export const creerEtudiantManuel = async (data, agentId) => {
       success: true,
       etudiant,
       inscription,
-      message: `Étudiant ${nom} ${prenom} créé avec succès et informations de connexion envoyées par email`
+      message: `Étudiant ${[nom.trim(), prenomClean].filter(Boolean).join(' ')} créé avec succès et informations de connexion envoyées par email`
     }
   } catch (error) {
     console.error('Erreur lors de la création manuelle de l\'étudiant:', error)
@@ -542,9 +545,9 @@ export const parseExcelFile = async (fileBuffer) => {
         adresse: hNorm.findIndex((h) => h.includes('adresse'))
       }
 
-      if (colIndices.nom < 0 || colIndices.prenom < 0) {
+      if (colIndices.nom < 0) {
         console.warn(
-          `Import Excel : feuille « ${sheetName} » ignorée (colonnes « Nom » et « Prénom » obligatoires, introuvables dans la première ligne).`
+          `Import Excel : feuille « ${sheetName} » ignorée (colonne « Nom » obligatoire introuvable dans la première ligne). La colonne « Prénom » est optionnelle.`
         )
         return
       }
@@ -558,9 +561,10 @@ export const parseExcelFile = async (fileBuffer) => {
         }
 
         const nom = colIndices.nom >= 0 ? String(row[colIndices.nom] || '').trim() : ''
-        const prenom = colIndices.prenom >= 0 ? String(row[colIndices.prenom] || '').trim() : ''
+        const prenom =
+          colIndices.prenom >= 0 ? String(row[colIndices.prenom] || '').trim() : ''
 
-        if (!nom || !prenom) {
+        if (!nom) {
           continue
         }
 
@@ -863,6 +867,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, for
       // Créer chaque étudiant
       for (const etudiantData of etudiants) {
         try {
+          const prenomNorm = (etudiantData.prenom ?? '').trim()
           const matricule = await generateMatricule(anneeFormatee)
 
           // Vérifier si l'étudiant existe déjà
@@ -870,7 +875,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, for
             .from('etudiants')
             .select('id')
             .eq('nom', etudiantData.nom)
-            .eq('prenom', etudiantData.prenom)
+            .eq('prenom', prenomNorm)
             .maybeSingle()
 
           if (etudiantExistant) {
@@ -885,7 +890,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, for
             .insert({
               matricule,
               nom: etudiantData.nom,
-              prenom: etudiantData.prenom,
+              prenom: prenomNorm,
               date_naissance: etudiantData.dateNaissance?.toISOString() || null,
               lieu_naissance: etudiantData.lieuNaissance || null,
               nationalite: etudiantData.nationalite || null,
@@ -948,7 +953,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, for
 
               await supabaseAdmin.from('utilisateurs').insert({
                 nom: etudiantData.nom,
-                prenom: etudiantData.prenom,
+                prenom: prenomNorm,
                 email: emailCompte,
                 username: username,
                 password: hashedPassword,
@@ -960,7 +965,7 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, for
               if (emailEtudiant) {
                 // Envoyer en "fire and forget" pour ne pas ralentir l'import
                 sendStudentCredentials(
-                  { nom: etudiantData.nom, prenom: etudiantData.prenom, email: emailEtudiant },
+                  { nom: etudiantData.nom, prenom: prenomNorm, email: emailEtudiant },
                   password,
                   matricule
                 ).catch(e => console.error(`Erreur envoi email ${emailEtudiant}:`, e))
@@ -971,7 +976,8 @@ export const importEtudiants = async (dataBySheet, anneeAcademique, agentId, for
           }
 
         } catch (error) {
-          const errorMsg = `Erreur pour ${etudiantData.nom} ${etudiantData.prenom}: ${error.message}`
+          const ident = [etudiantData.nom, (etudiantData.prenom ?? '').trim()].filter(Boolean).join(' ')
+          const errorMsg = `Erreur pour ${ident || etudiantData.nom}: ${error.message}`
           detailsFiliere.erreurs.push(errorMsg)
           results.erreurs.push(errorMsg)
           console.error(errorMsg, error)

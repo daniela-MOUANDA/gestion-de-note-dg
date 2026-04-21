@@ -357,7 +357,7 @@ const GestionComptesView = () => {
                       filteredComptes.map((compte) => (
                     <tr key={compte.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-800">{compte.prenom} {compte.nom}</p>
+                        <p className="font-semibold text-slate-800">{compte.nom} {compte.prenom}</p>
                         <p className="text-xs text-slate-500">Créé le {compte.dateCreation}</p>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">{compte.email}</td>

@@ -18,7 +18,7 @@ const DashboardChefView = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
   const { error: alertError } = useAlert()
-  const nomComplet = user ? `${user.prenom} ${user.nom}` : 'Chef de Service'
+  const nomComplet = user ? `${user.nom} ${user.prenom}` : 'Chef de Service'
   
   const [stats, setStats] = useState({
     totalAgents: 0,
@@ -120,7 +120,7 @@ const DashboardChefView = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+      <div className="min-h-screen bg-[#f4f6f9]">
         <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <AdminHeader />
@@ -136,7 +136,7 @@ const DashboardChefView = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+      <div className="min-h-screen bg-[#f4f6f9]">
         <AdminSidebar />
         <div className="flex flex-col lg:ml-64 min-h-screen">
           <AdminHeader />
@@ -152,7 +152,7 @@ const DashboardChefView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+    <div className="min-h-screen bg-[#f4f6f9]">
       <AdminSidebar />
       <div className="flex flex-col lg:ml-64 min-h-screen">
         <AdminHeader />

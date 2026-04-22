@@ -51,6 +51,41 @@ export const getPromotions = async () => {
   return response.json()
 }
 
+/** Tous les niveaux (sans filtre formation/filière) — pour listes déroulantes scolarité. */
+export const getNiveauxAll = async () => {
+  const response = await fetch(`${API_URL}/niveaux`)
+  if (!response.ok) throw new Error('Erreur lors de la récupération des niveaux')
+  return response.json()
+}
+
+/**
+ * Liste des étudiants du système (lignes d’inscription) — auth requise.
+ * @param {{ promotionId?: string, filiereId?: string, niveauId?: string }} params
+ */
+export const getListeEtudiantsScolarite = async (params = {}) => {
+  const token = localStorage.getItem('token')
+  if (!token) throw new Error('Token manquant. Veuillez vous reconnecter.')
+
+  const qs = new URLSearchParams()
+  if (params.promotionId) qs.set('promotionId', params.promotionId)
+  if (params.filiereId) qs.set('filiereId', params.filiereId)
+  if (params.niveauId) qs.set('niveauId', params.niveauId)
+
+  const response = await fetch(`${API_URL}/etudiants/liste?${qs.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+
+  if (!response.ok) {
+    if (handleAuthError(response)) {
+      throw new Error('Session expirée. Veuillez vous reconnecter.')
+    }
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err.error || 'Erreur lors du chargement de la liste des étudiants')
+  }
+
+  return response.json()
+}
+
 export const getAgentDashboardStats = async () => {
   const token = localStorage.getItem('token')
   if (!token) {

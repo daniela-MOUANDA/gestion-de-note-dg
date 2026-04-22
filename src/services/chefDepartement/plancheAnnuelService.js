@@ -72,6 +72,27 @@ function decisionAnnuelleDetails(totalCreditsAnnuel, semestreA) {
     return { text: `Redouble la Licence ${annee}`, kind: 'REDOUBLE' }
 }
 
+/** Âge en années révolues (date du jour, fuseau local du serveur / navigateur). */
+function ageFromDateNaissance(dateNaissance) {
+    if (dateNaissance == null || String(dateNaissance).trim() === '') return null
+    const d = new Date(dateNaissance)
+    if (Number.isNaN(d.getTime())) return null
+    const today = new Date()
+    let age = today.getFullYear() - d.getFullYear()
+    const md = today.getMonth() - d.getMonth()
+    if (md < 0 || (md === 0 && today.getDate() < d.getDate())) age--
+    if (age < 0 || age > 120) return null
+    return age
+}
+
+/** Affichage court pour la planche (M / F / —). */
+function sexeAffichePlanche(sexe) {
+    const s = String(sexe || '').trim().toUpperCase()
+    if (s === 'M' || s === 'MASCULIN') return 'M'
+    if (s === 'F' || s === 'FÉMININ' || s === 'FEMININ') return 'F'
+    return '—'
+}
+
 /**
  * Récupère et consolide les données pour une planche annuelle
  * @param {string} classeId 
@@ -110,6 +131,16 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
             return Number.isFinite(n) ? n : 0
         }
 
+        const creditsAttendusS1 = toNum(resultsA.meta?.totalCreditsAttendusSemestre)
+        const creditsAttendusS2 = toNum(resultsB.success ? resultsB.meta?.totalCreditsAttendusSemestre : 0)
+        const creditsAttendusAnnuelClasse = creditsAttendusS1 + creditsAttendusS2
+
+        /** Taux de validation = crédits capitalisés / crédits attendus (année), en %. */
+        function tauxValidationPourCreditsObtenus(creditsObtenus) {
+            if (creditsAttendusAnnuelClasse <= 0) return null
+            return Math.round((toNum(creditsObtenus) / creditsAttendusAnnuelClasse) * 100)
+        }
+
         // 2. Fusionner les données par étudiant
         const annualData = studentsA.map(studentA => {
             const idA = studentA.etudiant?.id
@@ -133,22 +164,35 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
                 decisionKind === 'ADMIS' ? 'green' : decisionKind === 'REDOUBLE' ? 'red' : 'orange'
 
             const mention = mentionFromMoyenneAnnuelle(moyAnnuelleArrondie)
+            const tauxValidation = tauxValidationPourCreditsObtenus(totalCreditsAnnuel)
+
+            const et = studentA.etudiant || {}
+            const sexe = sexeAffichePlanche(et.sexe)
+            const age = ageFromDateNaissance(et.date_naissance)
 
             return {
                 etudiant: studentA.etudiant,
+                sexe,
+                age,
                 s1: {
                     moyenne: moyS1,
                     credits: creditsS1,
+                    creditsAttendus: creditsAttendusS1,
+                    rang: studentA.rang ?? null,
                     ues: studentA.uesValidees || []
                 },
                 s2: {
                     moyenne: moyS2,
                     credits: creditsS2,
+                    creditsAttendus: creditsAttendusS2,
+                    rang: studentB?.rang ?? null,
                     ues: studentB?.uesValidees || []
                 },
                 annuel: {
                     moyenne: moyAnnuelleArrondie,
                     credits: totalCreditsAnnuel,
+                    creditsAttendus: creditsAttendusAnnuelClasse,
+                    tauxValidation,
                     decision,
                     decisionKind,
                     mention,
@@ -184,7 +228,10 @@ export const getAnnualPlancheData = async (classeId, departementId) => {
                 semestreB: sB,
                 classeInfo: resultsA.meta?.classeInfo,
                 ueOrderS1,
-                ueOrderS2
+                ueOrderS2,
+                creditsAttendusS1,
+                creditsAttendusS2,
+                creditsAttendusAnnuel: creditsAttendusAnnuelClasse
             }
         }
 

@@ -274,6 +274,76 @@ export const getEtudiantsParClasse = async (classeId, promotionId, typeInscripti
   }
 }
 
+/**
+ * Liste des inscriptions avec étudiants (scolarité) — filtres optionnels par promotion, filière, niveau.
+ */
+export const getListeEtudiantsInscriptions = async ({ promotionId, filiereId, niveauId } = {}) => {
+  try {
+    let query = supabaseAdmin
+      .from('inscriptions')
+      .select(`
+        id,
+        statut,
+        date_inscription,
+        filiere_id,
+        niveau_id,
+        promotion_id,
+        formation_id,
+        classe_id,
+        etudiants ( id, matricule, nom, prenom, email, telephone ),
+        filieres ( id, nom, code ),
+        niveaux ( id, nom, code ),
+        promotions ( id, annee ),
+        formations ( id, nom, code ),
+        classes ( id, nom )
+      `)
+      .order('date_inscription', { ascending: false })
+
+    if (promotionId) query = query.eq('promotion_id', promotionId)
+    if (filiereId) query = query.eq('filiere_id', filiereId)
+    if (niveauId) query = query.eq('niveau_id', niveauId)
+
+    const { data, error } = await query.limit(8000)
+
+    if (error) throw error
+
+    const rows = (data || [])
+      .filter((row) => row.etudiants)
+      .map((row) => ({
+        inscriptionId: row.id,
+        etudiantId: row.etudiants.id,
+        matricule: row.etudiants.matricule,
+        nom: row.etudiants.nom,
+        prenom: row.etudiants.prenom,
+        email: row.etudiants.email,
+        telephone: row.etudiants.telephone,
+        statutInscription: row.statut,
+        filiereId: row.filiere_id,
+        filiereNom: row.filieres?.nom ?? '',
+        filiereCode: row.filieres?.code ?? '',
+        niveauId: row.niveau_id,
+        niveauCode: row.niveaux?.code ?? '',
+        niveauNom: row.niveaux?.nom ?? '',
+        promotionId: row.promotion_id,
+        anneeAcademique: row.promotions?.annee ?? '',
+        formationNom: row.formations?.nom ?? '',
+        formationCode: row.formations?.code ?? '',
+        classeNom: row.classes?.nom ?? ''
+      }))
+
+    rows.sort((a, b) => {
+      const c = (a.nom || '').localeCompare(b.nom || '', 'fr', { sensitivity: 'base' })
+      if (c !== 0) return c
+      return (a.prenom || '').localeCompare(b.prenom || '', 'fr', { sensitivity: 'base' })
+    })
+
+    return rows
+  } catch (error) {
+    console.error('Erreur liste étudiants inscriptions:', error)
+    throw error
+  }
+}
+
 // Valider une inscription
 export const validerInscription = async (inscriptionId, agentId) => {
   try {

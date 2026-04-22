@@ -11,6 +11,7 @@ import { getMeilleursEtudiants } from '../../src/services/dep/meilleursEtudiants
 import { getStatistiquesDEP } from '../../src/services/dep/statistiquesService.js'
 import { getBulletinData } from '../../src/services/chefDepartement/relevesService.js'
 import { generateBulletinPDF } from '../services/bulletinPDFGenerator.js'
+import { buildBulletinVerificationPublicUrl } from '../services/bulletinVerifyToken.js'
 import { supabaseAdmin } from '../../src/lib/supabase.js'
 import { getMention } from '../utils/mentions.js'
 import path from 'path'
@@ -265,7 +266,8 @@ router.get('/bulletins/:id/preview', async (req, res) => {
             penalitesAbsences: 0,
             uesValidees: etudiantData.uesValidees || [],
             decision: etudiantData.avisJury || (etudiantData.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'),
-            dateGeneration: new Date().toISOString()
+            dateGeneration: new Date().toISOString(),
+            verificationUrl: buildBulletinVerificationPublicUrl(bulletin.id)
         }
 
         // 6. Générer le PDF

@@ -28,6 +28,7 @@ import studentRoutes from './routes/student.js'
 import depRoutes from './routes/depRoutes.js'
 import adminSystemeRoutes from './routes/adminSysteme.js'
 import notificationsRoutes from './routes/notifications.js'
+import publicVerifyRoutes from './routes/publicVerify.js'
 
 
 const app = express()
@@ -56,6 +57,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 // Routes publiques
 app.use('/api/auth', authRoutes)
+app.use('/api/public', publicVerifyRoutes)
 
 // Routes alias pour compatibilité (rediriger vers scolarite)
 app.get('/api/promotions', (req, res, next) => {
@@ -75,6 +77,13 @@ app.get('/api/filieres', (req, res, next) => {
 
 app.get('/api/niveaux', (req, res, next) => {
   req.url = '/api/scolarite/niveaux' + (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '')
+  scolariteRoutes(req, res, next)
+})
+
+app.get('/api/etudiants/liste', (req, res, next) => {
+  req.url =
+    '/api/scolarite/etudiants/liste' +
+    (req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '')
   scolariteRoutes(req, res, next)
 })
 

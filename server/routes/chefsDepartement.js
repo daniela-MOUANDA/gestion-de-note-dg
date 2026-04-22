@@ -68,39 +68,13 @@ import {
 import { getBulletinData } from '../../src/services/chefDepartement/relevesService.js'
 import { getMeilleursEtudiantsParFiliere } from '../../src/services/chefDepartementService.js'
 import { verifierEtatBulletins, genererBulletins, getEtatBulletinsToutesClasses } from '../../src/services/chefDepartement/bulletinService.js'
-
-const normalizeSemestreForBulletinEnum = (semestre) => {
-  const value = String(semestre || '').toUpperCase().trim()
-  const match = value.match(/^S([1-6])$/)
-  if (!match) return value
-  const n = Number(match[1])
-  return n % 2 === 0 ? 'S2' : 'S1'
-}
-
-const resolveSemestreForClasseLevel = (semestreStocke, niveauCode, semestreDemande) => {
-  const requested = String(semestreDemande || '').toUpperCase().trim()
-  const stored = String(semestreStocke || '').toUpperCase().trim()
-  const niveau = String(niveauCode || '').toUpperCase().trim()
-
-  const allowedByLevel = {
-    L1: ['S1', 'S2'],
-    L2: ['S3', 'S4'],
-    L3: ['S5', 'S6']
-  }
-
-  if (requested && (allowedByLevel[niveau] || []).includes(requested)) {
-    return requested
-  }
-
-  if (stored === 'S1') return niveau === 'L2' ? 'S3' : (niveau === 'L3' ? 'S5' : 'S1')
-  if (stored === 'S2') return niveau === 'L2' ? 'S4' : (niveau === 'L3' ? 'S6' : 'S2')
-  return stored
-}
+import { resolveSemestreForClasseLevel } from '../utils/bulletinSemestreResolve.js'
 import { supabaseAdmin } from '../../src/lib/supabase.js'
 import { fetchPromotionForCurrentAcademicYear, getCurrentAcademicYearLabel } from '../../src/utils/academicYear.js'
 import { getMention } from '../utils/mentions.js'
 // Imports des générateurs PDF
 import { generateBulletinPDF } from '../services/bulletinPDFGenerator.js'
+import { buildBulletinVerificationPublicUrl } from '../services/bulletinVerifyToken.js'
 import { generatePlanchePDF } from '../services/planchePDFGenerator.js'
 import { generatePlancheAnnuelPDF } from '../services/plancheAnnuelPDFGenerator.js'
 import { generatePlancheExcel, generateAnnualExcel } from '../services/plancheExcelGenerator.js'
@@ -112,6 +86,14 @@ import {
   deleteCoordinateurPedagogique
 } from '../../src/services/chefDepartement/coordinateurPedagogiqueService.js'
 import { fileURLToPath } from 'url'
+
+const normalizeSemestreForBulletinEnum = (semestre) => {
+  const value = String(semestre || '').toUpperCase().trim()
+  const match = value.match(/^S([1-6])$/)
+  if (!match) return value
+  const n = Number(match[1])
+  return n % 2 === 0 ? 'S2' : 'S1'
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -1595,7 +1577,8 @@ router.get('/bulletins/:id/download-pdf', authenticate, async (req, res) => {
       penalitesAbsences: 0,
       uesValidees: etudiantData.uesValidees || [], // Utiliser les UEs calculées par le service
       decision: etudiantData.avisJury || (etudiantData.statut === 'VALIDE' ? 'Semestre valide' : 'Semestre non Valide'),
-      dateGeneration: bulletin.date_generation || new Date().toISOString()
+      dateGeneration: bulletin.date_generation || new Date().toISOString(),
+      verificationUrl: buildBulletinVerificationPublicUrl(bulletin.id)
     }
 
     // Générer le PDF
@@ -1692,6 +1675,8 @@ router.get('/classes/:classeId/planches/annuel/pdf', async (req, res) => {
       students: result.data.map(s => ({
         nom: s.etudiant.nom,
         prenom: s.etudiant.prenom,
+        sexe: s.sexe,
+        age: s.age,
         s1: s.s1,
         s2: s.s2,
         annuel: s.annuel
@@ -1754,6 +1739,8 @@ router.get('/classes/:classeId/planches/annuel/excel', async (req, res) => {
       students: (result.data || []).map(s => ({
         nom: s.etudiant?.nom ?? 'N/A',
         prenom: s.etudiant?.prenom ?? '',
+        sexe: s.sexe,
+        age: s.age,
         s1: s.s1,
         s2: s.s2,
         annuel: s.annuel

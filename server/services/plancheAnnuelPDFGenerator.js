@@ -70,9 +70,11 @@ function drawAnnualTable(doc, data, startX, startY, totalWidth) {
 
     const colWidths = {
         num: 25,
-        nom: 180,
-        sem: 160, // Largeur pour un bloc semestre (Moy + Crédits)
-        annuel: 200 // Largeur bloc final
+        nom: 165,
+        sexe: 38,
+        age: 32,
+        sem: 210, // Moyenne + crédits + rang par semestre
+        annuel: 280 // Moy + crédits + taux + rang + décision
     }
 
     doc.fontSize(8).font('Helvetica-Bold')
@@ -84,34 +86,45 @@ function drawAnnualTable(doc, data, startX, startY, totalWidth) {
     doc.rect(startX + colWidths.num, currentY, colWidths.nom, 40).stroke()
     doc.text('Nom et Prénom', startX + colWidths.num + 5, currentY + 15)
 
+    doc.rect(startX + colWidths.num + colWidths.nom, currentY, colWidths.sexe, 40).stroke()
+    doc.text('Sexe', startX + colWidths.num + colWidths.nom, currentY + 15, { width: colWidths.sexe, align: 'center' })
+
+    doc.rect(startX + colWidths.num + colWidths.nom + colWidths.sexe, currentY, colWidths.age, 40).stroke()
+    doc.text('Âge', startX + colWidths.num + colWidths.nom + colWidths.sexe, currentY + 15, { width: colWidths.age, align: 'center' })
+
     // Bloc Semestre 1
-    let x = startX + colWidths.num + colWidths.nom
+    let x = startX + colWidths.num + colWidths.nom + colWidths.sexe + colWidths.age
     doc.rect(x, currentY, colWidths.sem, 20).stroke()
     doc.text('SEMESTRE 1', x, currentY + 6, { width: colWidths.sem, align: 'center' })
-    doc.rect(x, currentY + 20, colWidths.sem / 2, 20).stroke()
-    doc.text('Moyenne', x, currentY + 26, { width: colWidths.sem / 2, align: 'center' })
-    doc.rect(x + colWidths.sem / 2, currentY + 20, colWidths.sem / 2, 20).stroke()
-    doc.text('Crédits', x + colWidths.sem / 2, currentY + 26, { width: colWidths.sem / 2, align: 'center' })
+    const w3 = colWidths.sem / 3
+    doc.rect(x, currentY + 20, w3, 20).stroke()
+    doc.text('Moyenne', x, currentY + 26, { width: w3, align: 'center' })
+    doc.rect(x + w3, currentY + 20, w3, 20).stroke()
+    doc.text('Crédits', x + w3, currentY + 26, { width: w3, align: 'center' })
+    doc.rect(x + 2 * w3, currentY + 20, w3, 20).stroke()
+    doc.text('Rang', x + 2 * w3, currentY + 26, { width: w3, align: 'center' })
 
     // Bloc Semestre 2
     x += colWidths.sem
     doc.rect(x, currentY, colWidths.sem, 20).stroke()
     doc.text('SEMESTRE 2', x, currentY + 6, { width: colWidths.sem, align: 'center' })
-    doc.rect(x, currentY + 20, colWidths.sem / 2, 20).stroke()
-    doc.text('Moyenne', x, currentY + 26, { width: colWidths.sem / 2, align: 'center' })
-    doc.rect(x + colWidths.sem / 2, currentY + 20, colWidths.sem / 2, 20).stroke()
-    doc.text('Crédits', x + colWidths.sem / 2, currentY + 26, { width: colWidths.sem / 2, align: 'center' })
+    doc.rect(x, currentY + 20, w3, 20).stroke()
+    doc.text('Moyenne', x, currentY + 26, { width: w3, align: 'center' })
+    doc.rect(x + w3, currentY + 20, w3, 20).stroke()
+    doc.text('Crédits', x + w3, currentY + 26, { width: w3, align: 'center' })
+    doc.rect(x + 2 * w3, currentY + 20, w3, 20).stroke()
+    doc.text('Rang', x + 2 * w3, currentY + 26, { width: w3, align: 'center' })
 
     // Bloc Annuel
     x += colWidths.sem
     doc.rect(x, currentY, colWidths.annuel, 20).stroke()
     doc.text('RÉSULTATS ANNUELS', x, currentY + 6, { width: colWidths.annuel, align: 'center' })
 
-    const subWidth = colWidths.annuel / 4
-    const subs = ['Moy. Ann', 'Crédits', 'Rang', 'Décision']
-    subs.forEach((s, i) => {
+    const subWidth = colWidths.annuel / 5
+    const subs = ['Moy. Ann', 'Crédits', 'Taux', 'Rang', 'Décision']
+    subs.forEach((lbl, i) => {
         doc.rect(x + i * subWidth, currentY + 20, subWidth, 20).stroke()
-        doc.fontSize(7).text(s, x + i * subWidth, currentY + 26, { width: subWidth, align: 'center' })
+        doc.fontSize(6).text(lbl, x + i * subWidth, currentY + 26, { width: subWidth, align: 'center' })
     })
 
     currentY += 40
@@ -135,31 +148,53 @@ function drawAnnualTable(doc, data, startX, startY, totalWidth) {
         doc.text(`${s.nom} ${s.prenom}`, lx + 5, currentY + 6)
         lx += colWidths.nom
 
+        doc.rect(lx, currentY, colWidths.sexe, rowH).stroke()
+        doc.text(s.sexe != null && String(s.sexe).trim() !== '' ? String(s.sexe) : '—', lx, currentY + 6, { width: colWidths.sexe, align: 'center' })
+        lx += colWidths.sexe
+
+        doc.rect(lx, currentY, colWidths.age, rowH).stroke()
+        doc.text(s.age != null ? String(s.age) : '—', lx, currentY + 6, { width: colWidths.age, align: 'center' })
+        lx += colWidths.age
+
+        const sw = colWidths.sem / 3
         // S1
-        doc.rect(lx, currentY, colWidths.sem / 2, rowH).stroke()
-        doc.text(s.s1.moyenne.toFixed(2), lx, currentY + 6, { width: colWidths.sem / 2, align: 'center' })
-        doc.rect(lx + colWidths.sem / 2, currentY, colWidths.sem / 2, rowH).stroke()
-        doc.text(s.s1.credits.toString(), lx + colWidths.sem / 2, currentY + 6, { width: colWidths.sem / 2, align: 'center' })
+        doc.rect(lx, currentY, sw, rowH).stroke()
+        doc.text(Number(s.s1?.moyenne).toFixed(2), lx, currentY + 6, { width: sw, align: 'center' })
+        doc.rect(lx + sw, currentY, sw, rowH).stroke()
+        doc.text(String(s.s1?.credits ?? ''), lx + sw, currentY + 6, { width: sw, align: 'center' })
+        doc.rect(lx + 2 * sw, currentY, sw, rowH).stroke()
+        doc.text(s.s1?.rang != null ? String(s.s1.rang) : '—', lx + 2 * sw, currentY + 6, { width: sw, align: 'center' })
         lx += colWidths.sem
 
         // S2
-        doc.rect(lx, currentY, colWidths.sem / 2, rowH).stroke()
-        doc.text(s.s2.moyenne.toFixed(2), lx, currentY + 6, { width: colWidths.sem / 2, align: 'center' })
-        doc.rect(lx + colWidths.sem / 2, currentY, colWidths.sem / 2, rowH).stroke()
-        doc.text(s.s2.credits.toString(), lx + colWidths.sem / 2, currentY + 6, { width: colWidths.sem / 2, align: 'center' })
+        doc.rect(lx, currentY, sw, rowH).stroke()
+        doc.text(Number(s.s2?.moyenne).toFixed(2), lx, currentY + 6, { width: sw, align: 'center' })
+        doc.rect(lx + sw, currentY, sw, rowH).stroke()
+        doc.text(String(s.s2?.credits ?? ''), lx + sw, currentY + 6, { width: sw, align: 'center' })
+        doc.rect(lx + 2 * sw, currentY, sw, rowH).stroke()
+        doc.text(s.s2?.rang != null ? String(s.s2.rang) : '—', lx + 2 * sw, currentY + 6, { width: sw, align: 'center' })
         lx += colWidths.sem
 
         // Annuel
         doc.rect(lx, currentY, subWidth, rowH).stroke()
-        doc.font('Helvetica-Bold').text(s.annuel.moyenne.toFixed(2), lx, currentY + 6, { width: subWidth, align: 'center' }).font('Helvetica')
+        doc.font('Helvetica-Bold').text(Number(s.annuel.moyenne).toFixed(2), lx, currentY + 6, { width: subWidth, align: 'center' }).font('Helvetica')
         lx += subWidth
 
         doc.rect(lx, currentY, subWidth, rowH).stroke()
-        doc.text(s.annuel.credits.toString(), lx, currentY + 6, { width: subWidth, align: 'center' })
+        doc.text(String(s.annuel.credits ?? ''), lx, currentY + 6, { width: subWidth, align: 'center' })
         lx += subWidth
 
         doc.rect(lx, currentY, subWidth, rowH).stroke()
-        doc.text(s.annuel.rang.toString(), lx, currentY + 6, { width: subWidth, align: 'center' })
+        doc.font('Helvetica-Bold').text(
+            s.annuel.tauxValidation != null ? `${s.annuel.tauxValidation}%` : '—',
+            lx,
+            currentY + 6,
+            { width: subWidth, align: 'center' }
+        ).font('Helvetica')
+        lx += subWidth
+
+        doc.rect(lx, currentY, subWidth, rowH).stroke()
+        doc.text(s.annuel.rang != null ? String(s.annuel.rang) : '—', lx, currentY + 6, { width: subWidth, align: 'center' })
         lx += subWidth
 
         doc.rect(lx, currentY, subWidth, rowH).stroke()

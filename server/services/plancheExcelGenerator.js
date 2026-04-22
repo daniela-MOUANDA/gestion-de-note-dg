@@ -350,20 +350,25 @@ export async function generateAnnualExcel(data, outputPath) {
     const headers = [
         { name: 'N°', width: 5, bg: 'FFE2E8F0' },
         { name: 'Nom et Prénom', width: 35, bg: 'FFE2E8F0' },
+        { name: 'Sexe', width: 6, bg: 'FFE2E8F0' },
+        { name: 'Âge', width: 5, bg: 'FFE2E8F0' },
         { name: `${semA} ${shortUeHeaderLabel(u1a, 'UE1')}`, width: 11, bg: 'FFDBEAFE' },
         { name: 'CTS', width: 6, bg: 'FFEFF6FF' },
         { name: `${semA} ${shortUeHeaderLabel(u1b, 'UE2')}`, width: 11, bg: 'FFDBEAFE' },
         { name: 'CTS', width: 6, bg: 'FFEFF6FF' },
         { name: `MOY ${semA}`, width: 10, bg: 'FFBAE6FD' },
         { name: `CTS ${semA}`, width: 10, bg: 'FFBAE6FD' },
+        { name: `RANG ${semA}`, width: 8, bg: 'FFBAE6FD' },
         { name: `${semB} ${shortUeHeaderLabel(u2a, 'UE1')}`, width: 11, bg: 'FFE9D5FF' },
         { name: 'CTS', width: 6, bg: 'FFF5F3FF' },
         { name: `${semB} ${shortUeHeaderLabel(u2b, 'UE2')}`, width: 11, bg: 'FFE9D5FF' },
         { name: 'CTS', width: 6, bg: 'FFF5F3FF' },
         { name: `MOY ${semB}`, width: 10, bg: 'FFD8B4FE' },
         { name: `CTS ${semB}`, width: 10, bg: 'FFD8B4FE' },
+        { name: `RANG ${semB}`, width: 8, bg: 'FFD8B4FE' },
         { name: 'MOY ANN', width: 12, bg: 'FF99F6E4' },
         { name: 'CTS ANN', width: 8, bg: 'FF99F6E4' },
+        { name: 'TAUX VAL. AN.', width: 12, bg: 'FF99F6E4' },
         { name: 'RANG', width: 7, bg: 'FFCCFBF1' },
         { name: 'DÉCISION', width: 32, bg: 'FFCCFBF1' },
         { name: 'MENTION', width: 15, bg: 'FFCCFBF1' }
@@ -391,9 +396,11 @@ export async function generateAnnualExcel(data, outputPath) {
         worksheet.getColumn(i + 1).width = h.width;
     });
 
-    const creditColIndexes = new Set([3, 5, 7, 9, 11, 13, 15])
-    const gradeColIndexes = new Set([2, 4, 6, 8, 10, 12, 14])
-    const rangColIndex = 16
+    const creditColIndexes = new Set([5, 7, 9, 12, 14, 16, 19])
+    const gradeColIndexes = new Set([4, 6, 8, 11, 13, 15, 18])
+    const rangColIndexes = new Set([10, 17, 21])
+    const tauxColIndex = 20
+    const ageColIndex = 3
 
     data.students.forEach((s, idx) => {
         const row = worksheet.getRow(startRow + 1 + idx);
@@ -407,20 +414,25 @@ export async function generateAnnualExcel(data, outputPath) {
         const vals = [
             idx + 1,
             `${s.nom ?? ''} ${s.prenom ?? ''}`.trim().toUpperCase() || 'N/A',
+            s.sexe != null && String(s.sexe).trim() !== '' ? String(s.sexe) : '—',
+            safeExcelNumber(s.age),
             safeExcelNumber(e1a?.moyenne),
             safeExcelNumber(e1a?.credits) ?? 0,
             safeExcelNumber(e1b?.moyenne),
             safeExcelNumber(e1b?.credits) ?? 0,
             safeExcelNumber(s.s1?.moyenne),
             safeExcelNumber(s.s1?.credits) ?? 0,
+            safeExcelNumber(s.s1?.rang),
             safeExcelNumber(e2a?.moyenne),
             safeExcelNumber(e2a?.credits) ?? 0,
             safeExcelNumber(e2b?.moyenne),
             safeExcelNumber(e2b?.credits) ?? 0,
             safeExcelNumber(s.s2?.moyenne),
             safeExcelNumber(s.s2?.credits) ?? 0,
+            safeExcelNumber(s.s2?.rang),
             safeExcelNumber(s.annuel?.moyenne),
             safeExcelNumber(s.annuel?.credits) ?? 0,
+            safeExcelNumber(s.annuel?.tauxValidation),
             safeExcelNumber(s.annuel?.rang),
             s.annuel?.decision ?? '',
             (s.annuel?.mention != null ? String(s.annuel.mention).toUpperCase() : '')
@@ -432,8 +444,14 @@ export async function generateAnnualExcel(data, outputPath) {
             if (typeof store === 'number' && !Number.isFinite(store)) store = null
             cell.value = store
 
-            if (typeof store === 'number' && i > 1 && i !== rangColIndex) {
-                if (creditColIndexes.has(i)) {
+            if (typeof store === 'number' && i > 1) {
+                if (i === ageColIndex) {
+                    cell.numFmt = '0';
+                } else if (rangColIndexes.has(i)) {
+                    cell.numFmt = '0';
+                } else if (i === tauxColIndex) {
+                    cell.numFmt = '0"%"';
+                } else if (creditColIndexes.has(i)) {
                     cell.numFmt = '0';
                 } else {
                     cell.numFmt = '0.00';
@@ -453,7 +471,7 @@ export async function generateAnnualExcel(data, outputPath) {
             cell.alignment = { vertical: 'middle', horizontal: i === 1 ? 'left' : 'center', wrapText: false };
         });
 
-        const decisionCell = row.getCell(18);
+        const decisionCell = row.getCell(23);
         const decKind = s.annuel?.decisionKind;
         if (decKind === 'ADMIS') {
             decisionCell.font = { bold: true, color: { argb: 'FF15803D' }, size: 9 };

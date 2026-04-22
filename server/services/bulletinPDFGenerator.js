@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import QRCode from 'qrcode'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -12,9 +13,24 @@ const __dirname = path.dirname(__filename)
  * @param {string} outputPath - Chemin de sortie du PDF
  * @param {boolean} includeStamp - Inclure le cachet (true pour DEP, false pour Chef de Département)
  * @param {Object} depInfo - Informations du DEP (dateVisa, nom, prenom, titre) - optionnel
+ * @param {string} [bulletinData.verificationUrl] - URL publique de vérification (QR code)
  * @returns {Promise<string>} - Chemin du fichier généré
  */
 export async function generateBulletinPDF(bulletinData, outputPath, includeStamp = false, depInfo = null) {
+    let qrBuffer = null
+    if (bulletinData.verificationUrl) {
+        try {
+            qrBuffer = await QRCode.toBuffer(bulletinData.verificationUrl, {
+                type: 'png',
+                width: 140,
+                margin: 1,
+                errorCorrectionLevel: 'M'
+            })
+        } catch (e) {
+            console.error('Bulletin QR:', e)
+        }
+    }
+
     return new Promise((resolve, reject) => {
         try {
             // Créer un nouveau document PDF
@@ -41,7 +57,7 @@ export async function generateBulletinPDF(bulletinData, outputPath, includeStamp
             drawGradesTable(doc, bulletinData.modules, bulletinData.moyenneClasse, bulletinData.uesValidees)
             drawSummary(doc, bulletinData)
             drawCreditsValidation(doc, bulletinData.uesValidees)
-            drawFooter(doc, bulletinData.decision, bulletinData.dateGeneration, includeStamp, depInfo)
+            drawFooter(doc, bulletinData.decision, bulletinData.dateGeneration, includeStamp, depInfo, qrBuffer)
 
             // Finaliser le PDF
             doc.end()
@@ -69,17 +85,18 @@ function drawWatermark(doc) {
 
     const centerX = doc.page.width / 2
     const centerY = doc.page.height / 2 + 10
-    const watermarkWidth = 360
-    const watermarkHeight = 360
+    const watermarkWidth = 340
+    const watermarkHeight = 340
     const x = centerX - (watermarkWidth / 2)
     const y = centerY - (watermarkHeight / 2)
 
     doc.save()
-    // Opacité faible pour préserver la lecture des notes
-    doc.opacity(0.08)
+    // Opacité légèrement augmentée, tout en gardant une bonne lisibilité.
+    doc.opacity(0.1)
     // Léger angle pour se rapprocher du rendu "original" fourni
     doc.rotate(-25, { origin: [centerX, centerY] })
-    doc.image(logoPath, x, y, { width: watermarkWidth, height: watermarkHeight })
+    // Conserver le ratio naturel du logo pour éviter l'effet d'étirement.
+    doc.image(logoPath, x, y, { width: watermarkWidth })
     doc.restore()
 }
 
@@ -628,8 +645,9 @@ function drawCreditsValidation(doc, uesValidees) {
  * @param {string} dateGeneration - Date de génération
  * @param {boolean} includeStamp - Inclure le cachet (true pour DEP uniquement)
  * @param {Object} depInfo - Informations du DEP (dateVisa, nom, prenom, titre) - optionnel
+ * @param {Buffer|null} qrBuffer - Image PNG du QR (vérification d'authenticité)
  */
-function drawFooter(doc, decision, dateGeneration, includeStamp = false, depInfo = null) {
+function drawFooter(doc, decision, dateGeneration, includeStamp = false, depInfo = null, qrBuffer = null) {
     const cachetPath = path.join(__dirname, '../../public/images/cachet.png')
 
     // Utiliser l'espace restant naturellement
@@ -642,6 +660,17 @@ function drawFooter(doc, decision, dateGeneration, includeStamp = false, depInfo
     doc.fontSize(9)
         .font('Helvetica-Bold')
         .text(`Décision du jury: ${decision}`, MARGIN_LEFT, footerY, { width: TABLE_WIDTH, align: 'left' })
+
+    const qrSize = 68
+    const qrX = MARGIN_LEFT
+    const qrY = footerY + 16
+    if (qrBuffer) {
+        doc.image(qrBuffer, qrX, qrY, { width: qrSize })
+        doc.fontSize(5.5)
+            .font('Helvetica')
+            .fillColor('#000000')
+            .text('Vérification d\'authenticité — scannez ce code', qrX, qrY + qrSize + 2, { width: 150 })
+    }
 
     if (includeStamp && fs.existsSync(cachetPath)) {
         const cachetWidth = 140
@@ -694,9 +723,11 @@ function drawFooter(doc, decision, dateGeneration, includeStamp = false, depInfo
             month: 'long',
             day: 'numeric'
         })
+        const dateY = qrBuffer ? qrY + 4 : footerY + 15
+        const dateX = qrBuffer ? 230 : MARGIN_LEFT
         doc.fontSize(8)
             .font('Helvetica')
-            .text(`Fait à Libreville, le ${date}`, MARGIN_LEFT, footerY + 15)
+            .text(`Fait à Libreville, le ${date}`, dateX, dateY, { width: 300, align: qrBuffer ? 'right' : 'left' })
     }
 
     // Note en bas

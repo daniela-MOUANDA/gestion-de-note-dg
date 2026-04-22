@@ -471,25 +471,27 @@ const PlanchesView = () => {
                                 {/* Table Container with Horizontal Scroll */}
                                 <div className="overflow-x-auto min-h-[400px]">
                                     {selectedSemestre === 'ANNUEL' ? (
-                                        <table className="w-full border-collapse border border-slate-300 bg-white" id="planche-table">
+                                        <table className="w-max min-w-full border-collapse border border-slate-300 bg-white" id="planche-table">
                                             <thead className="sticky top-0 z-20 shadow-sm">
                                                 {/* Row 1: Main Headers — tons pastel (lisibles, moins agressifs) */}
                                                 <tr className="bg-slate-200/95 text-slate-800 font-bold text-[10px] uppercase">
                                                     <th rowSpan={2} className="border border-slate-300 p-2 w-10 sticky left-0 z-30 bg-slate-100 border-r-2 border-r-slate-300">N°</th>
-                                                    <th rowSpan={2} className="border border-slate-300 p-2 min-w-[180px] sticky left-10 z-30 bg-slate-100 border-r-2 border-r-slate-300">Nom et Prénom</th>
+                                                    <th rowSpan={2} className="border border-slate-300 p-2 min-w-[250px] sticky left-10 z-30 bg-slate-100 border-r-2 border-r-slate-300 whitespace-nowrap">Nom et Prénom</th>
+                                                    <th rowSpan={2} className="border border-slate-300 p-2 w-11 bg-slate-100">Sexe</th>
+                                                    <th rowSpan={2} className="border border-slate-300 p-2 w-10 bg-slate-100">Âge</th>
 
                                                     {/* Semestre 1 Blocks */}
-                                                    <th colSpan={6} className="border border-slate-300 p-2 bg-sky-100/90 text-slate-800">
+                                                    <th colSpan={7} className="border border-slate-300 p-2 bg-sky-100/90 text-slate-800">
                                                         {metaData?.semestreA ? `SEMESTRE ${metaData.semestreA.replace('S', '')}` : 'SEMESTRE 1'}
                                                     </th>
 
                                                     {/* Semestre 2 Blocks */}
-                                                    <th colSpan={6} className="border border-slate-300 p-2 bg-violet-100/90 text-slate-800">
+                                                    <th colSpan={7} className="border border-slate-300 p-2 bg-violet-100/90 text-slate-800">
                                                         {metaData?.semestreB ? `SEMESTRE ${metaData.semestreB.replace('S', '')}` : 'SEMESTRE 2'}
                                                     </th>
 
                                                     {/* Annuel Summary */}
-                                                    <th colSpan={5} className="border border-slate-300 p-2 bg-teal-100/90 text-slate-800">RÉSULTATS ANNUELS</th>
+                                                    <th colSpan={6} className="border border-slate-300 p-2 bg-teal-100/90 text-slate-800">RÉSULTATS ANNUELS</th>
                                                 </tr>
 
                                                 <tr className="bg-slate-50 text-slate-800 text-[9px] font-black uppercase">
@@ -500,6 +502,7 @@ const PlanchesView = () => {
                                                     <th className="border border-slate-300 p-1">CTS</th>
                                                     <th className="border border-slate-300 p-1 bg-sky-50">MOY {metaData?.semestreA || 'S1'}</th>
                                                     <th className="border border-slate-300 p-1 bg-sky-50">CTS {metaData?.semestreA || 'S1'}</th>
+                                                    <th className="border border-slate-300 p-1 bg-sky-50">RANG {metaData?.semestreA || 'S1'}</th>
 
                                                     {/* S2 sub-headers */}
                                                     <th className="border border-slate-300 p-1 max-w-[5.5rem] truncate" title={metaData?.ueOrderS2?.[0]}>{metaData?.semestreB || 'S2'} {metaData?.ueOrderS2?.[0] ?? 'UE1'}</th>
@@ -508,10 +511,12 @@ const PlanchesView = () => {
                                                     <th className="border border-slate-300 p-1">CTS</th>
                                                     <th className="border border-slate-300 p-1 bg-violet-50">MOY {metaData?.semestreB || 'S2'}</th>
                                                     <th className="border border-slate-300 p-1 bg-violet-50">CTS {metaData?.semestreB || 'S2'}</th>
+                                                    <th className="border border-slate-300 p-1 bg-violet-50">RANG {metaData?.semestreB || 'S2'}</th>
 
                                                     {/* Annual sub-headers */}
                                                     <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">MOY ANN</th>
                                                     <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">CTS ANN</th>
+                                                    <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">TAUX VAL. AN.</th>
                                                     <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">RANG</th>
                                                     <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">DÉCISION</th>
                                                     <th className="border border-slate-300 p-1 bg-teal-50 text-slate-800">MENTION</th>
@@ -534,9 +539,11 @@ const PlanchesView = () => {
                                                             className="table-row-hover border-b border-slate-200 h-10 transition-all duration-150"
                                                         >
                                                             <td className="border border-slate-300 p-1 text-center font-bold sticky left-0 z-10 bg-white border-r-2">{idx + 1}</td>
-                                                            <td className="border border-slate-300 p-2 font-bold sticky left-10 z-10 bg-white border-r-2 whitespace-nowrap uppercase text-[10px]">
+                                                            <td className="border border-slate-300 p-2 font-bold sticky left-10 z-10 bg-white border-r-2 text-left whitespace-nowrap uppercase text-[10px] min-w-[250px]">
                                                                 {row.etudiant.nom} {row.etudiant.prenom}
                                                             </td>
+                                                            <td className="border border-slate-300 p-1 text-center font-bold bg-white text-[10px] w-11">{row.sexe ?? '—'}</td>
+                                                            <td className="border border-slate-300 p-1 text-center font-bold bg-white text-[10px] w-10">{row.age != null ? row.age : '—'}</td>
 
                                                             {/* S1 values */}
                                                             <td className="border border-slate-300 p-1 text-center text-[10px]">{s1_ue1.moyenne?.toFixed(2) || '-'}</td>
@@ -545,6 +552,7 @@ const PlanchesView = () => {
                                                             <td className="border border-slate-300 p-1 text-center text-[10px] bg-slate-50">{s1_ue2.credits || 0}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold bg-blue-50 text-[10px]">{row.s1?.moyenne?.toFixed(2) || '-'}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold bg-blue-50 text-[10px]">{row.s1?.credits || 0}</td>
+                                                            <td className="border border-slate-300 p-1 text-center font-bold bg-blue-50 text-[10px]">{row.s1?.rang ?? '-'}</td>
 
                                                             {/* S2 values */}
                                                             <td className="border border-slate-300 p-1 text-center text-[10px]">{s2_ue1.moyenne?.toFixed(2) || '-'}</td>
@@ -553,10 +561,14 @@ const PlanchesView = () => {
                                                             <td className="border border-slate-300 p-1 text-center text-[10px] bg-slate-50">{s2_ue2.credits || 0}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold bg-indigo-50 text-[10px]">{row.s2?.moyenne?.toFixed(2) || '-'}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold bg-indigo-50 text-[10px]">{row.s2?.credits || 0}</td>
+                                                            <td className="border border-slate-300 p-1 text-center font-bold bg-indigo-50 text-[10px]">{row.s2?.rang ?? '-'}</td>
 
                                                             {/* Annual values */}
                                                             <td className="border border-slate-300 p-1 text-center font-black bg-blue-100 text-[10px]">{row.annuel?.moyenne?.toFixed(2) || '-'}</td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold bg-slate-50 text-[10px]">{row.annuel?.credits || 0}</td>
+                                                            <td className="border border-slate-300 p-1 text-center font-black bg-teal-50 text-[10px]">
+                                                                {row.annuel?.tauxValidation != null ? `${row.annuel.tauxValidation}%` : '-'}
+                                                            </td>
                                                             <td className="border border-slate-300 p-1 text-center font-bold text-[10px]">{row.annuel?.rang || '-'}</td>
                                                             <td
                                                                 className={`border border-slate-300 p-1 text-[8px] font-black text-center leading-tight max-w-[11rem] ${

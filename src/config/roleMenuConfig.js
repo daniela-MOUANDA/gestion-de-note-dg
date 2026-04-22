@@ -84,6 +84,7 @@ export const ROLE_MENUS = {
         { path: '/chef-scolarite/statistiques', icon: faChartLine, label: 'Statistiques' },
         { path: '/chef-scolarite/importer-candidats', icon: faUserPlus, label: 'Importer candidats' },
         { path: '/chef-scolarite/inscriptions', icon: faClipboardList, label: 'Gérer inscriptions' },
+        { path: '/chef-scolarite/liste-etudiants', icon: faUsers, label: 'Liste étudiants' },
         { path: '/chef-scolarite/attestations', icon: faFileAlt, label: 'Attestations' },
         { path: '/chef-scolarite/archives-attestations', icon: faArchive, label: 'Archives attestations' },
         { path: '/chef-scolarite/bulletins', icon: faClipboardList, label: 'Bulletins' },
@@ -96,6 +97,7 @@ export const ROLE_MENUS = {
     AGENT_SCOLARITE: [
         { path: '/scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
         { path: '/scolarite/inscriptions', icon: faUserPlus, label: 'Gérer les inscriptions' },
+        { path: '/scolarite/liste-etudiants', icon: faUsers, label: 'Liste étudiants' },
         { path: '/scolarite/importer-candidats', icon: faUserPlus, label: 'Importer candidats' },
         // { path: '/scolarite/attestations', icon: faFileAlt, label: 'Attestations' },
         { path: '/scolarite/archives-attestations', icon: faArchive, label: 'Archives attestations' },
@@ -110,6 +112,7 @@ export const ROLE_MENUS = {
     // SP Scolarité (Secrétaire Particulière)
     SP_SCOLARITE: [
         { path: '/sp-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
+        { path: '/sp-scolarite/liste-etudiants', icon: faUsers, label: 'Liste étudiants' },
         { path: '/sp-scolarite/attestations', icon: faFileAlt, label: 'Attestations de scolarité' },
         { path: '/sp-scolarite/archives', icon: faArchive, label: 'Archives des attestations' },
         { path: '/sp-scolarite/messagerie', icon: faEnvelope, label: 'Messagerie interne' },

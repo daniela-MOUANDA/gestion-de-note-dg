@@ -9,6 +9,7 @@ import {
   getClasses,
   getEtudiantsParClasse,
   getEtudiantsParFiliereNiveau,
+  getListeEtudiantsInscriptions,
   validerInscription,
   finaliserInscription,
   bulkFinaliserInscriptionsCompletes,
@@ -236,6 +237,29 @@ router.get('/promotions', async (req, res) => {
   } catch (error) {
     console.error('Erreur:', error)
     res.status(500).json({ error: error.message })
+  }
+})
+
+/** Liste globale des étudiants (via inscriptions) pour la scolarité — filtres optionnels. */
+router.get('/etudiants/liste', authenticate, async (req, res) => {
+  try {
+    const userRole = req.user?.role?.trim().toUpperCase()
+    const allowed = ['AGENT_SCOLARITE', 'SP_SCOLARITE', 'CHEF_SERVICE_SCOLARITE']
+    if (!allowed.includes(userRole)) {
+      return res.status(403).json({ success: false, error: 'Accès refusé.' })
+    }
+
+    const { promotionId, filiereId, niveauId } = req.query
+    const data = await getListeEtudiantsInscriptions({
+      promotionId: promotionId || undefined,
+      filiereId: filiereId || undefined,
+      niveauId: niveauId || undefined
+    })
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Erreur liste étudiants:', error)
+    res.status(500).json({ success: false, error: error.message || 'Erreur serveur' })
   }
 })
 

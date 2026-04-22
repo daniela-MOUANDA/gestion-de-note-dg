@@ -21,6 +21,7 @@ const NavigationInit = () => {
 // Formulaires de connexion
 const LoginView = lazy(() => import('./views/LoginView'))
 const LoginStudentView = lazy(() => import('./views/student/LoginStudentView'))
+const VerifierBulletinView = lazy(() => import('./views/VerifierBulletinView'))
 
 // Routes Étudiant
 const DashboardView = lazy(() => import('./views/student/DashboardView'))
@@ -63,6 +64,7 @@ const DashboardScolariteView = lazy(() => import('./views/scolarite/DashboardSco
 const ImporterCandidatsView = lazy(() => import('./views/scolarite/ImporterCandidatsView'))
 const GererInscriptionsView = lazy(() => import('./views/scolarite/GererInscriptionsView'))
 const GererEtudiantsScolariteView = lazy(() => import('./views/scolarite/GererEtudiantsScolariteView'))
+const ListeEtudiantsScolariteView = lazy(() => import('./views/scolarite/ListeEtudiantsScolariteView'))
 const MessagerieScolareView = lazy(() => import('./views/scolarite/MessagerieScolareView'))
 const BulletinsView = lazy(() => import('./views/scolarite/BulletinsView'))
 const DiplomesView = lazy(() => import('./views/scolarite/DiplomesView'))
@@ -140,6 +142,14 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={false}>
                   <LoginStudentView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/verifier-bulletin"
+              element={
+                <ProtectedRoute requireAuth={false}>
+                  <VerifierBulletinView />
                 </ProtectedRoute>
               }
             />
@@ -390,6 +400,14 @@ function App() {
               }
             />
             <Route
+              path="/scolarite/liste-etudiants"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
+                  <ListeEtudiantsScolariteView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/scolarite/etudiants"
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="AGENT_SCOLARITE">
@@ -495,6 +513,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/sp-scolarite/liste-etudiants"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
+                  <ListeEtudiantsScolariteView />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Routes communes Administration - Protégées pour tous les rôles authentifiés */}
             <Route
@@ -570,6 +596,14 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
                   <GererInscriptionsView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chef-scolarite/liste-etudiants"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="CHEF_SERVICE_SCOLARITE">
+                  <ListeEtudiantsScolariteView />
                 </ProtectedRoute>
               }
             />

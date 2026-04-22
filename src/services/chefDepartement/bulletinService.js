@@ -638,8 +638,9 @@ export const verifierEtatBulletins = async (classeId, semestre, departementId, m
 // Générer les bulletins pour une classe et un semestre
 export const genererBulletins = async (classeId, semestre, departementId, chefDepartementId) => {
   try {
-    // 1. Vérifier l'état des bulletins
-    const etat = await verifierEtatBulletins(classeId, semestre, departementId)
+    // 1. Même critère « prêt » que la liste (mode rapide / cache statut_notes_classes).
+    // Sans mode rapide, un recalcul complet par module peut prendre plusieurs minutes → spinner infini côté UI.
+    const etat = await verifierEtatBulletins(classeId, semestre, departementId, true)
     if (!etat.success) {
       return etat
     }

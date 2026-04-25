@@ -42,9 +42,9 @@ function photoSrc(photo) {
 
 function Field({ label, children, className = '' }) {
   return (
-    <div className={`flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 border-b border-slate-100 pb-3 last:border-0 ${className}`}>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className="text-sm font-medium text-slate-900 sm:text-right">{children}</dd>
+    <div className={`grid grid-cols-[minmax(120px,1fr)_auto] items-center gap-4 border-b border-slate-100 pb-3 last:border-0 ${className}`}>
+      <dt className="text-sm font-medium text-slate-500">{label}</dt>
+      <dd className="text-sm font-semibold text-slate-900 text-right">{children}</dd>
     </div>
   )
 }
@@ -205,7 +205,7 @@ export default function VerifierBulletinView() {
           <Field label="Sexe">{formatSexe(etu.sexe)}</Field>
           <Field label="Nationalité">{etu.nationalite || '—'}</Field>
           <Field label="Classe / filière">
-            <span className="block max-w-full sm:max-w-[280px] sm:ml-auto sm:text-right">
+            <span className="block max-w-[220px] sm:max-w-[280px] ml-auto text-right">
               {bulletin?.classe}
               {bulletin?.filiere ? ` — ${bulletin.filiere}` : ''}
             </span>

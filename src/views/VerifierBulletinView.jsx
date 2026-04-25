@@ -261,9 +261,6 @@ export default function VerifierBulletinView() {
               info@Enotes.com
             </a>
           </p>
-          <Link to="/login" className="mt-3 inline-block text-xs font-medium text-slate-500 hover:text-slate-800 hover:underline">
-            Accès sécurisé — Connexion
-          </Link>
         </div>
       </div>
     </div>

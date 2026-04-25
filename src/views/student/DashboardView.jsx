@@ -24,6 +24,8 @@ import Header from '../../components/common/Header'
 import { useAuth } from '../../contexts/AuthContext'
 import { getMyInfo } from '../../api/student'
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
 const DashboardView = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated, loading: authLoading } = useAuth()
@@ -154,7 +156,7 @@ const DashboardView = () => {
                 <div className="w-20 h-20 rounded-lg bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {student.photo ? (
                     <img
-                      src={student.photo.startsWith('http') ? student.photo : `http://localhost:3000${student.photo}`}
+                      src={student.photo.startsWith('http') ? student.photo : `${BACKEND_URL}${student.photo}`}
                       alt={student.fullName}
                       className="w-full h-full object-cover"
                       onError={(e) => {

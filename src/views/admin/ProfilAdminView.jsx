@@ -13,6 +13,8 @@ import AdminLayout from '../../components/layouts/AdminLayout'
 import { useAuth } from '../../contexts/AuthContext'
 import { uploadProfilePhoto, getCurrentUser } from '../../api/auth'
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
 const ProfilAdminView = () => {
   const { user, logout, isAuthenticated, updateUser } = useAuth()
   const navigate = useNavigate()
@@ -224,7 +226,7 @@ const ProfilAdminView = () => {
   }
 
   const photoUrl = userData?.photo
-    ? (userData.photo.startsWith('http') ? userData.photo : `http://localhost:3000${userData.photo}`)
+    ? (userData.photo.startsWith('http') ? userData.photo : `${BACKEND_URL}${userData.photo}`)
     : null
 
   if (loading || !userData) {

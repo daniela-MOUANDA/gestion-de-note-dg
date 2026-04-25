@@ -9,11 +9,13 @@ import { useAlert } from '../../contexts/AlertContext'
 import { getClasses, createClasse, updateClasse, deleteClasse, getEtudiantsByClasse, getFilieres } from '../../api/chefDepartement.js'
 import { getFormations } from '../../api/scolarite.js'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+
 // Fonction pour obtenir tous les niveaux
 const getAllNiveaux = async () => {
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:3000/api/scolarite/niveaux', {
+    const response = await fetch(`${API_URL}/scolarite/niveaux`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

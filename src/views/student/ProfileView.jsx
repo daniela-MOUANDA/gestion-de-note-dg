@@ -18,6 +18,8 @@ import { getMonProfilEtudiant } from '../../api/scolarite'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { useAlert } from '../../contexts/AlertContext'
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
 const ProfileView = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
@@ -114,7 +116,7 @@ const ProfileView = () => {
               <div className="w-24 h-24 rounded-lg bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                 {student.photo ? (
                   <img
-                    src={student.photo.startsWith('http') ? student.photo : `http://localhost:3000${student.photo}`}
+                    src={student.photo.startsWith('http') ? student.photo : `${BACKEND_URL}${student.photo}`}
                     alt={student.fullName}
                     className="w-full h-full object-cover"
                     onError={(e) => {

@@ -10,6 +10,13 @@ const serverEnv = path.join(__dirname, '.env')
 dotenv.config({ path: rootEnv })
 // Complète avec server/.env les clés absentes de la racine (ex. SMTP uniquement côté server)
 dotenv.config({ path: serverEnv })
+const appEnv = process.env.APP_ENV?.trim()
+if (appEnv) {
+  const rootEnvByMode = path.join(__dirname, '..', `.env.${appEnv}`)
+  const serverEnvByMode = path.join(__dirname, `.env.${appEnv}`)
+  dotenv.config({ path: rootEnvByMode, override: true })
+  dotenv.config({ path: serverEnvByMode, override: true })
+}
 
 // Debug: vérifier si les variables sont chargées
 console.log('📍 Fichiers .env:', rootEnv, '|', serverEnv)
@@ -37,10 +44,10 @@ const PORT = process.env.PORT || 3000
 // Configuration CORS
 const corsOptions = {
   origin: [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5174',
+    // 'http://localhost:5173',
+    // 'http://127.0.0.1:5173',
+    // 'http://localhost:5174',
+    // 'http://127.0.0.1:5174',
     process.env.FRONTEND_URL // URL de votre site sur Hostinger
   ].filter(Boolean),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

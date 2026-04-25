@@ -4,6 +4,8 @@ import { faBell, faUser } from '@fortawesome/free-solid-svg-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { getRoleDashboardTitle } from '../../config/roleMenuConfig'
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
 /**
  * Header unifié pour tous les rôles administratifs
  * Affiche le titre approprié selon le rôle de l'utilisateur connecté
@@ -23,7 +25,7 @@ const AdminHeader = ({ title }) => {
 
     // URL de la photo
     const photoUrl = userPhoto
-        ? (userPhoto.startsWith('http') ? userPhoto : `http://localhost:3000${userPhoto}`)
+        ? (userPhoto.startsWith('http') ? userPhoto : `${BACKEND_URL}${userPhoto}`)
         : null
 
     // Titre du header : utilise le titre personnalisé ou le titre par défaut du rôle

@@ -11,6 +11,7 @@ import { useAlert } from '../../contexts/AlertContext'
 import { getEtatBulletinsToutesClasses, genererBulletins, getBulletinsGeneres } from '../../api/chefDepartement'
 
 const BULLETINS_FETCH_TIMEOUT_MS = 90000
+const CHEF_DEPARTEMENT_API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/chef-departement`
 
 const BulletinsView = () => {
   const { user, loading: authLoading } = useAuth()
@@ -148,11 +149,10 @@ const BulletinsView = () => {
   const handlePreviewBulletin = async (bulletin) => {
     try {
       const token = localStorage.getItem('token')
-      const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
       // Faire une requête authentifiée pour récupérer les données du bulletin
       const semParam = bulletinsModal?.semestre ? `?semestre=${encodeURIComponent(bulletinsModal.semestre)}` : ''
-      const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/pdf${semParam}`, {
+      const response = await fetch(`${CHEF_DEPARTEMENT_API_URL}/bulletins/${bulletin.id}/pdf${semParam}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -817,11 +817,10 @@ const BulletinsView = () => {
                                         try {
                                           setViewingBulletinId(bulletin.id)
                                           const token = localStorage.getItem('token')
-                                          const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
                                           // Télécharger le PDF et l'ouvrir dans un nouvel onglet
                                           const semParam = bulletinsModal?.semestre ? `?semestre=${encodeURIComponent(bulletinsModal.semestre)}` : ''
-                                          const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/download-pdf${semParam}`, {
+                                          const response = await fetch(`${CHEF_DEPARTEMENT_API_URL}/bulletins/${bulletin.id}/download-pdf${semParam}`, {
                                             method: 'GET',
                                             headers: {
                                               'Authorization': `Bearer ${token}`
@@ -868,11 +867,10 @@ const BulletinsView = () => {
                                       onClick={async () => {
                                         try {
                                           const token = localStorage.getItem('token')
-                                          const API_BASE_URL = 'http://localhost:3000/api/chef-departement'
 
                                           // Télécharger le PDF
                                           const semParam = bulletinsModal?.semestre ? `?semestre=${encodeURIComponent(bulletinsModal.semestre)}` : ''
-                                          const response = await fetch(`${API_BASE_URL}/bulletins/${bulletin.id}/download-pdf${semParam}`, {
+                                          const response = await fetch(`${CHEF_DEPARTEMENT_API_URL}/bulletins/${bulletin.id}/download-pdf${semParam}`, {
                                             method: 'GET',
                                             headers: {
                                               'Authorization': `Bearer ${token}`

@@ -4,10 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:vps": "vite --mode vps --host 0.0.0.0 --port 4500",
     "build": "vite build",
+    "build:vps": "vite build --mode vps",
     "preview": "vite preview",
     "start": "node server/index.js",
     "server": "node server/index.js",
+    "server:vps": "APP_ENV=vps node server/index.js",
     "server:dev": "nodemon server/index.js",
     "update:matricules": "node scripts/updateMatricules.js"
   },

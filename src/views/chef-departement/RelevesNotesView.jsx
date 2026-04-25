@@ -221,6 +221,12 @@ const RelevesNotesView = () => {
     if (!tableRows.length) return
     const classe = getSelectedClasseInfo()
     const module = getSelectedModuleInfo()
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const academicYear = `${currentYear}-${currentYear + 1}`
+    const effectifClasse = tableRows.length
+    const nbValides = tableRows.filter((r) => r.statut === 'ACQUIS').length
+    const nbAjournes = tableRows.filter((r) => r.statut === 'AJOURNÉ').length
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const logoDataUrl = await loadLogoDataUrl()
@@ -230,16 +236,17 @@ const RelevesNotesView = () => {
     }
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(13)
-    doc.text('INPTIC - RELEVE DE NOTES PAR MODULE', 148, 14, { align: 'center' })
+    doc.setFontSize(12)
+    doc.text(`Classe: ${abbreviateClasseLabel(classe?.nom || '-', classe || {})}`, 148, 12, { align: 'center' })
+    doc.text(`Module: ${module?.code || ''} - ${module?.nom || '-'}`, 148, 18, { align: 'center' })
+    doc.text(`Semestre: ${selectedSemestre}`, 148, 24, { align: 'center' })
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.text(`Classe: ${abbreviateClasseLabel(classe?.nom || '-', classe || {})}`, 12, 34)
-    doc.text(`Module: ${module?.code || ''} - ${module?.nom || '-'}`, 12, 39)
-    doc.text(`Semestre: ${selectedSemestre}`, 12, 44)
-    doc.text(`UE: ${module?.ue || '-'} ${module?.nom_ue ? `- ${module.nom_ue}` : ''}`, 90, 44)
-    doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, 280, 14, { align: 'right' })
+    doc.text(`UE: ${module?.ue || '-'} ${module?.nom_ue ? `- ${module.nom_ue}` : ''}`, 148, 30, { align: 'center' })
+    doc.text(`Annee academique: ${academicYear}`, 280, 12, { align: 'right' })
+    doc.text(`Date generation: ${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR')}`, 280, 18, { align: 'right' })
+    doc.text(`Effectif classe: ${effectifClasse}  |  Valides: ${nbValides}  |  Ajournes: ${nbAjournes}`, 148, 36, { align: 'center' })
 
     const body = tableRows.map((r) => [
       String(r.rang),
@@ -252,11 +259,23 @@ const RelevesNotesView = () => {
     ])
 
     autoTable(doc, {
-      startY: 50,
+      startY: 42,
       head: [['Rang', 'Matricule', 'Nom', 'Prenom', 'Nb eval.', 'Moyenne module', 'Statut']],
       body,
       styles: { fontSize: 9, cellPadding: 2.5, valign: 'middle' },
       headStyles: { fillColor: [15, 39, 68], textColor: [255, 255, 255], fontStyle: 'bold' },
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body' && hookData.column.index === 6) {
+          const status = String(hookData.cell.raw || '').toUpperCase()
+          if (status === 'ACQUIS') {
+            hookData.cell.styles.textColor = [22, 163, 74]
+            hookData.cell.styles.fontStyle = 'bold'
+          } else if (status === 'AJOURNÉ' || status === 'AJOURNE') {
+            hookData.cell.styles.textColor = [220, 38, 38]
+            hookData.cell.styles.fontStyle = 'bold'
+          }
+        }
+      },
       columnStyles: {
         0: { halign: 'center', cellWidth: 16 },
         1: { cellWidth: 36 },

@@ -69,7 +69,7 @@ export const getClassesByDepartement = async (departementId) => {
           code: classe.formations.code,
           nom: classe.formations.nom
         } : null,
-        promotion
+        promotion: promotion
           ? {
               id: promotion.id,
               annee: promotion.annee,

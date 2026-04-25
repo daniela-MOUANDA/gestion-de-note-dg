@@ -44,8 +44,9 @@ const PORT = process.env.PORT || 3000
 // Configuration CORS
 const corsOptions = {
   origin: [
-    // 'http://localhost:5173',
-    // 'http://127.0.0.1:5173',
+     'http://195.35.3.54:5173', 
+     'http://localhost:5173',
+    //'http://127.0.0.1:5173',
     // 'http://localhost:5174',
     // 'http://127.0.0.1:5174',
     process.env.FRONTEND_URL // URL de votre site sur Hostinger

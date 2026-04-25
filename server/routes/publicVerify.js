@@ -32,7 +32,7 @@ router.get('/verify-bulletin', async (req, res) => {
         date_generation,
         statut_visa,
         date_visa,
-        etudiants (id, nom, prenom, matricule),
+        etudiants (id, nom, prenom, matricule, photo, date_naissance, nationalite, sexe),
         classes (id, code, nom, niveaux (code), filieres (id, code, nom, departement_id)),
         promotions (annee)
       `)
@@ -115,7 +115,11 @@ router.get('/verify-bulletin', async (req, res) => {
         etudiant: {
           nom: etu.nom || '',
           prenom: etu.prenom || '',
-          matricule: etu.matricule || ''
+          matricule: etu.matricule || '',
+          photo: etu.photo || null,
+          dateNaissance: etu.date_naissance || null,
+          nationalite: etu.nationalite || null,
+          sexe: etu.sexe || null
         },
         classe: cls.nom || cls.code || '',
         filiere: fil.nom || fil.code || '',

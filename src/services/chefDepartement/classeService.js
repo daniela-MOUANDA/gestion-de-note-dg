@@ -12,11 +12,25 @@ export const getClassesByDepartement = async (departementId) => {
 
     const { data: classes, error } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres (*), niveaux (*), formations (*), promotions (*)')
+      .select('*, filieres (*), niveaux (*), formations (*)')
       .in('filiere_id', filiereIds)
       .order('code', { ascending: true })
 
     if (error) throw error
+
+    const promotionIds = [...new Set((classes || []).map((c) => c.promotion_id).filter(Boolean))]
+    let promotionsById = new Map()
+
+    if (promotionIds.length > 0) {
+      const { data: promotionsData, error: promotionsError } = await supabaseAdmin
+        .from('promotions')
+        .select('id, annee, statut')
+        .in('id', promotionIds)
+
+      if (!promotionsError && Array.isArray(promotionsData)) {
+        promotionsById = new Map(promotionsData.map((p) => [p.id, p]))
+      }
+    }
 
     // Compter les inscriptions et modules pour chaque classe
     const classesWithCounts = await Promise.all((classes || []).map(async (classe) => {
@@ -29,6 +43,8 @@ export const getClassesByDepartement = async (departementId) => {
         .from('modules')
         .select('*', { count: 'exact', head: true })
         .eq('classe_id', classe.id)
+
+      const promotion = promotionsById.get(classe.promotion_id)
 
       return {
         id: classe.id,
@@ -53,11 +69,11 @@ export const getClassesByDepartement = async (departementId) => {
           code: classe.formations.code,
           nom: classe.formations.nom
         } : null,
-        promotion: classe.promotions
+        promotion
           ? {
-              id: classe.promotions.id,
-              annee: classe.promotions.annee,
-              statut: classe.promotions.statut
+              id: promotion.id,
+              annee: promotion.annee,
+              statut: promotion.statut
             }
           : null
       }

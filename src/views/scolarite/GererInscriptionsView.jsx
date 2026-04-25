@@ -34,6 +34,16 @@ import { pickPromotionForCurrentAcademicYear } from '../../utils/academicYear.js
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
+const resolveMediaUrl = (value) => {
+  if (!value || typeof value !== 'string') return value
+  if (value.startsWith('http://localhost:3000') || value.startsWith('https://localhost:3000')) {
+    const pathOnly = value.replace(/^https?:\/\/localhost:3000/i, '')
+    return `${BACKEND_URL}${pathOnly.startsWith('/') ? '' : '/'}${pathOnly}`
+  }
+  if (value.startsWith('http')) return value
+  return `${BACKEND_URL}${value.startsWith('/') ? '' : '/'}${value}`
+}
+
 const GererInscriptionsView = () => {
   const location = useLocation()
   const navigate = useNavigate()
@@ -949,7 +959,7 @@ const GererInscriptionsView = () => {
                   <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
                     {dossier.etudiant.photo ? (
                       <img
-                        src={dossier.etudiant.photo.startsWith('http') ? dossier.etudiant.photo : `${BACKEND_URL}${dossier.etudiant.photo}`}
+                        src={resolveMediaUrl(dossier.etudiant.photo)}
                         alt={`${[dossier.etudiant.prenom, dossier.etudiant.nom].filter(Boolean).join(' ')}`}
                         className="w-full h-full object-cover rounded-full"
                         onError={(e) => {
@@ -1241,7 +1251,7 @@ const GererInscriptionsView = () => {
                             <p className="text-sm text-green-800 font-medium mb-2">✓ Document uploadé</p>
                             <div className="flex gap-2 flex-wrap">
                               <a
-                                href={doc.url.startsWith('http') ? doc.url : `${BACKEND_URL}${doc.url}`}
+                                href={resolveMediaUrl(doc.url)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
@@ -1249,7 +1259,7 @@ const GererInscriptionsView = () => {
                                 <FontAwesomeIcon icon={faEye} />Consulter
                               </a>
                               <a
-                                href={doc.url.startsWith('http') ? doc.url : `${BACKEND_URL}${doc.url}`}
+                                href={resolveMediaUrl(doc.url)}
                                 download
                                 className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
                               >
@@ -1463,7 +1473,7 @@ const GererInscriptionsView = () => {
                         <div className="relative w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden flex-shrink-0">
                           {etudiant.photo ? (
                             <img
-                              src={etudiant.photo.startsWith('http') ? etudiant.photo : `${BACKEND_URL}${etudiant.photo}`}
+                              src={resolveMediaUrl(etudiant.photo)}
                               alt={`${etudiant.prenom || ''} ${etudiant.nom || ''}`}
                               className="w-full h-full object-cover rounded-full"
                               onError={(e) => {
@@ -1573,7 +1583,7 @@ const GererInscriptionsView = () => {
                               <div className="relative w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-base overflow-hidden flex-shrink-0 ring-2 ring-blue-100">
                                 {etudiant.photo ? (
                                   <img
-                                    src={etudiant.photo.startsWith('http') ? etudiant.photo : `${BACKEND_URL}${etudiant.photo}`}
+                                    src={resolveMediaUrl(etudiant.photo)}
                                     alt={`${etudiant.prenom || ''} ${etudiant.nom || ''}`}
                                     className="w-full h-full object-cover rounded-full"
                                     onError={(e) => {

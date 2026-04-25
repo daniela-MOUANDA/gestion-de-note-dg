@@ -32,6 +32,10 @@ function formatDateNaissance(iso) {
 
 function photoSrc(photo) {
   if (!photo) return null
+  if (photo.startsWith('http://localhost:3000') || photo.startsWith('https://localhost:3000')) {
+    const pathOnly = photo.replace(/^https?:\/\/localhost:3000/i, '')
+    return `${BACKEND_URL}${pathOnly.startsWith('/') ? '' : '/'}${pathOnly}`
+  }
   if (photo.startsWith('http')) return photo
   return `${BACKEND_URL}${photo.startsWith('/') ? '' : '/'}${photo}`
 }

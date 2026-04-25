@@ -12,7 +12,7 @@ export const getClassesByDepartement = async (departementId) => {
 
     const { data: classes, error } = await supabaseAdmin
       .from('classes')
-      .select('*, filieres (*), niveaux (*), formations (*)')
+      .select('*, filieres (*), niveaux (*), formations (*), promotions (*)')
       .in('filiere_id', filiereIds)
       .order('code', { ascending: true })
 
@@ -52,7 +52,14 @@ export const getClassesByDepartement = async (departementId) => {
           id: classe.formations.id,
           code: classe.formations.code,
           nom: classe.formations.nom
-        } : null
+        } : null,
+        promotion: classe.promotions
+          ? {
+              id: classe.promotions.id,
+              annee: classe.promotions.annee,
+              statut: classe.promotions.statut
+            }
+          : null
       }
     }))
 

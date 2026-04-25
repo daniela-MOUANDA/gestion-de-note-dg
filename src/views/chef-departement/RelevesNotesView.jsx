@@ -222,8 +222,7 @@ const RelevesNotesView = () => {
     const classe = getSelectedClasseInfo()
     const module = getSelectedModuleInfo()
     const now = new Date()
-    const currentYear = now.getFullYear()
-    const academicYear = `${currentYear}-${currentYear + 1}`
+    const academicYear = classe?.promotion?.annee || 'N/A'
     const effectifClasse = tableRows.length
     const nbValides = tableRows.filter((r) => r.statut === 'ACQUIS').length
     const nbAjournes = tableRows.filter((r) => r.statut === 'AJOURNÉ').length

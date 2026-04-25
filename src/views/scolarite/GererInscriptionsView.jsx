@@ -969,7 +969,7 @@ const GererInscriptionsView = () => {
                           if (parent && !parent.querySelector('.fallback-initials')) {
                             const fallback = document.createElement('span')
                             fallback.textContent = `${dossier.etudiant.prenom?.[0] || ''}${dossier.etudiant.nom?.[0] || ''}`
-                            fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
+                            fallback.className = 'fallback-initials pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
                             parent.appendChild(fallback)
                           }
                         }}
@@ -1483,7 +1483,7 @@ const GererInscriptionsView = () => {
                                 if (parent && !parent.querySelector('.fallback-initials')) {
                                   const fallback = document.createElement('span')
                                   fallback.textContent = `${etudiant.prenom?.[0] || ''}${etudiant.nom?.[0] || ''}`
-                                  fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
+                                  fallback.className = 'fallback-initials pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
                                   parent.appendChild(fallback)
                                 }
                               }}
@@ -1592,7 +1592,7 @@ const GererInscriptionsView = () => {
                                       if (parent && !parent.querySelector('.fallback-initials')) {
                                         const fallback = document.createElement('span')
                                         fallback.textContent = `${etudiant.prenom?.[0] || ''}${etudiant.nom?.[0] || ''}`
-                                        fallback.className = 'fallback-initials absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
+                                        fallback.className = 'fallback-initials pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600'
                                         parent.appendChild(fallback)
                                       }
                                     }}

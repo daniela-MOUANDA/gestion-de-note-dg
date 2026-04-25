@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:vps": "vite --mode vps --host 0.0.0.0 --port 4500",
+    "dev:vps": "vite --mode vps --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "build:vps": "vite build --mode vps",
     "preview": "vite preview",

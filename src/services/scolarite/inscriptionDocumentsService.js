@@ -14,6 +14,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 }
 
+const normalizeLegacyLocalhostUrl = (value) => {
+  if (typeof value !== 'string') return value
+  return value.replace(/^https?:\/\/localhost:3000/i, '')
+}
+
 // Sauvegarder un fichier uploadé
 export const saveDocument = async (file, etudiantId, documentType) => {
   try {
@@ -106,11 +111,8 @@ export const deleteInscriptionDocument = async (inscriptionId, documentType, age
       [dateField]: new Date().toISOString()
     }
 
-    // Si l'inscription était déjà finalisée, on la repasse en statut 'VALIDE'
-    // pour permettre de nouveau les modifications si nécessaire.
-    if (inscription.statut === 'INSCRIT') {
-      updateData.statut = 'VALIDE'
-    }
+    // IMPORTANT: ne jamais rétrograder une inscription déjà finalisée.
+    // L'agent doit pouvoir corriger/remplacer des pièces sans perdre le statut INSCRIT.
 
     if (agentId) {
       updateData.agent_valideur_id = agentId
@@ -379,7 +381,7 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
         email: etudiant.email,
         telephone: etudiant.telephone,
         adresse: etudiant.adresse,
-        photo: photoProfil || etudiant.photo
+        photo: normalizeLegacyLocalhostUrl(photoProfil || etudiant.photo)
       },
       inscription: {
         id: inscription.id,
@@ -388,13 +390,13 @@ export const getDossierEtudiant = async (etudiantId, inscriptionId) => {
         dateInscription: inscription.date_inscription,
         dateValidation: inscription.date_validation,
         documents: {
-          acteNaissance: inscription.copie_acte_naissance,
-          photo: inscription.photo_identite || photoProfil,
-          quittance: inscription.quittance,
-          pieceIdentite: inscription.piece_identite,
-          releveBac: inscription.copie_releve,
-          attestationReussiteBac: inscription.copie_diplome,
-          diplome: inscription.copie_diplome
+          acteNaissance: normalizeLegacyLocalhostUrl(inscription.copie_acte_naissance),
+          photo: normalizeLegacyLocalhostUrl(inscription.photo_identite || photoProfil),
+          quittance: normalizeLegacyLocalhostUrl(inscription.quittance),
+          pieceIdentite: normalizeLegacyLocalhostUrl(inscription.piece_identite),
+          releveBac: normalizeLegacyLocalhostUrl(inscription.copie_releve),
+          attestationReussiteBac: normalizeLegacyLocalhostUrl(inscription.copie_diplome),
+          diplome: normalizeLegacyLocalhostUrl(inscription.copie_diplome)
         },
         promotion: inscription.promotions,
         formation: inscription.formations,

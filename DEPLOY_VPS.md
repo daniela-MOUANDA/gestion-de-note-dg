@@ -4,7 +4,7 @@ Cette configuration permet de garder le `localhost` en local et d'utiliser une c
 
 ## Ports VPS demandés
 
-- Frontend: `4500`
+- Frontend: `5173`
 - Backend: `4501`
 - IP serveur: `195.35.3.54`
 

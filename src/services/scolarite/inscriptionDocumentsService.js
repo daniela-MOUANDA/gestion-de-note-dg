@@ -5,9 +5,10 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const PROJECT_ROOT = path.join(__dirname, '..', '..', '..')
 
 // Dossier d'upload des documents d'inscription
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'inscriptions')
+const UPLOAD_DIR = path.join(PROJECT_ROOT, 'uploads', 'inscriptions')
 
 // S'assurer que le dossier existe
 if (!fs.existsSync(UPLOAD_DIR)) {

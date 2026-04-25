@@ -2,12 +2,17 @@ import express from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import { fileURLToPath } from 'url'
 import { authenticateUser, verifyToken, logoutUser, getUserById, changePassword, updateUserPhoto } from '../../src/services/authService.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const PROJECT_ROOT = path.join(__dirname, '..', '..')
 
 // Configuration de multer pour l'upload de photos
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'profiles')
+    const uploadDir = path.join(PROJECT_ROOT, 'uploads', 'profiles')
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true })
     }

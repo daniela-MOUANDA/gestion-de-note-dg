@@ -1,10 +1,16 @@
 /**
  * Génération des attestations de scolarité avec jsPDF.
- * Design calqué sur l'attestation officielle INPTIC.
+ * Design calqué fidèlement sur l'attestation officielle INPTIC.
+ *
+ *  - Gras sur le nom de l'étudiant et les labels
+ *  - Exposants "ère" / "ème" / "ième" pour les niveaux d'études
+ *  - Triangles ➤ pour la liste
+ *  - Bandeau bleu titre avec bordure marquée
+ *  - Signature grande, posée AU-DESSUS du cachet (qui chevauche en bas)
  */
 import { jsPDF } from 'jspdf'
 
-// ---------- helpers ----------
+// ─── Helpers d'images ────────────────────────────────────────────────────
 
 export async function preloadAttestationImages() {
   const [logoUrl, cachetUrl] = await Promise.all([
@@ -33,7 +39,8 @@ function loadImgAsDataUrl(src) {
   })
 }
 
-/** Sanitize un segment pour un nom de fichier/dossier zip */
+// ─── Helpers de noms de fichiers ─────────────────────────────────────────
+
 export function sanitizeZipSegment(value) {
   if (value == null || String(value).trim() === '') return 'X'
   return String(value)
@@ -45,7 +52,6 @@ export function sanitizeZipSegment(value) {
     .replace(/^_|_$/g, '') || 'X'
 }
 
-/** Sanitize un morceau de nom de fichier PDF */
 export function sanitizePdfNamePart(s) {
   return String(s ?? 'X')
     .normalize('NFD')
@@ -55,16 +61,87 @@ export function sanitizePdfNamePart(s) {
     .slice(0, 80) || 'X'
 }
 
-// ---------- core PDF builder ----------
+// ─── Helpers typographiques ──────────────────────────────────────────────
 
 /**
- * Construit une attestation de scolarité en PDF, design fidèle à l'original INPTIC.
+ * Sépare un libellé d'ordinal en (chiffre, suffixe à mettre en exposant).
+ * Ex : "1ère" → {num:"1", sup:"\u00e8re"}, "3ème" → {num:"3", sup:"\u00e8me"}
+ */
+function parseOrdinal(value) {
+  const s = String(value ?? '').trim()
+  const m = s.match(/^(\d+)\s*(ère|ere|ème|eme|ième|ieme)\b/i)
+  if (!m) return { num: s, sup: '', tail: '' }
+  const sup = m[2].toLowerCase()
+    .replace(/^ere$/i, '\u00e8re')
+    .replace(/^eme$/i, '\u00e8me')
+    .replace(/^ieme$/i, 'i\u00e8me')
+  return { num: m[1], sup, tail: s.slice(m[0].length).trim() }
+}
+
+/** Dessine un petit triangle (style ➤) plein, à gauche d'un item de liste. */
+function drawBullet(doc, x, y) {
+  // triangle pointant à droite
+  doc.setFillColor(0, 0, 0)
+  doc.triangle(x, y - 2.4, x, y + 0.4, x + 2.6, y - 1, 'F')
+}
+
+/**
+ * Écrit un paragraphe contenant des segments en gras et en normal,
+ * en gérant correctement le wrap. Renvoie le Y final.
  *
- * @param {object}  data           - champs de l'attestation
+ * @param {Array<{text:string,bold:boolean}>} segments
+ */
+function drawRichParagraph(doc, segments, { x, y, maxWidth, lineHeight, fontSize, indent = 0 }) {
+  const space = ' '
+  // Découper en tokens (mots + espaces)
+  const tokens = []
+  for (const seg of segments) {
+    const parts = seg.text.split(/(\s+)/) // garde les espaces
+    for (const p of parts) {
+      if (p.length === 0) continue
+      tokens.push({ text: p, bold: seg.bold, isSpace: /^\s+$/.test(p) })
+    }
+  }
+
+  let cursorX = x + indent
+  let lineMax = maxWidth - indent
+  let firstOfLine = true
+
+  doc.setFontSize(fontSize)
+
+  for (const tk of tokens) {
+    doc.setFont('helvetica', tk.bold ? 'bold' : 'normal')
+    const w = doc.getTextWidth(tk.text)
+
+    // Si on est en début de ligne et que le token est un espace, on l'ignore
+    if (firstOfLine && tk.isSpace) continue
+
+    // Si le mot ne tient pas → retour à la ligne
+    if (!tk.isSpace && cursorX - x + w > maxWidth) {
+      y += lineHeight
+      cursorX = x
+      lineMax = maxWidth
+      firstOfLine = true
+      if (tk.isSpace) continue
+    }
+
+    doc.text(tk.text, cursorX, y)
+    cursorX += w
+    firstOfLine = false
+  }
+  return y
+}
+
+// ─── Builder principal ───────────────────────────────────────────────────
+
+/**
+ * Construit une attestation de scolarité en PDF.
+ *
+ * @param {object}      data              - infos
  * @param {string|null} logoDataUrl
  * @param {string|null} cachetDataUrl
- * @param {boolean} isDuplicate    - ajoute filigrane + tampon DUPLICATA rouge
- * @param {string|null} signatureDataUrl - signature du Directeur (optionnelle)
+ * @param {boolean}     isDuplicate
+ * @param {string|null} signatureDataUrl
  * @returns {jsPDF}
  */
 export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicate = false, signatureDataUrl = null) {
@@ -83,163 +160,184 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   const W = 210
   const H = 297
-  const mL = 20   // marge gauche
-  const mR = 20   // marge droite
-  const mT = 18   // marge haute
-  const cW = W - mL - mR   // 170 mm
+  const mL = 22
+  const mR = 22
+  const mT = 14
+  const cW = W - mL - mR // 166 mm
 
-  // ── Filigrane DUPLICATA (diagonal, rouge très clair) ─────────────────────
+  // ── Filigrane DUPLICATA ─────────────────────────────────────────────────
   if (isDuplicate) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(70)
+    doc.setFontSize(72)
     doc.setTextColor(235, 185, 185)
     doc.text('DUPLICATA', W / 2, H / 2 + 10, { align: 'center', angle: 38 })
     doc.setTextColor(0, 0, 0)
 
-    // Tampon rouge vif haut droite
-    doc.setFontSize(11)
+    doc.setFontSize(10)
     doc.setTextColor(200, 30, 30)
     doc.setDrawColor(200, 30, 30)
     doc.setLineWidth(0.5)
-    const sw = 44, sh = 9, sx = W - mR - sw, sy = mT - 3
+    const sw = 40, sh = 8, sx = W - mR - sw, sy = mT - 2
     doc.rect(sx, sy, sw, sh)
-    doc.text('DUPLICATA', sx + sw / 2, sy + 6, { align: 'center' })
+    doc.text('DUPLICATA', sx + sw / 2, sy + 5.5, { align: 'center' })
     doc.setTextColor(0, 0, 0)
     doc.setDrawColor(0, 0, 0)
   }
 
-  let y = mT
-
-  // ── Logo ─────────────────────────────────────────────────────────────────
-  // L'original : logo 32×26 mm en haut à gauche, texte à droite du logo
+  // ── Logo + texte sous le logo ───────────────────────────────────────────
+  // Sur l'original : logo ~28mm de large, légende juste en dessous
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', mL, y, 32, 26, undefined, 'FAST')
+    doc.addImage(logoDataUrl, 'PNG', mL, mT, 30, 24, undefined, 'FAST')
   }
 
-  // ── En-tête textuel (à droite du logo, calque identique à l'original) ────
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.5)
+  doc.setTextColor(0, 0, 0)
+  doc.text('Institut National de la Poste, des Technologies', mL + 15, mT + 26, { align: 'center' })
+  doc.text("de l'Information et de la Communication",        mL + 15, mT + 28.5, { align: 'center' })
+
+  // ── En-tête textuel (à droite du logo) ──────────────────────────────────
   const hx = mL + 36
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(0, 0, 0)
-  doc.text('DIRECTION GENERALE', hx, y + 6)
-  doc.text('LA DIRECTION DE LA SCOLARITE ET DES EXAMENS', hx, y + 12)
+  doc.setFontSize(10)
+  doc.text('DIRECTION GENERALE', hx, mT + 8)
+  doc.text('LA DIRECTION DE LA SCOLARITE ET DES EXAMENS', hx, mT + 13)
+  doc.text(String(numero), hx, mT + 19)
 
-  // Numéro de l'attestation
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.text(String(numero), hx, y + 20)
+  // ── Bandeau bleu titre ──────────────────────────────────────────────────
+  let y = mT + 40
+  const bandX = mL + 14
+  const bandW = cW - 28
 
-  y += 32   // avance après le bloc logo/en-tête
-
-  // ── Bandeau bleu titre ───────────────────────────────────────────────────
-  doc.setFillColor(168, 201, 228)   // #A8C9E4
-  doc.setDrawColor(0, 0, 0)
-  doc.setLineWidth(1)
-  doc.rect(mL, y, cW, 14, 'FD')
+  doc.setFillColor(168, 201, 228)        // #A8C9E4
+  doc.setDrawColor(40, 90, 145)          // bord bleu foncé
+  doc.setLineWidth(0.7)
+  doc.roundedRect(bandX, y, bandW, 13, 2, 2, 'FD')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(17)
   doc.setTextColor(0, 0, 0)
-  doc.text('ATTESTATION DE SCOLARITE', W / 2, y + 9.5, { align: 'center' })
+  doc.text('ATTESTATION DE SCOLARITE', W / 2, y + 9, { align: 'center' })
   y += 22
 
-  // ── Paragraphe introductif ───────────────────────────────────────────────
-  // Police légèrement réduite pour avoir de l'air, texte justifié simulé
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(11)
+  // ── Paragraphe d'introduction (avec NOM en gras) ────────────────────────
   doc.setTextColor(0, 0, 0)
+  const introFontSize = 11
+  const introLineH    = 5.8
+  const nomUpper      = String(etudiant).trim()
 
-  const introText =
-    '   Je soussign\u00e9, Soilihi ALI ISSILAM, Directeur de la Scolarit\u00e9 et des ' +
-    'Examens de l\'Institut National de la Poste, des Technologies de l\'Information ' +
-    'et de la Communication (INPTIC), atteste que l\'\u00e9tudiant(e) ' +
-    etudiant +
-    ' suit la formation ci-dessous dans notre \u00e9tablissement.'
+  y = drawRichParagraph(doc, [
+    { text: 'Je soussign\u00e9, ',                                                      bold: false },
+    { text: 'Soilihi ALI ISSILAM',                                                       bold: false },
+    { text: ', Directeur de la Scolarit\u00e9 et des Examens de l\u2019Institut '       , bold: false },
+    { text: 'National de la Poste, des Technologies de l\u2019Information et de la '   , bold: false },
+    { text: 'Communication (INPTIC), atteste que l\u2019\u00e9tudiant(e) '              , bold: false },
+    { text: nomUpper.toUpperCase(),                                                       bold: true },
+    { text: ' suit la formation ci-dessous dans notre \u00e9tablissement.',               bold: false },
+  ], { x: mL, y, maxWidth: cW, lineHeight: introLineH, fontSize: introFontSize, indent: 8 })
 
-  const introLines = doc.splitTextToSize(introText, cW)
-  doc.text(introLines, mL, y)
-  y += introLines.length * 6.2 + 10
+  y += introLineH + 6
 
-  // ── Liste d'informations (calque fidèle : ➤ bold label, valeur normale) ──
-  const listX  = mL + 9   // décalage de la liste
-  const lineH  = 8        // espacement entre items
+  // ── Liste d'informations ────────────────────────────────────────────────
+  // Format : ➤ **Label :** valeur (avec exposant pour le niveau)
+  const labelFontSize = 11
+  const itemSpacing   = 8.5
+  const labelX        = mL + 8     // après le triangle
+  const ord           = parseOrdinal(niveau)
 
-  // Selon l'original : Niveau, Filière, Programme, Année — PAS de matricule dans la liste
-  const items = [
-    ["Niveau d'\u00e9tudes", `${niveau} ann\u00e9e`],
-    ['Fili\u00e8re', String(filiere)],
-    ['Programme', String(formation)],
-    ['Ann\u00e9e acad\u00e9mique', String(anneeAcademique)],
-  ]
-
-  for (const [label, value] of items) {
-    // Symbole flèche
+  const drawListItem = (label, valueRenderer) => {
+    drawBullet(doc, mL + 2, y)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
-    doc.text('>', mL + 1, y)
-
-    // Label en gras
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    const lbl = `${label}\u00a0: `
-    doc.text(lbl, listX, y)
-
-    // Valeur en normal
+    doc.setFontSize(labelFontSize)
+    const lbl = `${label}\u00a0:\u00a0`
+    doc.text(lbl, labelX, y)
+    const valueX = labelX + doc.getTextWidth(lbl)
     doc.setFont('helvetica', 'normal')
-    doc.text(String(value), listX + doc.getTextWidth(lbl), y)
-
-    y += lineH
+    valueRenderer(valueX, y)
+    y += itemSpacing
   }
 
-  y += 10
+  // Niveau d'études — avec exposant
+  drawListItem("Niveau d'\u00e9tudes", (vx, vy) => {
+    doc.setFontSize(labelFontSize)
+    doc.text(ord.num, vx, vy)
+    const numW = doc.getTextWidth(ord.num)
+    if (ord.sup) {
+      // exposant : police plus petite + offset Y vers le haut
+      doc.setFontSize(labelFontSize * 0.65)
+      doc.text(ord.sup, vx + numW + 0.3, vy - 1.6)
+      doc.setFontSize(labelFontSize)
+    }
+    const supW = ord.sup ? doc.getTextWidth(ord.sup) * (0.65) : 0
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(labelFontSize)
+    doc.text(' ann\u00e9e', vx + numW + supW + 1, vy)
+  })
 
-  // ── Paragraphe de clôture ────────────────────────────────────────────────
-  const closingText =
-    '   En foi de quoi, la pr\u00e9sente attestation lui est d\u00e9livr\u00e9e ' +
-    'pour servir et valoir ce que de droit.'
-  const closingLines = doc.splitTextToSize(closingText, cW)
+  drawListItem('Fili\u00e8re',          (vx, vy) => doc.text(String(filiere), vx, vy))
+  drawListItem('Programme',             (vx, vy) => doc.text(String(formation), vx, vy))
+  drawListItem('Ann\u00e9e acad\u00e9mique', (vx, vy) => doc.text(String(anneeAcademique), vx, vy))
+
+  // ── Paragraphe de clôture ───────────────────────────────────────────────
+  y += 4
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(introFontSize)
+  y = drawRichParagraph(doc, [
+    { text: 'En foi de quoi, la pr\u00e9sente attestation lui est d\u00e9livr\u00e9e ' +
+            'pour servir et valoir ce que de droit.', bold: false },
+  ], { x: mL, y, maxWidth: cW, lineHeight: introLineH, fontSize: introFontSize, indent: 8 })
+
+  // ── Bloc signature (aligné à droite, comme l'original) ──────────────────
+  // Position fixe : on aligne sur le bas pour une présentation aérée
+  const blockRight  = W - mR
+  const blockCenter = W - mR - 38   // centre du bloc signature/cachet
+  let sigY = 195                    // commence assez haut pour avoir de la place
+
+  // Date
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
-  doc.text(closingLines, mL, y)
+  doc.text(`Fait \u00e0 ${lieu}, le ${dateTexte}`, blockRight, sigY, { align: 'right' })
+  sigY += 8
 
-  // ── Section signature ────────────────────────────────────────────────────
-  // Position fixe proche du bas, alignée à droite (comme l'original)
-  const sigY     = 232
-  const rightX   = W - mR
-  const sigCtrX  = W - mR - 32   // centre horizontal du bloc signature
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(11)
-  doc.text(`Fait \u00e0 ${lieu}, le ${dateTexte}`, rightX, sigY, { align: 'right' })
-
+  // Titre signataire (en gras)
   doc.setFont('helvetica', 'bold')
-  doc.text('Directeur de la Scolarit\u00e9 et des Examens', rightX, sigY + 8, { align: 'right' })
+  doc.setFontSize(11)
+  doc.text('Directeur de la Scolarit\u00e9 et des Examens', blockRight, sigY, { align: 'right' })
+  sigY += 4
 
-  // Signature du directeur (si fournie)
-  const sigImgSize = 30
+  // Signature manuscrite (grande, AU-DESSUS du cachet)
+  const sigW = 50
+  const sigH = 22
   if (signatureDataUrl) {
     doc.addImage(
       signatureDataUrl, 'PNG',
-      sigCtrX - sigImgSize / 2, sigY + 10,
-      sigImgSize, sigImgSize * 0.5,
+      blockCenter - sigW / 2, sigY,
+      sigW, sigH,
       undefined, 'FAST'
     )
+    sigY += sigH - 8     // léger chevauchement avec le cachet en dessous
+  } else {
+    sigY += 6            // espace réservé même sans signature
   }
 
-  // Cachet circulaire (chevauchant la signature comme sur l'original)
-  const cachetSize = 34
-  const cachetX    = sigCtrX - cachetSize / 2 + 8   // légèrement décalé à droite
-  const cachetY    = sigY + (signatureDataUrl ? 18 : 10)
+  // Cachet circulaire (chevauchement avec le bas de la signature)
+  const cachetSize = 32
   if (cachetDataUrl) {
-    doc.addImage(cachetDataUrl, 'PNG', cachetX, cachetY, cachetSize, cachetSize, undefined, 'FAST')
+    doc.addImage(
+      cachetDataUrl, 'PNG',
+      blockCenter - cachetSize / 2, sigY,
+      cachetSize, cachetSize,
+      undefined, 'FAST'
+    )
+    sigY += cachetSize
   }
 
-  // Nom du signataire
+  // Nom du signataire (en gras, sous le cachet)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.text('Soilihi ALI ISSILAM', sigCtrX, cachetY + cachetSize + 4, { align: 'center' })
+  doc.text('Soilihi ALI ISSILAM', blockCenter, sigY + 2, { align: 'center' })
 
-  // ── Pied de page institutionnel ──────────────────────────────────────────
+  // ── Pied de page institutionnel ─────────────────────────────────────────
   const footY = H - 14
   doc.setDrawColor(60, 60, 60)
   doc.setLineWidth(0.3)
@@ -249,8 +347,8 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
   doc.setFontSize(7)
   doc.setTextColor(50, 50, 50)
   doc.text(
-    '\u00c9tablissement public sous tutelle du Minist\u00e8re de l\'Economie Num\u00e9rique ' +
-    'et des Nouvelles Technologies de l\'Information',
+    "\u00c9tablissement public sous tutelle du Minist\u00e8re de l'Economie Num\u00e9rique " +
+    "et des Nouvelles Technologies de l'Information",
     W / 2, footY + 4, { align: 'center' }
   )
   doc.text(

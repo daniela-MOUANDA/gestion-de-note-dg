@@ -207,7 +207,7 @@ const AttestationsView = () => {
     window.print()
   }
 
-  /** Télécharge le PDF d'une attestation déjà générée (vue originale, sans DUPLICATA). */
+  /** Ouvre le PDF d'une attestation déjà générée dans un nouvel onglet (consultation, pas de téléchargement). */
   const handleViewAttestation = async (etudiant) => {
     try {
       setLoading(true)
@@ -236,21 +236,20 @@ const AttestationsView = () => {
       const { logoUrl, cachetUrl } = await preloadAttestationImages()
       const blob = buildAttestationPdfBlob(data, logoUrl, cachetUrl, false)
 
-      const nomSafe = sanitizePdfNamePart(`${etudiant.nom}_${etudiant.prenom}`)
-      const matSafe = sanitizePdfNamePart(etudiant.matricule)
-      const filename = `Attestation_${matSafe}_${nomSafe}.pdf`
-
+      // Ouvrir dans un nouvel onglet sans déclencher de téléchargement
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const tab = window.open(url, '_blank')
+      // Libérer l'URL après que le nouvel onglet ait eu le temps de la charger
+      if (tab) {
+        setTimeout(() => URL.revokeObjectURL(url), 10000)
+      } else {
+        // Si le navigateur bloque les popups, libérer immédiatement
+        URL.revokeObjectURL(url)
+        alertError('Veuillez autoriser les pop-ups pour visualiser le PDF.')
+      }
     } catch (error) {
-      console.error('Erreur téléchargement attestation:', error)
-      alertError('Erreur lors du téléchargement. Veuillez réessayer.')
+      console.error('Erreur visualisation attestation:', error)
+      alertError('Erreur lors de la visualisation. Veuillez réessayer.')
     } finally {
       setLoading(false)
     }
@@ -827,9 +826,9 @@ const AttestationsView = () => {
                                     <button
                                       onClick={() => handleViewAttestation(etudiant)}
                                       disabled={loading}
-                                      className="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-                                      <FontAwesomeIcon icon={faDownload} />
-                                      Télécharger PDF
+                                      title="Voir l'attestation"
+                                      className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                      <FontAwesomeIcon icon={faEye} />
                                     </button>
                                   ) : (
                                     <button

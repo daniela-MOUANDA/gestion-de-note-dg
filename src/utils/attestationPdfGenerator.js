@@ -184,28 +184,25 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
     doc.setDrawColor(0, 0, 0)
   }
 
-  // ── Logo + texte sous le logo ───────────────────────────────────────────
-  // Sur l'original : logo ~28mm de large, légende juste en dessous
+  // ── Logo (grand, en haut à gauche — texte de l'institut DÉJÀ inclus dans l'image) ─
+  // Sur l'original : logo ~50mm de large, occupe une bonne place
+  const logoW = 50
+  const logoH = 38
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', mL, mT, 30, 24, undefined, 'FAST')
+    doc.addImage(logoDataUrl, 'PNG', mL, mT, logoW, logoH, undefined, 'FAST')
   }
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
-  doc.setTextColor(0, 0, 0)
-  doc.text('Institut National de la Poste, des Technologies', mL + 15, mT + 26, { align: 'center' })
-  doc.text("de l'Information et de la Communication",        mL + 15, mT + 28.5, { align: 'center' })
-
-  // ── En-tête textuel (à droite du logo) ──────────────────────────────────
-  const hx = mL + 36
+  // ── En-tête textuel : aligné à GAUCHE, JUSTE SOUS le logo ───────────────
+  const headerY = mT + logoH + 2
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.text('DIRECTION GENERALE', hx, mT + 8)
-  doc.text('LA DIRECTION DE LA SCOLARITE ET DES EXAMENS', hx, mT + 13)
-  doc.text(String(numero), hx, mT + 19)
+  doc.setTextColor(0, 0, 0)
+  doc.text('DIRECTION GENERALE',                           mL, headerY)
+  doc.text('LA DIRECTION DE LA SCOLARITE ET DES EXAMENS',  mL, headerY + 5)
+  doc.text(String(numero),                                  mL, headerY + 10)
 
   // ── Bandeau bleu titre ──────────────────────────────────────────────────
-  let y = mT + 40
+  let y = headerY + 22
   const bandX = mL + 14
   const bandW = cW - 28
 

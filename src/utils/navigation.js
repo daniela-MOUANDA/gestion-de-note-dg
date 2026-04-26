@@ -69,6 +69,12 @@ export const redirectToDashboard = (role) => {
     case 'DG':
       navigateTo('/dg/dashboard', { replace: true })
       break
+    case 'DIRECTEUR_SCOLARITE':
+      navigateTo('/directeur-scolarite/dashboard', { replace: true })
+      break
+    case 'ADMIN_SYSTEME':
+      navigateTo('/admin-systeme/dashboard', { replace: true })
+      break
     default:
       redirectToLogin('Rôle non reconnu')
   }

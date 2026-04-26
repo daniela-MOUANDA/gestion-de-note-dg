@@ -85,6 +85,10 @@ const getUserDashboard = (role) => {
       return '/dep/dashboard'
     case 'DG':
       return '/dg/dashboard'
+    case 'DIRECTEUR_SCOLARITE':
+      return '/directeur-scolarite/dashboard'
+    case 'ADMIN_SYSTEME':
+      return '/admin-systeme/dashboard'
     default:
       return '/login'
   }

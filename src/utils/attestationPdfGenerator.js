@@ -1,6 +1,6 @@
 /**
- * Génération des attestations de scolarité avec jsPDF (sans html2canvas).
- * Evite entièrement les pages blanches dues au rendu hors-écran de html2canvas.
+ * Génération des attestations de scolarité avec jsPDF.
+ * Design calqué sur l'attestation officielle INPTIC.
  */
 import { jsPDF } from 'jspdf'
 
@@ -19,11 +19,11 @@ function loadImgAsDataUrl(src) {
     const img = new Image()
     img.onload = () => {
       try {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.naturalWidth || 300
-        canvas.height = img.naturalHeight || 200
-        canvas.getContext('2d').drawImage(img, 0, 0)
-        resolve(canvas.toDataURL('image/png'))
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth || 300
+        c.height = img.naturalHeight || 200
+        c.getContext('2d').drawImage(img, 0, 0)
+        resolve(c.toDataURL('image/png'))
       } catch {
         resolve(null)
       }
@@ -58,16 +58,16 @@ export function sanitizePdfNamePart(s) {
 // ---------- core PDF builder ----------
 
 /**
- * Construit une attestation de scolarité en PDF.
+ * Construit une attestation de scolarité en PDF, design fidèle à l'original INPTIC.
  *
- * @param {object} data
- *   { etudiant, matricule, niveau, filiere, formation, anneeAcademique, numero, lieu, dateTexte }
- * @param {string|null} logoDataUrl   – data-URL PNG du logo INPTIC
- * @param {string|null} cachetDataUrl – data-URL PNG du cachet
- * @param {boolean}     isDuplicate   – ajoute le filigrane + tampon DUPLICATA rouge
+ * @param {object}  data           - champs de l'attestation
+ * @param {string|null} logoDataUrl
+ * @param {string|null} cachetDataUrl
+ * @param {boolean} isDuplicate    - ajoute filigrane + tampon DUPLICATA rouge
+ * @param {string|null} signatureDataUrl - signature du Directeur (optionnelle)
  * @returns {jsPDF}
  */
-export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicate = false) {
+export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicate = false, signatureDataUrl = null) {
   const {
     etudiant = '',
     matricule = '',
@@ -83,31 +83,27 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   const W = 210
   const H = 297
-  const mL = 20
-  const mR = 20
-  const mT = 20
-  const cW = W - mL - mR // 170 mm
+  const mL = 20   // marge gauche
+  const mR = 20   // marge droite
+  const mT = 18   // marge haute
+  const cW = W - mL - mR   // 170 mm
 
-  // ── Filigrane DUPLICATA (diagonal, rouge clair) ──────────────────────────
+  // ── Filigrane DUPLICATA (diagonal, rouge très clair) ─────────────────────
   if (isDuplicate) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(66)
-    doc.setTextColor(230, 170, 170) // rouge très atténué = effet watermark
+    doc.setFontSize(70)
+    doc.setTextColor(235, 185, 185)
     doc.text('DUPLICATA', W / 2, H / 2 + 10, { align: 'center', angle: 38 })
+    doc.setTextColor(0, 0, 0)
 
-    // Tampon rouge vif en haut à droite
+    // Tampon rouge vif haut droite
     doc.setFontSize(11)
     doc.setTextColor(200, 30, 30)
     doc.setDrawColor(200, 30, 30)
     doc.setLineWidth(0.5)
-    const stampW = 44
-    const stampH = 9
-    const stampX = W - mR - stampW
-    const stampY = mT - 3
-    doc.rect(stampX, stampY, stampW, stampH)
-    doc.text('DUPLICATA', stampX + stampW / 2, stampY + 6, { align: 'center' })
-
-    // Remettre les couleurs par défaut
+    const sw = 44, sh = 9, sx = W - mR - sw, sy = mT - 3
+    doc.rect(sx, sy, sw, sh)
+    doc.text('DUPLICATA', sx + sw / 2, sy + 6, { align: 'center' })
     doc.setTextColor(0, 0, 0)
     doc.setDrawColor(0, 0, 0)
   }
@@ -115,52 +111,61 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
   let y = mT
 
   // ── Logo ─────────────────────────────────────────────────────────────────
+  // L'original : logo 32×26 mm en haut à gauche, texte à droite du logo
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', mL, y, 28, 22, undefined, 'FAST')
+    doc.addImage(logoDataUrl, 'PNG', mL, y, 32, 26, undefined, 'FAST')
   }
 
-  // ── En-tête texte ────────────────────────────────────────────────────────
-  const hx = mL + 32
+  // ── En-tête textuel (à droite du logo, calque identique à l'original) ────
+  const hx = mL + 36
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
+  doc.setFontSize(9)
   doc.setTextColor(0, 0, 0)
-  doc.text('DIRECTION GENERALE', hx, y + 7)
-  doc.text('LA DIRECTION DE LA SCOLARITE ET DES EXAMENS', hx, y + 13)
+  doc.text('DIRECTION GENERALE', hx, y + 6)
+  doc.text('LA DIRECTION DE LA SCOLARITE ET DES EXAMENS', hx, y + 12)
+
+  // Numéro de l'attestation
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.text(String(numero), hx, y + 20)
 
-  y += 32
+  y += 32   // avance après le bloc logo/en-tête
 
   // ── Bandeau bleu titre ───────────────────────────────────────────────────
-  doc.setFillColor(168, 201, 228)  // #A8C9E4
-  doc.setDrawColor(44, 62, 80)     // #2C3E50
-  doc.setLineWidth(0.8)
-  doc.rect(mL, y, cW, 13, 'FD')
+  doc.setFillColor(168, 201, 228)   // #A8C9E4
+  doc.setDrawColor(0, 0, 0)
+  doc.setLineWidth(1)
+  doc.rect(mL, y, cW, 14, 'FD')
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
+  doc.setFontSize(16)
   doc.setTextColor(0, 0, 0)
-  doc.text('ATTESTATION DE SCOLARITE', W / 2, y + 8.5, { align: 'center' })
-  y += 20
+  doc.text('ATTESTATION DE SCOLARITE', W / 2, y + 9.5, { align: 'center' })
+  y += 22
 
   // ── Paragraphe introductif ───────────────────────────────────────────────
+  // Police légèrement réduite pour avoir de l'air, texte justifié simulé
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
-  // Les polices WinAnsiEncoding (Helvetica) supportent les caractères Latin-1 (é,è,à,ç…)
+  doc.setTextColor(0, 0, 0)
+
   const introText =
-    "   Je soussign\u00e9, Soilihi ALI ISSILAM, Directeur de la Scolarit\u00e9 et des Examens de " +
-    "l'Institut National de la Poste, des Technologies de l'Information et de la " +
-    "Communication (INPTIC), atteste que l'\u00e9tudiant(e) " +
+    '   Je soussign\u00e9, Soilihi ALI ISSILAM, Directeur de la Scolarit\u00e9 et des ' +
+    'Examens de l\'Institut National de la Poste, des Technologies de l\'Information ' +
+    'et de la Communication (INPTIC), atteste que l\'\u00e9tudiant(e) ' +
     etudiant +
-    " suit la formation ci-dessous dans notre \u00e9tablissement."
+    ' suit la formation ci-dessous dans notre \u00e9tablissement.'
+
   const introLines = doc.splitTextToSize(introText, cW)
   doc.text(introLines, mL, y)
-  y += introLines.length * 6.5 + 8
+  y += introLines.length * 6.2 + 10
 
-  // ── Liste d'informations ─────────────────────────────────────────────────
-  const listX = mL + 8
-  const lineH = 7
+  // ── Liste d'informations (calque fidèle : ➤ bold label, valeur normale) ──
+  const listX  = mL + 9   // décalage de la liste
+  const lineH  = 8        // espacement entre items
+
+  // Selon l'original : Niveau, Filière, Programme, Année — PAS de matricule dans la liste
   const items = [
-    ['Matricule', String(matricule)],
     ["Niveau d'\u00e9tudes", `${niveau} ann\u00e9e`],
     ['Fili\u00e8re', String(filiere)],
     ['Programme', String(formation)],
@@ -168,30 +173,40 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
   ]
 
   for (const [label, value] of items) {
-    doc.setFont('helvetica', 'normal')
-    doc.text('>', mL + 1.5, y)
+    // Symbole flèche
     doc.setFont('helvetica', 'bold')
-    const lbl = `${label} : `
+    doc.setFontSize(12)
+    doc.text('>', mL + 1, y)
+
+    // Label en gras
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    const lbl = `${label}\u00a0: `
     doc.text(lbl, listX, y)
+
+    // Valeur en normal
     doc.setFont('helvetica', 'normal')
-    doc.text(value, listX + doc.getTextWidth(lbl), y)
+    doc.text(String(value), listX + doc.getTextWidth(lbl), y)
+
     y += lineH
   }
 
-  y += 8
+  y += 10
 
   // ── Paragraphe de clôture ────────────────────────────────────────────────
   const closingText =
-    "   En foi de quoi, la pr\u00e9sente attestation lui est d\u00e9livr\u00e9e pour servir " +
-    "et valoir ce que de droit."
+    '   En foi de quoi, la pr\u00e9sente attestation lui est d\u00e9livr\u00e9e ' +
+    'pour servir et valoir ce que de droit.'
   const closingLines = doc.splitTextToSize(closingText, cW)
   doc.setFont('helvetica', 'normal')
+  doc.setFontSize(11)
   doc.text(closingLines, mL, y)
 
-  // ── Section signature (bas droite) ───────────────────────────────────────
-  const sigY = 226
-  const rightX = W - mR
-  const sigCenterX = W - mR - 35
+  // ── Section signature ────────────────────────────────────────────────────
+  // Position fixe proche du bas, alignée à droite (comme l'original)
+  const sigY     = 232
+  const rightX   = W - mR
+  const sigCtrX  = W - mR - 32   // centre horizontal du bloc signature
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
@@ -200,41 +215,54 @@ export function buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicat
   doc.setFont('helvetica', 'bold')
   doc.text('Directeur de la Scolarit\u00e9 et des Examens', rightX, sigY + 8, { align: 'right' })
 
-  const cachetSize = 38
-  if (cachetDataUrl) {
+  // Signature du directeur (si fournie)
+  const sigImgSize = 30
+  if (signatureDataUrl) {
     doc.addImage(
-      cachetDataUrl, 'PNG',
-      sigCenterX - cachetSize / 2, sigY + 12,
-      cachetSize, cachetSize,
+      signatureDataUrl, 'PNG',
+      sigCtrX - sigImgSize / 2, sigY + 10,
+      sigImgSize, sigImgSize * 0.5,
       undefined, 'FAST'
     )
   }
 
-  doc.setFont('helvetica', 'bold')
-  doc.text('Soilihi ALI ISSILAM', sigCenterX, sigY + 56, { align: 'center' })
+  // Cachet circulaire (chevauchant la signature comme sur l'original)
+  const cachetSize = 34
+  const cachetX    = sigCtrX - cachetSize / 2 + 8   // légèrement décalé à droite
+  const cachetY    = sigY + (signatureDataUrl ? 18 : 10)
+  if (cachetDataUrl) {
+    doc.addImage(cachetDataUrl, 'PNG', cachetX, cachetY, cachetSize, cachetSize, undefined, 'FAST')
+  }
 
-  // ── Pied de page ─────────────────────────────────────────────────────────
-  doc.setDrawColor(120, 120, 120)
-  doc.setLineWidth(0.25)
-  doc.line(mL, 283, W - mR, 283)
+  // Nom du signataire
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text('Soilihi ALI ISSILAM', sigCtrX, cachetY + cachetSize + 4, { align: 'center' })
+
+  // ── Pied de page institutionnel ──────────────────────────────────────────
+  const footY = H - 14
+  doc.setDrawColor(60, 60, 60)
+  doc.setLineWidth(0.3)
+  doc.line(mL, footY, W - mR, footY)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.setTextColor(70, 70, 70)
+  doc.setTextColor(50, 50, 50)
   doc.text(
-    "Etablissement public sous tutelle du Minist\u00e8re de l'Economie Num\u00e9rique " +
-    "et des Nouvelles Technologies de l'Information",
-    W / 2, 287, { align: 'center' }
+    '\u00c9tablissement public sous tutelle du Minist\u00e8re de l\'Economie Num\u00e9rique ' +
+    'et des Nouvelles Technologies de l\'Information',
+    W / 2, footY + 4, { align: 'center' }
   )
   doc.text(
-    'Tel : (241) 01 73 81 31 - Fax: (241) 01 73 44 16 - BP 13 124 Libreville - Gabon - Email : gabon.inptic@gmail.com',
-    W / 2, 292, { align: 'center' }
+    'T\u00e9l\u00a0: (241) 01 73 81 31 \u2013 Fax\u00a0: (241) 01 73 44 16 \u2013 ' +
+    'BP 13 124 Libreville \u2013 Gabon \u2013 Email\u00a0: gabon.inptic@gmail.com',
+    W / 2, footY + 9, { align: 'center' }
   )
 
   return doc
 }
 
 /** Retourne le blob PDF de l'attestation */
-export function buildAttestationPdfBlob(data, logoDataUrl, cachetDataUrl, isDuplicate = false) {
-  return buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicate).output('blob')
+export function buildAttestationPdfBlob(data, logoDataUrl, cachetDataUrl, isDuplicate = false, signatureDataUrl = null) {
+  return buildAttestationPdf(data, logoDataUrl, cachetDataUrl, isDuplicate, signatureDataUrl).output('blob')
 }

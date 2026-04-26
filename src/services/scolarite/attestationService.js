@@ -29,7 +29,10 @@ const genererNumeroAttestation = async (annee) => {
 // Créer une attestation
 export const creerAttestation = async (etudiantId, promotionId, anneeAcademique) => {
   try {
-    const annee = new Date().getFullYear()
+    // Utiliser la première année de l'année académique (ex: "2024-2025" → 2024)
+    const annee = anneeAcademique
+      ? parseInt(String(anneeAcademique).split('-')[0], 10) || new Date().getFullYear()
+      : new Date().getFullYear()
     const numero = await genererNumeroAttestation(annee)
     
     const { data, error } = await supabaseAdmin

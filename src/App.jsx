@@ -80,6 +80,14 @@ const AttestationsView = lazy(() => import('./views/sp-scolarite/AttestationsVie
 const ArchivesAttestationsView = lazy(() => import('./views/sp-scolarite/ArchivesAttestationsView'))
 const MessagerieSPView = lazy(() => import('./views/sp-scolarite/MessagerieSPView'))
 
+// Routes Directeur de la Scolarité (DS)
+const DashboardDSView = lazy(() => import('./views/directeur-scolarite/DashboardDSView'))
+const SignatureDSView  = lazy(() => import('./views/directeur-scolarite/SignatureDSView'))
+const AttestationsDSView = lazy(() => import('./views/directeur-scolarite/AttestationsDSView'))
+const ArchivesDSView   = lazy(() => import('./views/directeur-scolarite/ArchivesDSView'))
+const GestionComptesDSView = lazy(() => import('./views/directeur-scolarite/GestionComptesDSView'))
+const StatistiquesDSView = lazy(() => import('./views/directeur-scolarite/StatistiquesDSView'))
+
 // Routes DG
 const DashboardDGView = lazy(() => import('./views/dg/DashboardDGView'))
 
@@ -518,6 +526,56 @@ function App() {
               element={
                 <ProtectedRoute requireAuth={true} allowedRoles="SP_SCOLARITE">
                   <ListeEtudiantsScolariteView />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Routes Directeur de la Scolarité - Protégées pour le rôle DIRECTEUR_SCOLARITE */}
+            <Route
+              path="/directeur-scolarite/dashboard"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DIRECTEUR_SCOLARITE">
+                  <DashboardDSView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/directeur-scolarite/signature"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DIRECTEUR_SCOLARITE">
+                  <SignatureDSView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/directeur-scolarite/attestations"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DIRECTEUR_SCOLARITE">
+                  <AttestationsDSView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/directeur-scolarite/archives"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DIRECTEUR_SCOLARITE">
+                  <ArchivesDSView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/directeur-scolarite/gestion-comptes"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DIRECTEUR_SCOLARITE">
+                  <GestionComptesDSView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/directeur-scolarite/statistiques"
+              element={
+                <ProtectedRoute requireAuth={true} allowedRoles="DIRECTEUR_SCOLARITE">
+                  <StatistiquesDSView />
                 </ProtectedRoute>
               }
             />

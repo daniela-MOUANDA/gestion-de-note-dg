@@ -40,7 +40,7 @@ const LoginView = () => {
     const roleCode = user.role || 'UNKNOWN'
     console.log('Redirection par code de rôle:', roleCode)
 
-    const criticalRoles = ['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE', 'CHEF_SERVICE_SCOLARITE', 'DEP', 'SP_SCOLARITE']
+    const criticalRoles = ['CHEF_DEPARTEMENT', 'COORD_PEDAGOGIQUE', 'CHEF_SERVICE_SCOLARITE', 'DEP', 'SP_SCOLARITE', 'DIRECTEUR_SCOLARITE', 'ADMIN_SYSTEME']
     const useRouteDashboard = !criticalRoles.includes(roleCode) && user.roleDetails && user.roleDetails.routeDashboard
 
     if (useRouteDashboard) {
@@ -76,6 +76,10 @@ const LoginView = () => {
       case 'ADMIN_SYSTEME':
         console.log('✅ Redirection vers /admin-systeme/dashboard pour ADMIN_SYSTEME')
         navigate('/admin-systeme/dashboard', { replace: true })
+        break
+      case 'DIRECTEUR_SCOLARITE':
+        console.log('✅ Redirection vers /directeur-scolarite/dashboard pour DIRECTEUR_SCOLARITE')
+        navigate('/directeur-scolarite/dashboard', { replace: true })
         break
       default:
         console.warn('⚠️ Rôle non reconnu:', roleCode)

@@ -109,6 +109,18 @@ export const ROLE_MENUS = {
         { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
     ],
 
+    // Directeur de la Scolarité et des Examens
+    DIRECTEUR_SCOLARITE: [
+        { path: '/directeur-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
+        { path: '/directeur-scolarite/signature', icon: faFileContract, label: 'Ma signature' },
+        { path: '/directeur-scolarite/attestations', icon: faFileAlt, label: 'Attestations' },
+        { path: '/directeur-scolarite/archives', icon: faArchive, label: 'Archives' },
+        { path: '/directeur-scolarite/gestion-comptes', icon: faUsers, label: 'Gestion des comptes' },
+        { path: '/directeur-scolarite/statistiques', icon: faChartLine, label: 'Statistiques' },
+        { path: '/admin/profil', icon: faUser, label: 'Profil' },
+        { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
+    ],
+
     // SP Scolarité (Secrétaire Particulière)
     SP_SCOLARITE: [
         { path: '/sp-scolarite/dashboard', icon: faHome, label: 'Tableau de bord' },
@@ -185,6 +197,7 @@ export const getRoleDashboardTitle = (roleCode, roleName) => {
     const titles = {
         DG: 'Direction Générale',
         DEP: 'Direction des Études et de la Pédagogie',
+        DIRECTEUR_SCOLARITE: 'Directeur de la Scolarit\u00e9 et des Examens',
         CHEF_SERVICE_SCOLARITE: 'Chef de Service Scolarité',
         AGENT_SCOLARITE: 'Service Scolarité',
         SP_SCOLARITE: 'Secrétaire Particulière - Direction de la Scolarité',

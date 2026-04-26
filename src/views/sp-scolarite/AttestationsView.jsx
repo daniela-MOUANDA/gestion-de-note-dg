@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faFileAlt, faArrowLeft, faSearch, faDownload, faPrint, faPlus, faCheck
+  faFileAlt, faArrowLeft, faSearch, faDownload, faPrint, faPlus, faCheck, faEye
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
@@ -73,10 +73,7 @@ const AttestationsView = () => {
         if (promoDefaut) {
           setSelectedPromotion(promoDefaut.id)
         }
-        // Sélectionner la première formation par défaut
-        if (formationsData.length > 0) {
-          setSelectedFormation(formationsData[0].id)
-        }
+        // Ne pas pré-sélectionner la formation : l'utilisateur doit choisir explicitement
       } catch (error) {
         console.error('Erreur lors du chargement:', error)
         alertError('Erreur lors du chargement des données')
@@ -208,6 +205,55 @@ const AttestationsView = () => {
 
   const handlePrint = () => {
     window.print()
+  }
+
+  /** Télécharge le PDF d'une attestation déjà générée (vue originale, sans DUPLICATA). */
+  const handleViewAttestation = async (etudiant) => {
+    try {
+      setLoading(true)
+      const promotion = promotions.find(p => p.id === selectedPromotion)
+      const niveauInfo = niveaux.find(n => n.id === selectedNiveau)
+      const filiereInfo = filieres.find(f => f.id === selectedFiliere)
+
+      const dateTexte = etudiant.attestationDate
+        ? new Date(etudiant.attestationDate).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+          })
+        : new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+
+      const data = {
+        etudiant: `${etudiant.nom} ${etudiant.prenom}`,
+        matricule: etudiant.matricule,
+        niveau: niveauInfo?.ordinal || etudiant.niveauOrdinal || '1ère',
+        filiere: filiereInfo?.nom || etudiant.filiere || '',
+        formation: etudiant.formation || '',
+        anneeAcademique: promotion?.annee || '',
+        numero: etudiant.attestationNumero || '',
+        lieu: 'Libreville',
+        dateTexte,
+      }
+
+      const { logoUrl, cachetUrl } = await preloadAttestationImages()
+      const blob = buildAttestationPdfBlob(data, logoUrl, cachetUrl, false)
+
+      const nomSafe = sanitizePdfNamePart(`${etudiant.nom}_${etudiant.prenom}`)
+      const matSafe = sanitizePdfNamePart(etudiant.matricule)
+      const filename = `Attestation_${matSafe}_${nomSafe}.pdf`
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Erreur téléchargement attestation:', error)
+      alertError('Erreur lors du téléchargement. Veuillez réessayer.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleGenerateAllAttestations = async () => {
@@ -776,17 +822,24 @@ const AttestationsView = () => {
                               </td>
                               <td className="px-6 py-4 text-sm text-slate-600">{etudiant.formation || 'N/A'}</td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center justify-center">
-                                  <button
-                                    onClick={() => handleGenerateAttestation(etudiant)}
-                                    disabled={loading || dejaGeneree}
-                                    className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${loading || dejaGeneree
-                                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                      : 'bg-blue-600 text-white hover:bg-blue-700 transition-colors'
-                                      }`}>
-                                    <FontAwesomeIcon icon={faFileAlt} />
-                                    {dejaGeneree ? 'Déjà générée' : 'Générer attestation'}
-                                  </button>
+                                <div className="flex items-center justify-center gap-2">
+                                  {dejaGeneree ? (
+                                    <button
+                                      onClick={() => handleViewAttestation(etudiant)}
+                                      disabled={loading}
+                                      className="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                                      <FontAwesomeIcon icon={faDownload} />
+                                      Télécharger PDF
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleGenerateAttestation(etudiant)}
+                                      disabled={loading}
+                                      className="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                                      <FontAwesomeIcon icon={faFileAlt} />
+                                      Générer attestation
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>

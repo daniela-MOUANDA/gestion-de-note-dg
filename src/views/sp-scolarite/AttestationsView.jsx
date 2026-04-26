@@ -212,7 +212,7 @@ const AttestationsView = () => {
     }
 
     const confirmation = window.confirm(
-      `Voulez-vous générer ${etudiantsInscrits.length} attestations pour tous les étudiants inscrits ?\n\nCela peut prendre quelques minutes...`
+      `Voulez-vous générer ${etudiantsDisponibles.length} attestation(s) pour les étudiants qui n'en ont pas encore ?\n\nCela peut prendre quelques minutes...`
     )
 
     if (!confirmation) return

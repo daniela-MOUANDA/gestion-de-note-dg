@@ -134,23 +134,26 @@ const ArchivesAttestationsView = () => {
       const filiereObj = filieres.find(f => f.id === selectedFiliere)
       const niveauObj = niveaux.find(n => n.id === selectedNiveau)
 
-      // Créer l'élément HTML pour le PDF
+      // Hors écran mais dans le contexte de pile normal : z-index négatif mettait le bloc
+      // derrière le document et html2canvas/html2pdf produisait une page blanche.
       const element = document.createElement('div')
+      element.setAttribute('data-pdf-export', 'attestation-duplicata')
       element.style.width = '210mm'
       element.style.height = '297mm'
       element.style.maxHeight = '297mm'
       element.style.overflow = 'hidden'
-      element.style.position = 'absolute'
-      element.style.left = '0'
+      element.style.position = 'fixed'
+      element.style.left = '-12000px'
       element.style.top = '0'
-      element.style.zIndex = '-1'
       element.style.backgroundColor = '#ffffff'
       element.style.boxSizing = 'border-box'
       element.style.pageBreakInside = 'avoid'
+      const numeroSafe = String(attestation.numero ?? '').replace(/</g, '')
       element.innerHTML = `
         <div style="padding: 2cm; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; position: relative; background-color: #ffffff; page-break-inside: avoid;">
-          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 72pt; font-weight: bold; color: rgba(0, 0, 0, 0.1); font-family: Arial, sans-serif; z-index: 1; pointer-events: none; white-space: nowrap;">DUPLICATA - Conforme à l'original</div>
-          
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: 64pt; font-weight: bold; color: rgba(220, 38, 38, 0.18); font-family: Arial, sans-serif; z-index: 1; pointer-events: none; white-space: nowrap;">DUPLICATA</div>
+          <div style="position: absolute; top: 1.2cm; right: 1.2cm; z-index: 3; font-family: Arial, sans-serif; font-size: 13pt; font-weight: bold; color: #dc2626; border: 3px solid #dc2626; padding: 8px 14px; letter-spacing: 2px; transform: rotate(-10deg); pointer-events: none;">DUPLICATA</div>
+
           <div style="z-index: 2; position: relative; page-break-inside: avoid;">
             <div style="margin-bottom: 3rem;">
               <div style="display: flex; justify-content: flex-start; margin-bottom: 0.5rem;">
@@ -159,7 +162,7 @@ const ArchivesAttestationsView = () => {
               <div style="text-align: left; font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.2;">
                 <p style="font-weight: bold; margin: 0; font-size: 10pt;">DIRECTION GENERALE</p>
                 <p style="font-weight: bold; margin: 0; font-size: 10pt;">LA DIRECTION DE LA SCOLARITE ET DES EXAMENS</p>
-                <p style="font-weight: bold; margin-top: 0.25rem; font-size: 10pt;">${attestation.numero}</p>
+                <p style="font-weight: bold; margin-top: 0.25rem; font-size: 10pt;">${numeroSafe}</p>
               </div>
             </div>
 
@@ -280,7 +283,7 @@ const ArchivesAttestationsView = () => {
 
       const opt = {
         margin: [0, 0, 0, 0],
-        filename: `Attestation_Duplicata_${matricule.replace(/\s+/g, '_')}_${attestation.numero.replace(/\//g, '-')}.pdf`,
+        filename: `Attestation_Duplicata_${String(matricule).replace(/\s+/g, '_')}_${String(attestation.numero || 'sans-numero').replace(/\//g, '-')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
           scale: 2,

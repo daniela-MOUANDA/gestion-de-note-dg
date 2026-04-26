@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Attestation de scolarité — INPTIC</title>
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════
+     ATTESTATION DE SCOLARITÉ INPTIC — maquette HTML/CSS fidèle
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  *,*::before,*::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #e9ecef;
+  }
+
+  body {
+    font-family: "Times New Roman", Georgia, serif;
+    color: #000;
+    -webkit-font-smoothing: antialiased;
+    padding: 30px 16px;
+  }
+
+  /* ─── feuille A4 ─────────────────────────────────────────────────────── */
+  .sheet {
+    background: #fff;
+    width: 800px;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 60px 95px 40px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.15);
+    position: relative;
+  }
+
+  /* ─── EN-TÊTE ────────────────────────────────────────────────────────── */
+  .header { text-align: left; }
+
+  .header .logo {
+    width: 220px;
+    height: auto;
+    display: block;
+  }
+
+  .header .institut {
+    font-family: "Times New Roman", Georgia, serif;
+    font-size: 20px;
+    margin: 4px 0 14px;
+    line-height: 1.2;
+  }
+
+  .header .direction-block {
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.35;
+  }
+  .header .direction-block .ligne1 {
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .header .direction-block .ligne2 {
+    font-size: 13px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+  .header .direction-block .numero {
+    font-size: 11px;
+    font-weight: bold;
+    margin-top: 2px;
+  }
+
+  /* ─── TITRE BANDEAU BLEU ─────────────────────────────────────────────── */
+  .title-banner {
+    margin-top: 30px;
+    background: #cfe1f0;
+    border: 1.5px solid #2e6396;
+    border-radius: 6px;
+    text-align: center;
+    padding: 14px 0;
+    box-shadow: 0 1px 0 rgba(46,99,150,0.15);
+  }
+  .title-banner h1 {
+    margin: 0;
+    font-family: "Times New Roman", Georgia, serif;
+    font-size: 26px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ─── CORPS DU DOCUMENT ──────────────────────────────────────────────── */
+  .body { margin-top: 35px; font-size: 16px; }
+
+  .intro {
+    text-align: justify;
+    text-indent: 36px;
+    line-height: 1.5;
+    margin: 0 0 25px;
+  }
+
+  .infos {
+    list-style: none;
+    margin: 0 0 25px;
+    padding: 0 0 0 24px;
+  }
+  .infos li {
+    line-height: 1.8;
+    margin-bottom: 6px;
+    position: relative;
+    padding-left: 22px;
+  }
+  .infos li::before {
+    content: "\27A4";              /* ➤ */
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 14px;
+  }
+  .infos li b { font-weight: bold; }
+  .infos sup {
+    font-size: 0.65em;
+    vertical-align: super;
+    line-height: 0;
+  }
+
+  .closing {
+    text-align: justify;
+    text-indent: 36px;
+    line-height: 1.5;
+    margin: 25px 0 30px;
+  }
+
+  /* ─── BLOC DATE & SIGNATURE ──────────────────────────────────────────── */
+  .signature-zone {
+    text-align: right;
+    font-size: 16px;
+  }
+  .signature-zone .date {
+    margin-bottom: 20px;
+  }
+  .signature-zone .titre-signataire {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+
+  /* trait noir 120px sous "Directeur de la Scolarité…" — facultatif (ici masqué pour ressembler à l'original) */
+  .signature-zone hr.sig-line {
+    width: 120px;
+    border: none;
+    border-top: 1px solid #000;
+    margin: 8px 0 8px auto;
+    display: none;
+  }
+
+  .signature-stack {
+    display: inline-block;
+    position: relative;
+    width: 200px;
+    height: 130px;
+  }
+  .signature-stack .signature-img {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 180px;
+    height: auto;
+    z-index: 2;
+  }
+  .signature-stack .cachet-img {
+    position: absolute;
+    top: 35px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: auto;
+    z-index: 1;
+    opacity: 0.95;
+  }
+
+  .signature-zone .nom-signataire {
+    margin-top: 15px;
+    font-size: 16px;
+    font-weight: bold;
+    font-variant: small-caps;
+  }
+
+  /* ─── PIED DE PAGE ───────────────────────────────────────────────────── */
+  .footer {
+    margin-top: 40px;
+    border-top: 1px solid #ccc;
+    padding-top: 15px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10px;
+    text-align: center;
+    line-height: 1.5;
+    color: #1f1f1f;
+  }
+
+  /* ─── RESPONSIVE ─────────────────────────────────────────────────────── */
+  @media (max-width: 820px) {
+    .sheet { padding: 40px 28px 24px; }
+    .header .logo { width: 160px; }
+  }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .sheet { box-shadow: none; padding: 30mm 20mm; width: auto; }
+  }
+</style>
+</head>
+<body>
+
+  <article class="sheet">
+
+    <!-- EN-TÊTE -->
+    <header class="header">
+      <img class="logo" src="/images/logo.png" alt="INPTIC" />
+      <div class="direction-block">
+        <div class="ligne1">DIRECTION GENERALE</div>
+        <div class="ligne2">LA DIRECTION DE LA SCOLARITE ET DES EXAMENS</div>
+        <div class="numero">N&deg;0560/INPTIC/DG/DSE/2024</div>
+      </div>
+    </header>
+
+    <!-- TITRE -->
+    <div class="title-banner">
+      <h1>Attestation de scolarit&eacute;</h1>
+    </div>
+
+    <!-- CORPS -->
+    <section class="body">
+
+      <p class="intro">
+        Je soussign&eacute;, Soilih ALI ISSILAM, Directeur de la Scolarit&eacute; et
+        des Examens de l&rsquo;Institut National de la Poste, des Technologies de
+        l&rsquo;Information et de la Communication (INPTIC), atteste que
+        l&rsquo;&eacute;tudiant(e) <b>MOUSSOUNDA MOUANDA Daniela</b> suit la formation
+        ci-dessous dans notre &eacute;tablissement.
+      </p>
+
+      <ul class="infos">
+        <li><b>Niveau d&rsquo;&eacute;tudes&nbsp;:</b> 3<sup>&egrave;me</sup> ann&eacute;e</li>
+        <li><b>Fili&egrave;re&nbsp;:</b> G&eacute;nie Informatique</li>
+        <li><b>Programme&nbsp;:</b> Formation Initiale 1</li>
+        <li><b>Ann&eacute;e acad&eacute;mique&nbsp;:</b> 2024-2025</li>
+      </ul>
+
+      <p class="closing">
+        En foi de quoi, la pr&eacute;sente attestation lui est d&eacute;livr&eacute;e
+        pour servir et valoir ce que de droit.
+      </p>
+
+      <!-- ZONE SIGNATURE -->
+      <div class="signature-zone">
+        <div class="date">Fait &agrave; Libreville, le 28 novembre 2024</div>
+
+        <div class="titre-signataire">Directeur de la Scolarit&eacute; et des Examens</div>
+        <hr class="sig-line" />
+
+        <div class="signature-stack">
+          <img class="signature-img" src="/images/signature.png" alt="Signature" onerror="this.style.display='none'"/>
+          <img class="cachet-img"    src="/images/cachet.png"    alt="Cachet" />
+        </div>
+
+        <div class="nom-signataire">Soilih ALI ISSILAM</div>
+      </div>
+
+    </section>
+
+    <!-- PIED DE PAGE -->
+    <footer class="footer">
+      Etablissement public sous tutelle du Minist&egrave;re de l&rsquo;Economie Num&eacute;rique
+      et des Nouvelles Technologies de l&rsquo;Information<br />
+      T&eacute;l&nbsp;: (241) 01 73 81 31 &ndash; Fax (241) 01 73 44 16 - BP 13 124 Libreville -
+      Gabon &ndash; Email&nbsp;: gabon.inptic@gmail.com
+    </footer>
+
+  </article>
+
+</body>
+</html>

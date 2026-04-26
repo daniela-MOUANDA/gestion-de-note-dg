@@ -5,11 +5,15 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import AdminSidebar from '../../components/common/AdminSidebar'
 import AdminHeader from '../../components/common/AdminHeader'
-import html2pdf from 'html2pdf.js'
 import { getPromotions, getFilieres, getNiveauxDisponibles, getFormations } from '../../api/scolarite'
 import { getAttestationsArchiveesParFiliereNiveau } from '../../api/scolarite'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { useAlert } from '../../contexts/AlertContext'
+import {
+  preloadAttestationImages,
+  buildAttestationPdfBlob,
+  sanitizePdfNamePart,
+} from '../../utils/attestationPdfGenerator.js'
 
 const ArchivesAttestationsView = () => {
   const { error: alertError } = useAlert()
@@ -116,212 +120,48 @@ const ArchivesAttestationsView = () => {
 
   const handleDownloadAttestation = async (attestation) => {
     try {
-      // Gérer les deux formats possibles pour l'étudiant
       const nomComplet = typeof attestation.etudiant === 'string'
         ? attestation.etudiant
         : `${attestation.etudiant?.prenom || ''} ${attestation.etudiant?.nom || ''}`.trim()
-      const matricule = attestation.matricule || attestation.etudiant?.matricule || 'N/A'
-      const formation = attestation.formation || 'N/A'
-      const filiere = attestation.filiere || 'N/A'
-      const niveau = attestation.niveau || attestation.niveauFull || 'N/A'
-      const anneeAcademique = attestation.anneeAcademique || 'N/A'
-      const dateGeneration = attestation.dateGenerationISO
-        ? new Date(attestation.dateGenerationISO).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-        : attestation.dateGeneration || new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 
-      // Récupérer les informations de promotion, filière et niveau depuis les états
-      const promotion = promotions.find(p => p.id === selectedPromotion)
-      const filiereObj = filieres.find(f => f.id === selectedFiliere)
-      const niveauObj = niveaux.find(n => n.id === selectedNiveau)
-
-      // Hors écran mais dans le contexte de pile normal : z-index négatif mettait le bloc
-      // derrière le document et html2canvas/html2pdf produisait une page blanche.
-      const element = document.createElement('div')
-      element.setAttribute('data-pdf-export', 'attestation-duplicata')
-      element.style.width = '210mm'
-      element.style.height = '297mm'
-      element.style.maxHeight = '297mm'
-      element.style.overflow = 'hidden'
-      element.style.position = 'fixed'
-      element.style.left = '-12000px'
-      element.style.top = '0'
-      element.style.backgroundColor = '#ffffff'
-      element.style.boxSizing = 'border-box'
-      element.style.pageBreakInside = 'avoid'
-      const numeroSafe = String(attestation.numero ?? '').replace(/</g, '')
-      element.innerHTML = `
-        <div style="padding: 2cm; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; position: relative; background-color: #ffffff; page-break-inside: avoid;">
-          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: 64pt; font-weight: bold; color: rgba(220, 38, 38, 0.18); font-family: Arial, sans-serif; z-index: 1; pointer-events: none; white-space: nowrap;">DUPLICATA</div>
-          <div style="position: absolute; top: 1.2cm; right: 1.2cm; z-index: 3; font-family: Arial, sans-serif; font-size: 13pt; font-weight: bold; color: #dc2626; border: 3px solid #dc2626; padding: 8px 14px; letter-spacing: 2px; transform: rotate(-10deg); pointer-events: none;">DUPLICATA</div>
-
-          <div style="z-index: 2; position: relative; page-break-inside: avoid;">
-            <div style="margin-bottom: 3rem;">
-              <div style="display: flex; justify-content: flex-start; margin-bottom: 0.5rem;">
-                <img src="${window.location.origin}/images/logo.png" alt="Logo INPTIC" style="height: 80px;" crossorigin="anonymous" />
-              </div>
-              <div style="text-align: left; font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.2;">
-                <p style="font-weight: bold; margin: 0; font-size: 10pt;">DIRECTION GENERALE</p>
-                <p style="font-weight: bold; margin: 0; font-size: 10pt;">LA DIRECTION DE LA SCOLARITE ET DES EXAMENS</p>
-                <p style="font-weight: bold; margin-top: 0.25rem; font-size: 10pt;">${numeroSafe}</p>
-              </div>
-            </div>
-
-            <div style="background-color: #A8C9E4; border: 3px solid #2C3E50; padding: 15px 0; margin-bottom: 3rem; width: 100%; display: flex; justify-content: center; align-items: center;">
-              <h1 style="font-family: Arial, sans-serif; font-size: 18pt; letter-spacing: 4px; color: #000; font-weight: bold; margin: 0; text-align: center;">ATTESTATION DE SCOLARITE</h1>
-            </div>
-
-            <div style="font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.3; flex: 1;">
-              <p style="margin-bottom: 1rem; text-align: justify; text-indent: 2cm;">
-                Je soussigné, Soilihi ALI ISSILAM, Directeur de la Scolarité et des Examens de 
-                l'Institut National de la Poste, des Technologies de l'Information et de la 
-                Communication (INPTIC), atteste que l'étudiant(e) <strong>${nomComplet}</strong> suit 
-                la formation ci-dessous dans notre établissement.
-              </p>
-
-              <div style="margin-bottom: 1rem; padding-left: 1.5cm;">
-                <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                  <span style="margin-right: 0.5cm;">➤</span>
-                  <span><strong>Matricule :</strong> ${matricule}</span>
-                </p>
-                <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                  <span style="margin-right: 0.5cm;">➤</span>
-                  <span><strong>Niveau d'études :</strong> ${niveau}</span>
-                </p>
-                <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                  <span style="margin-right: 0.5cm;">➤</span>
-                  <span><strong>Filière :</strong> ${filiere}</span>
-                </p>
-                <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                  <span style="margin-right: 0.5cm;">➤</span>
-                  <span><strong>Programme :</strong> ${formation}</span>
-                </p>
-                <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                  <span style="margin-right: 0.5cm;">➤</span>
-                  <span><strong>Année académique :</strong> ${anneeAcademique}</span>
-                </p>
-              </div>
-
-              <p style="text-align: justify; text-indent: 2cm;">
-                En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que 
-                de droit.
-              </p>
-            </div>
-
-            <div style="flex-grow: 1; min-height: 40px; max-height: 80px;"></div>
-
-            <div style="font-family: Arial, sans-serif; font-size: 12pt;">
-              <div style="display: flex; justify-content: flex-end;">
-                <div style="width: 300px; position: relative;">
-                  <p style="text-align: right; margin-bottom: 4rem; font-size: 12pt; white-space: nowrap;">Fait à Libreville, le ${dateGeneration}</p>
-                  
-                  <p style="font-weight: bold; margin-bottom: 0.5rem; text-align: right; font-size: 12pt; white-space: nowrap;">Directeur de la Scolarité et des Examens</p>
-                  
-                  <div style="position: relative; height: 120px; display: flex; align-items: center; justify-content: center;">
-                    <img src="${window.location.origin}/images/cachet.png" alt="Cachet" style="width: 140px; height: auto; display: block; margin: 0 auto;" crossorigin="anonymous" />
-                  </div>
-                  
-                  <p style="font-weight: bold; text-align: center; font-size: 12pt;">Soilihi ALI ISSILAM</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `
-
-      document.body.appendChild(element)
-
-      // Attendre que le DOM soit complètement rendu
-      await new Promise(resolve => setTimeout(resolve, 300))
-
-      // Attendre que les images soient chargées
-      await new Promise((resolve) => {
-        const images = element.getElementsByTagName('img')
-        let loadedCount = 0
-        const totalImages = images.length
-
-        if (totalImages === 0) {
-          setTimeout(resolve, 1000)
-          return
-        }
-
-        let timeoutId = setTimeout(() => {
-          console.warn('Timeout lors du chargement des images, génération du PDF quand même')
-          resolve()
-        }, 10000)
-
-        const checkAllLoaded = () => {
-          loadedCount++
-          if (loadedCount === totalImages) {
-            clearTimeout(timeoutId)
-            // Attendre encore un peu pour être sûr que tout est rendu
-            setTimeout(resolve, 1000)
-          }
-        }
-
-        for (let img of images) {
-          // Forcer le rechargement si nécessaire
-          if (img.complete && img.naturalHeight !== 0) {
-            checkAllLoaded()
-          } else {
-            img.onload = () => {
-              checkAllLoaded()
-            }
-            img.onerror = () => {
-              console.warn('Erreur de chargement d\'image:', img.src)
-              checkAllLoaded() // Continuer même si l'image échoue
-            }
-            // Forcer le chargement
-            const src = img.src
-            img.src = ''
-            img.src = src
-          }
-        }
-      })
-
-      // Attendre encore un peu pour le rendu final
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const opt = {
-        margin: [0, 0, 0, 0],
-        filename: `Attestation_Duplicata_${String(matricule).replace(/\s+/g, '_')}_${String(attestation.numero || 'sans-numero').replace(/\//g, '-')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          windowWidth: 794,
-          windowHeight: 1123,
-          logging: false,
-          backgroundColor: '#ffffff',
-          allowTaint: false
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-          compress: true,
-          precision: 16,
-          putOnlyUsedFonts: true
-        },
-        pagebreak: { mode: 'avoid-all' }
+      const data = {
+        etudiant: nomComplet,
+        matricule: attestation.matricule || attestation.etudiant?.matricule || 'N/A',
+        filiere: attestation.filiere || 'N/A',
+        niveau: attestation.niveau || attestation.niveauFull || 'N/A',
+        formation: attestation.formation || 'N/A',
+        anneeAcademique: attestation.anneeAcademique || 'N/A',
+        numero: attestation.numero || '',
+        lieu: 'Libreville',
+        dateTexte: attestation.dateGenerationISO
+          ? new Date(attestation.dateGenerationISO).toLocaleDateString('fr-FR', {
+              day: 'numeric', month: 'long', year: 'numeric'
+            })
+          : attestation.dateGeneration || new Date().toLocaleDateString('fr-FR', {
+              day: 'numeric', month: 'long', year: 'numeric'
+            }),
       }
 
-      try {
-        console.log('Début de la génération du PDF pour:', nomComplet)
-        console.log('Dimensions de l\'élément:', element.offsetWidth, element.offsetHeight)
-        await html2pdf().set(opt).from(element).save()
-        console.log('PDF généré avec succès')
-      } catch (pdfError) {
-        console.error('Erreur lors de la génération du PDF:', pdfError)
-        throw pdfError
-      } finally {
-        // S'assurer de supprimer l'élément même en cas d'erreur
-        if (element.parentNode) {
-          document.body.removeChild(element)
-        }
-      }
+      // Chargement des images (même origine = pas de CORS)
+      const { logoUrl, cachetUrl } = await preloadAttestationImages()
+
+      // Génération jsPDF (pas de html2canvas, pas de page blanche)
+      const blob = buildAttestationPdfBlob(data, logoUrl, cachetUrl, true)
+
+      const nomSafe = sanitizePdfNamePart(nomComplet)
+      const matSafe = sanitizePdfNamePart(data.matricule)
+      const filename = `Attestation_Duplicata_${matSafe}_${nomSafe}.pdf`
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     } catch (error) {
-      console.error('Erreur lors de la génération du PDF:', error)
+      console.error('Erreur lors de la génération du PDF duplicata:', error)
       alertError('Erreur lors de la génération du PDF. Veuillez réessayer.')
     }
   }

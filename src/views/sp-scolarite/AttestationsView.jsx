@@ -12,33 +12,12 @@ import { getEtudiantsInscritsParFiliereNiveau, creerAttestation } from '../../ap
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { useAlert } from '../../contexts/AlertContext'
 import { pickPromotionForCurrentAcademicYear } from '../../utils/academicYear.js'
-
-function sanitizeZipSegment(value) {
-  if (value == null || String(value).trim() === '') return 'X'
-  const s = String(value)
-    .trim()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-  return s || 'X'
-}
-
-function escapeHtml(text) {
-  return String(text ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function sanitizePdfEntryNamePart(s) {
-  return String(s ?? 'X')
-    .replace(/[/\\:*?"<>|]/g, '-')
-    .replace(/\s+/g, '_')
-    .slice(0, 96) || 'X'
-}
+import {
+  preloadAttestationImages,
+  buildAttestationPdfBlob,
+  sanitizeZipSegment,
+  sanitizePdfNamePart,
+} from '../../utils/attestationPdfGenerator.js'
 
 const AttestationsView = () => {
   const { success, error: alertError } = useAlert()
@@ -251,10 +230,16 @@ const AttestationsView = () => {
 
     try {
       setLoading(true)
+
+      // Précharger les images une seule fois pour toutes les attestations
+      const { logoUrl, cachetUrl } = await preloadAttestationImages()
+
       const zip = new JSZip()
 
       for (const etudiant of etudiantsDisponibles) {
-        const { blob, entryName } = await generateAttestationPdfEntryForZip(etudiant)
+        const { blob, entryName } = await generateAttestationEntryForZip(
+          etudiant, promotion, niveauInfo, filiereInfo, logoUrl, cachetUrl
+        )
         zip.file(entryName, blob)
       }
 
@@ -274,8 +259,7 @@ const AttestationsView = () => {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      success(`${etudiantsDisponibles.length} attestation(s) générée(s). Archive « ${zipBaseName}.zip » téléchargée (décompressez-la pour obtenir tous les PDF).`)
-
+      success(`${etudiantsDisponibles.length} attestation(s) générée(s). Archive « ${zipBaseName}.zip » téléchargée.`)
       window.dispatchEvent(new CustomEvent('attestationGenerated'))
     } catch (error) {
       console.error('Erreur lors de la génération en masse:', error)
@@ -285,15 +269,11 @@ const AttestationsView = () => {
     }
   }
 
-  /** PDF pour une entrée du ZIP : rendu hors écran (fixed) + pas de crossOrigin sur images same-origin (évite PDF blanc). */
-  const generateAttestationPdfEntryForZip = async (etudiant) => {
-    const promotion = promotions.find(p => p.id === selectedPromotion)
-    const niveauInfo = niveaux.find(n => n.id === selectedNiveau)
-    const filiereInfo = filieres.find(f => f.id === selectedFiliere)
-
+  /** Génère un PDF en mémoire (Blob) via jsPDF pour un étudiant — aucun html2canvas, aucune page blanche. */
+  const generateAttestationEntryForZip = async (etudiant, promotion, niveauInfo, filiereInfo, logoUrl, cachetUrl) => {
     const attestationData = await creerAttestation(etudiant.id, selectedPromotion, promotion?.annee || '2025-2026')
 
-    const attestation = {
+    const data = {
       etudiant: `${etudiant.nom} ${etudiant.prenom}`,
       matricule: etudiant.matricule,
       niveau: niveauInfo?.ordinal || etudiant.niveauOrdinal || '1ère',
@@ -302,168 +282,19 @@ const AttestationsView = () => {
       anneeAcademique: promotion?.annee || '2025-2026',
       numero: attestationData.numero,
       lieu: 'Libreville',
-      dateTexte: new Date(attestationData.dateGeneration).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+      dateTexte: new Date(attestationData.dateGeneration).toLocaleDateString('fr-FR', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      })
     }
 
-    const h = escapeHtml
-    const logoSrc = `${window.location.origin}/images/logo.png`
-    const cachetSrc = `${window.location.origin}/images/cachet.png`
+    const blob = buildAttestationPdfBlob(data, logoUrl, cachetUrl, false)
 
-    const element = document.createElement('div')
-    element.setAttribute('data-bulk-attestation-pdf', '1')
-    element.style.width = '210mm'
-    element.style.height = '297mm'
-    element.style.maxHeight = '297mm'
-    element.style.overflow = 'hidden'
-    element.style.position = 'fixed'
-    element.style.left = '-12000px'
-    element.style.top = '0'
-    element.style.backgroundColor = '#ffffff'
-    element.style.boxSizing = 'border-box'
-
-    element.innerHTML = `
-      <div style="padding: 2cm; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; position: relative; background-color: #ffffff; page-break-inside: avoid;">
-        <div style="z-index: 2; position: relative; page-break-inside: avoid;">
-          <div style="margin-bottom: 3rem;">
-            <div style="display: flex; justify-content: flex-start; margin-bottom: 0.5rem;">
-              <img src="${logoSrc}" alt="Logo" style="height: 80px;" />
-            </div>
-            <div style="text-align: left; font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.2;">
-              <p style="font-weight: bold; margin: 0; font-size: 10pt;">DIRECTION GENERALE</p>
-              <p style="font-weight: bold; margin: 0; font-size: 10pt;">LA DIRECTION DE LA SCOLARITE ET DES EXAMENS</p>
-              <p style="font-weight: bold; margin-top: 0.25rem; font-size: 10pt;">${h(attestation.numero)}</p>
-            </div>
-          </div>
-
-          <div style="background-color: #A8C9E4; border: 3px solid #2C3E50; padding: 15px 0; margin-bottom: 3rem; width: 100%; display: flex; justify-content: center; align-items: center;">
-            <h1 style="font-family: Arial, sans-serif; font-size: 18pt; letter-spacing: 4px; color: #000; font-weight: bold; margin: 0; text-align: center;">ATTESTATION DE SCOLARITE</h1>
-          </div>
-
-          <div style="font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.3; flex: 1;">
-            <p style="margin-bottom: 1rem; text-align: justify; text-indent: 2cm;">
-              Je soussigné, Soilihi ALI ISSILAM, Directeur de la Scolarité et des Examens de 
-              l'Institut National de la Poste, des Technologies de l'Information et de la 
-              Communication (INPTIC), atteste que l'étudiant(e) <strong>${h(attestation.etudiant)}</strong> suit 
-              la formation ci-dessous dans notre établissement.
-            </p>
-
-            <div style="margin-bottom: 1rem; padding-left: 1.5cm;">
-              <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                <span style="margin-right: 0.5cm;">➤</span>
-                <span><strong>Matricule :</strong> ${h(attestation.matricule)}</span>
-              </p>
-              <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                <span style="margin-right: 0.5cm;">➤</span>
-                <span><strong>Niveau d'études :</strong> ${h(attestation.niveau)} année</span>
-              </p>
-              <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                <span style="margin-right: 0.5cm;">➤</span>
-                <span><strong>Filière :</strong> ${h(attestation.filiere)}</span>
-              </p>
-              <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                <span style="margin-right: 0.5cm;">➤</span>
-                <span><strong>Programme :</strong> ${h(attestation.formation)}</span>
-              </p>
-              <p style="margin-bottom: 0.25rem; display: flex; align-items: baseline;">
-                <span style="margin-right: 0.5cm;">➤</span>
-                <span><strong>Année académique :</strong> ${h(attestation.anneeAcademique)}</span>
-              </p>
-            </div>
-
-            <p style="text-align: justify; text-indent: 2cm;">
-              En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que 
-              de droit.
-            </p>
-          </div>
-
-          <div style="flex-grow: 1; min-height: 40px; max-height: 80px;"></div>
-
-          <div style="font-family: Arial, sans-serif; font-size: 12pt;">
-            <div style="display: flex; justify-content: flex-end;">
-              <div style="width: 300px; position: relative;">
-                <p style="text-align: right; margin-bottom: 4rem; font-size: 12pt; white-space: nowrap;">Fait à ${h(attestation.lieu)}, le ${h(attestation.dateTexte)}</p>
-                
-                <p style="font-weight: bold; margin-bottom: 0.5rem; text-align: right; font-size: 12pt; white-space: nowrap;">Directeur de la Scolarité et des Examens</p>
-                
-                <div style="position: relative; height: 120px; display: flex; align-items: center; justify-content: center;">
-                  <img src="${cachetSrc}" alt="Cachet" style="width: 140px; height: auto; display: block; margin: 0 auto;" />
-                </div>
-                
-                <p style="font-weight: bold; text-align: center; font-size: 12pt;">Soilihi ALI ISSILAM</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `
-
-    document.body.appendChild(element)
-
-    await new Promise((resolve) => {
-      const images = element.getElementsByTagName('img')
-      let loadedCount = 0
-      const totalImages = images.length
-
-      if (totalImages === 0) {
-        setTimeout(resolve, 200)
-        return
-      }
-
-      const checkAllLoaded = () => {
-        loadedCount++
-        if (loadedCount === totalImages) {
-          setTimeout(resolve, 400)
-        }
-      }
-
-      for (const img of images) {
-        if (img.complete && img.naturalHeight !== 0) {
-          checkAllLoaded()
-        } else {
-          img.onload = checkAllLoaded
-          img.onerror = checkAllLoaded
-        }
-      }
-    })
-
-    const entryName = `Attestation_${sanitizePdfEntryNamePart(attestation.matricule)}_${sanitizePdfEntryNamePart(attestation.numero)}.pdf`
-
-    const opt = {
-      margin: [0, 0, 0, 0],
-      filename: entryName,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: false,
-        letterRendering: true,
-        windowWidth: 794,
-        windowHeight: 1123,
-        logging: false,
-        backgroundColor: '#ffffff',
-        allowTaint: true
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait',
-        compress: true,
-        precision: 16,
-        putOnlyUsedFonts: true
-      },
-      pagebreak: { mode: 'avoid-all' }
-    }
-
-    let blob
-    try {
-      blob = await html2pdf().set(opt).from(element).outputPdf('blob')
-    } finally {
-      if (element.parentNode) {
-        element.parentNode.removeChild(element)
-      }
-    }
+    const nomSafe = sanitizePdfNamePart(`${etudiant.nom}_${etudiant.prenom}`)
+    const matriculeSafe = sanitizePdfNamePart(etudiant.matricule)
+    const entryName = `Attestation_${matriculeSafe}_${nomSafe}.pdf`
 
     markAttestationAsGenerated(etudiant.id, attestationData)
-    return { blob, entryName, attestationData }
+    return { blob, entryName }
   }
 
   const handleBack = () => {

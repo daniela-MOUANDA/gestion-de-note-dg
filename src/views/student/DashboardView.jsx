@@ -1,384 +1,253 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faUser,
-  faChartLine,
-  faMedal,
-  faBook,
-  faTrophy,
-  faClock,
-  faCalendar,
-  faFileAlt,
-  faCheckCircle,
-  faSpinner,
-  faExclamationTriangle,
-  faBell,
-  faGraduationCap,
-  faFolderOpen,
-  faChevronRight
+  faUser, faChartLine, faMedal, faBook, faTrophy,
+  faBell, faGraduationCap, faFolderOpen, faFileAlt,
+  faCalendarAlt, faArrowRight, faExclamationCircle, faSpinner
 } from '@fortawesome/free-solid-svg-icons'
-import { StudentModel } from '../../models/StudentModel'
-import Sidebar from '../../components/common/Sidebar'
-import Header from '../../components/common/Header'
+import StudentLayout from '../../components/student/StudentLayout'
 import { useAuth } from '../../contexts/AuthContext'
 import { getMyInfo } from '../../api/student'
+import { StudentModel } from '../../models/StudentModel'
+import * as notifAPI from '../../api/notifications'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
+// ─── Carte statistique ──────────────────────────────────────────────────
+const StatCard = ({ icon, label, value, sub, color }) => (
+  <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4">
+    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+      <FontAwesomeIcon icon={icon} className="text-xl text-white" />
+    </div>
+    <div>
+      <p className="text-2xl font-bold text-slate-800 leading-tight">{value}</p>
+      <p className="text-xs font-medium text-slate-500 mt-0.5">{label}</p>
+      {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+    </div>
+  </div>
+)
+
+// ─── Lien raccourci ─────────────────────────────────────────────────────
+const ShortcutCard = ({ to, icon, label, desc, color }) => (
+  <Link to={to}
+    className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3 hover:border-blue-300 hover:shadow-sm transition-all group">
+    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+      <FontAwesomeIcon icon={icon} className="text-white" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-semibold text-slate-800">{label}</p>
+      <p className="text-xs text-slate-400 truncate">{desc}</p>
+    </div>
+    <FontAwesomeIcon icon={faArrowRight} className="text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+  </Link>
+)
 
 const DashboardView = () => {
   const navigate = useNavigate()
   const { user, isAuthenticated, loading: authLoading } = useAuth()
+  const [student,  setStudent]  = useState(null)
+  const [notifs,   setNotifs]   = useState([])
+  const [notifCnt, setNotifCnt] = useState(0)
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState(null)
 
-  const [student, setStudent] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  // Charger les données de l'étudiant au montage du composant
   useEffect(() => {
-    const loadStudentData = async () => {
-      if (!isAuthenticated || !user) {
-        navigate('/login-student')
-        return
-      }
+    if (authLoading) return
+    if (!isAuthenticated || !user) { navigate('/login-etudiant'); return }
+    if (user.role !== 'ETUDIANT') { setError('Accès réservé aux étudiants.'); setLoading(false); return }
 
-      if (user.role !== 'ETUDIANT') {
-        setError('Accès refusé. Vous devez être un étudiant pour accéder à cette page.')
-        setLoading(false)
-        return
-      }
-
+    const load = async () => {
       try {
         setLoading(true)
-        setError(null)
+        const [infoRes, notifRes] = await Promise.allSettled([
+          getMyInfo(),
+          notifAPI.getNotifications(),
+        ])
 
-        const result = await getMyInfo()
-
-        if (result.success && result.data) {
-          const studentData = new StudentModel({
-            id: result.data.id,
-            email: result.data.email,
-            matricule: result.data.matricule,
-            nom: result.data.nom,
-            prenom: result.data.prenom,
-            programme: result.data.programme,
-            niveau: result.data.niveau,
-            classe: result.data.classe,
-            photo: result.data.photo,
-            moyenneGenerale: result.data.moyenneGenerale || 0,
-            credits: result.data.nbrCredits || result.data.credits || 0,
-            totalModules: result.data.totalModules || 0,
-            rangClasse: result.data.rangClasse || 0,
-            estActif: result.data.estActif || true,
-            estBoursier: result.data.estBoursier || false,
-            semestre: result.data.semestreActuel || result.data.semestre || '',
-            totalStudentsInClass: result.data.totalStudentsInClass || 0,
-            derniereConnexion: user.derniereConnexion || new Date().toISOString(),
-            promotion: result.data.promotion || result.data.annee_promotion
-          })
-
-          setStudent(studentData)
-          localStorage.setItem('student', JSON.stringify(result.data))
+        if (infoRes.status === 'fulfilled' && infoRes.value.success) {
+          const d = infoRes.value.data
+          setStudent(new StudentModel({
+            id: d.id, email: d.email, matricule: d.matricule,
+            nom: d.nom, prenom: d.prenom, programme: d.programme,
+            niveau: d.niveau, classe: d.classe, photo: d.photo,
+            moyenneGenerale: d.moyenneGenerale || 0,
+            credits: d.nbrCredits || d.credits || 0,
+            totalModules: d.totalModules || 0,
+            rangClasse: d.rangClasse || 0,
+            estActif: d.estActif ?? true,
+            estBoursier: d.estBoursier || false,
+            semestre: d.semestreActuel || d.semestre || '',
+            totalStudentsInClass: d.totalStudentsInClass || 0,
+            promotion: d.promotion || d.annee_promotion,
+          }))
+          localStorage.setItem('student', JSON.stringify(d))
         } else {
-          setError(result.error || 'Erreur lors du chargement des données')
+          setError(infoRes.value?.error || 'Impossible de charger vos données.')
         }
-      } catch (err) {
-        console.error('Erreur lors du chargement des données de l\'étudiant:', err)
-        setError('Une erreur est survenue lors du chargement de vos données')
+
+        if (notifRes.status === 'fulfilled') {
+          const list = notifRes.value?.notifications || notifRes.value || []
+          setNotifs(Array.isArray(list) ? list.slice(0, 4) : [])
+          setNotifCnt(Array.isArray(list) ? list.filter(n => !n.lue).length : 0)
+        }
+      } catch (e) {
+        setError('Une erreur est survenue.')
       } finally {
         setLoading(false)
       }
     }
-
-    if (!authLoading) {
-      loadStudentData()
-    }
+    load()
   }, [isAuthenticated, user, authLoading, navigate])
 
-  if (loading || authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <FontAwesomeIcon icon={faSpinner} className="text-5xl text-blue-600 animate-spin mb-4" />
-          <p className="text-lg text-slate-600">Chargement...</p>
-        </div>
+  if (loading || authLoading) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-3">
+        <FontAwesomeIcon icon={faSpinner} spin className="text-3xl text-blue-600" />
+        <p className="text-sm text-slate-500">Chargement en cours…</p>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow p-8 max-w-md">
-          <FontAwesomeIcon icon={faExclamationTriangle} className="text-5xl text-red-500 mb-4" />
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Erreur</h2>
-          <p className="text-slate-600 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Réessayer
-          </button>
-        </div>
+  if (error) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="bg-white rounded-xl border border-red-200 p-8 max-w-sm w-full text-center">
+        <FontAwesomeIcon icon={faExclamationCircle} className="text-3xl text-red-400 mb-3" />
+        <p className="text-slate-700 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()}
+          className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
+          Réessayer
+        </button>
       </div>
-    )
-  }
+    </div>
+  )
 
   if (!student) return null
 
-  // Déterminer l'année de promotion (année d'entrée + 3 ans pour une licence)
-  const currentYear = new Date().getFullYear()
-  const promotionYear = student.promotion || currentYear
+  const moyenne = student.moyenneGenerale ?? 0
+  const moyenneColor = moyenne >= 14 ? 'bg-emerald-500' : moyenne >= 10 ? 'bg-blue-500' : 'bg-red-500'
+  const currentYear  = new Date().getFullYear()
+  const photoSrc = student.photo
+    ? (student.photo.startsWith('http') ? student.photo : `${BACKEND_URL}${student.photo}`)
+    : null
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar />
-      <div className="lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName} />
+    <StudentLayout studentName={student.fullName} studentPhoto={student.photo} notifCount={notifCnt}>
 
-        <main className="p-6 pt-24">
-          {/* Header Section */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">
-              Tableau de Bord
-            </h1>
-            <p className="text-slate-600">
-              Vue d'ensemble de votre parcours académique
-            </p>
+      {/* ── Bannière identité ─────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-5 flex items-center gap-4">
+        {/* Avatar */}
+        <div className="w-16 h-16 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-slate-200">
+          {photoSrc
+            ? <img src={photoSrc} alt={student.fullName} className="w-full h-full object-cover"
+                   onError={e => e.target.style.display = 'none'} />
+            : <FontAwesomeIcon icon={faUser} className="text-2xl text-slate-400" />
+          }
+        </div>
+
+        {/* Infos */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold text-slate-800 truncate">Bonjour, {student.prenom} 👋</h1>
+          <p className="text-sm text-slate-500 truncate">{student.programme || student.filiere || 'INPTIC'}</p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {student.classe && (
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-100">
+                {student.classe}
+              </span>
+            )}
+            {student.semestre && (
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full border border-slate-200">
+                {student.semestre}
+              </span>
+            )}
+            {student.estBoursier && (
+              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-100">
+                Boursier
+              </span>
+            )}
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full border border-emerald-100">
+              Actif
+            </span>
           </div>
+        </div>
 
-          {/* Carte d'identité et info */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* Profil étudiant */}
-            <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-              <div className="flex items-start gap-4">
-                {/* Photo */}
-                <div className="w-20 h-20 rounded-lg bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {student.photo ? (
-                    <img
-                      src={student.photo.startsWith('http') ? student.photo : `${BACKEND_URL}${student.photo}`}
-                      alt={student.fullName}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                        if (e.target.nextSibling) {
-                          e.target.nextSibling.style.display = 'flex'
-                        }
-                      }}
-                    />
-                  ) : null}
-                  <FontAwesomeIcon
-                    icon={faUser}
-                    className="text-3xl text-slate-400"
-                    style={{ display: student.photo ? 'none' : 'flex' }}
-                  />
-                </div>
-
-                {/* Informations */}
-                <div className="flex-1">
-                  <h2 className="text-xl font-bold text-slate-800 mb-1">
-                    {student.fullName}
-                  </h2>
-                  <p className="text-sm text-slate-600 mb-3">
-                    Matricule: {student.matricule}
-                  </p>
-
-                  <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                      <FontAwesomeIcon icon={faGraduationCap} className="mr-1.5" />
-                      {student.classe || student.niveau}
-                    </span>
-                    <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                      <FontAwesomeIcon icon={faCalendar} className="mr-1.5" />
-                      Promotion {promotionYear}
-                    </span>
-                    <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <FontAwesomeIcon icon={faCheckCircle} className="mr-1.5" />
-                      Étudiant actif
-                    </span>
-                    {student.estBoursier && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                        <FontAwesomeIcon icon={faMedal} className="mr-1.5" />
-                        Boursier
-                      </span>
-                    )}
-                    {student.semestre && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
-                        {student.semestre}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Dernière connexion */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center mr-3">
-                  <FontAwesomeIcon icon={faClock} className="text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Dernière connexion</p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {student.derniereConnexion
-                      ? new Date(student.derniereConnexion).toLocaleDateString('fr-FR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })
-                      : 'Aujourd\'hui'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Statistiques académiques */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {/* Moyenne générale */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faChartLine} className="text-blue-600" />
-                </div>
-                <span className="text-xs text-slate-500">Semestre actuel</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800 mb-1">
-                {student.moyenneGenerale.toFixed(2)}/20
-              </p>
-              <p className="text-xs text-slate-600">Moyenne générale</p>
-            </div>
-
-            {/* Crédits validés */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faMedal} className="text-purple-600" />
-                </div>
-                <span className="text-xs text-slate-500">Total</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800 mb-1">
-                {student.credits}/60
-              </p>
-              <p className="text-xs text-slate-600">Crédits validés</p>
-            </div>
-
-            {/* Total modules */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faBook} className="text-emerald-600" />
-                </div>
-                <span className="text-xs text-slate-500">Ce semestre</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800 mb-1">
-                {student.totalModules}
-              </p>
-              <p className="text-xs text-slate-600">Modules inscrits</p>
-            </div>
-
-            {/* Rang de classe */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faTrophy} className="text-orange-600" />
-                </div>
-                <span className="text-xs text-slate-500">Classement</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-800 mb-1">
-                {student.rangClasse ? `${student.rangClasse}/${student.totalStudentsInClass || '--'}` : 'N/A'}
-              </p>
-              <p className="text-xs text-slate-600">Rang de classe</p>
-            </div>
-          </div>
-
-          {/* Actions rapides */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <button
-              onClick={() => navigate('/notes')}
-              className="bg-white rounded-lg shadow-sm border border-slate-200 p-5 hover:shadow-md hover:border-blue-300 transition-all text-left group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                  <FontAwesomeIcon icon={faChartLine} className="text-blue-600 text-xl" />
-                </div>
-                <FontAwesomeIcon icon={faChevronRight} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
-              </div>
-              <h3 className="font-semibold text-slate-800 mb-1">Mes Notes</h3>
-              <p className="text-xs text-slate-600">Consulter mes résultats</p>
-            </button>
-
-            <button
-              onClick={() => navigate('/emploi-du-temps')}
-              className="bg-white rounded-lg shadow-sm border border-slate-200 p-5 hover:shadow-md hover:border-purple-300 transition-all text-left group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
-                  <FontAwesomeIcon icon={faCalendar} className="text-purple-600 text-xl" />
-                </div>
-                <FontAwesomeIcon icon={faChevronRight} className="text-slate-400 group-hover:text-purple-600 transition-colors" />
-              </div>
-              <h3 className="font-semibold text-slate-800 mb-1">Emploi du Temps</h3>
-              <p className="text-xs text-slate-600">Planning de la semaine</p>
-            </button>
-
-            <button
-              onClick={() => navigate('/documents')}
-              className="bg-white rounded-lg shadow-sm border border-slate-200 p-5 hover:shadow-md hover:border-emerald-300 transition-all text-left group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
-                  <FontAwesomeIcon icon={faFileAlt} className="text-emerald-600 text-xl" />
-                </div>
-                <FontAwesomeIcon icon={faChevronRight} className="text-slate-400 group-hover:text-emerald-600 transition-colors" />
-              </div>
-              <h3 className="font-semibold text-slate-800 mb-1">Documents</h3>
-              <p className="text-xs text-slate-600">Mes documents scolaires</p>
-            </button>
-
-            <button
-              onClick={() => navigate('/mon-dossier')}
-              className="bg-white rounded-lg shadow-sm border border-slate-200 p-5 hover:shadow-md hover:border-orange-300 transition-all text-left group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
-                  <FontAwesomeIcon icon={faFolderOpen} className="text-orange-600 text-xl" />
-                </div>
-                <FontAwesomeIcon icon={faChevronRight} className="text-slate-400 group-hover:text-orange-600 transition-colors" />
-              </div>
-              <h3 className="font-semibold text-slate-800 mb-1">Mon Dossier</h3>
-              <p className="text-xs text-slate-600">Documents d'inscription</p>
-            </button>
-          </div>
-
-          {/* Notifications/Annonces */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center mb-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center mr-3">
-                <FontAwesomeIcon icon={faBell} className="text-blue-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800">Notifications</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-start p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
-                  <FontAwesomeIcon icon={faCheckCircle} className="text-blue-600 text-sm" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-800">Bienvenue à l'INPTIC !</p>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Pensez à compléter votre dossier d'inscription en téléversant vos documents dans la section "Mon Dossier".
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
+        {/* Moyenne cercle */}
+        <div className="flex-shrink-0 hidden sm:flex flex-col items-center justify-center w-16 h-16 rounded-full border-4 border-slate-100 bg-white shadow-sm">
+          <span className="text-base font-bold text-slate-800 leading-none">{moyenne.toFixed(1)}</span>
+          <span className="text-[10px] text-slate-400">/20</span>
+        </div>
       </div>
-    </div>
+
+      {/* ── Statistiques ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <StatCard icon={faChartLine} label="Moyenne générale"
+          value={`${moyenne.toFixed(2)}/20`}
+          sub={student.semestre || 'Semestre en cours'}
+          color={moyenneColor}
+        />
+        <StatCard icon={faMedal} label="Crédits validés"
+          value={`${student.credits} cr.`}
+          sub="Sur 60 au total"
+          color="bg-violet-500"
+        />
+        <StatCard icon={faBook} label="Modules inscrits"
+          value={student.totalModules || '—'}
+          sub="Ce semestre"
+          color="bg-amber-500"
+        />
+        <StatCard icon={faTrophy} label="Rang de classe"
+          value={student.rangClasse ? `${student.rangClasse}e` : '—'}
+          sub={student.totalStudentsInClass ? `sur ${student.totalStudentsInClass} étudiants` : 'Non disponible'}
+          color="bg-rose-500"
+        />
+      </div>
+
+      {/* ── Raccourcis ────────────────────────────────────────────────── */}
+      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Accès rapide</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-5">
+        <ShortcutCard to="/notes"    icon={faGraduationCap} label="Mes Notes" desc="Notes, moyennes, crédits"  color="bg-blue-500" />
+        <ShortcutCard to="/documents" icon={faFileAlt}      label="Documents" desc="Attestation, bulletins…"   color="bg-teal-500" />
+        <ShortcutCard to="/mon-dossier" icon={faFolderOpen} label="Mon Dossier" desc="Inscription et pièces jointes" color="bg-orange-500" />
+        <ShortcutCard to="/emploi-du-temps" icon={faCalendarAlt} label="Emploi du temps" desc="Planning de la semaine" color="bg-indigo-500" />
+      </div>
+
+      {/* ── Notifications ─────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <FontAwesomeIcon icon={faBell} className="text-blue-500" />
+            <span className="text-sm font-semibold text-slate-800">Notifications</span>
+            {notifCnt > 0 && (
+              <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">{notifCnt}</span>
+            )}
+          </div>
+          <Link to="/notifications" className="text-xs text-blue-600 font-medium hover:underline">Voir tout</Link>
+        </div>
+
+        {notifs.length === 0 ? (
+          <div className="px-5 py-8 text-center text-slate-400 text-sm">Aucune notification</div>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {notifs.map((n, i) => (
+              <li key={n.id || i} className={`flex items-start gap-3 px-5 py-3.5 ${!n.lue ? 'bg-blue-50/40' : ''}`}>
+                <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.lue ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${!n.lue ? 'font-semibold text-slate-800' : 'text-slate-600'} leading-snug`}>
+                    {n.message || n.titre || 'Notification'}
+                  </p>
+                  {n.created_at && (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {new Date(n.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+    </StudentLayout>
   )
 }
 

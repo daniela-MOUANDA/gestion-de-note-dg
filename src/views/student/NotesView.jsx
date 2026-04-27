@@ -2,267 +2,310 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faDownload,
-  faPrint,
-  faCheckCircle,
-  faTimesCircle,
-  faSpinner
+  faCheckCircle, faTimesCircle, faSpinner, faExclamationCircle,
+  faDownload, faChartBar, faMedal, faBook, faExclamationTriangle
 } from '@fortawesome/free-solid-svg-icons'
-import Sidebar from '../../components/common/Sidebar'
-import Header from '../../components/common/Header'
-import { StudentModel } from '../../models/StudentModel'
-import { getMesNotes } from '../../api/scolarite'
+import StudentLayout from '../../components/student/StudentLayout'
 import { useAuth } from '../../contexts/AuthContext'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { getMesNotes } from '../../api/scolarite'
+import { StudentModel } from '../../models/StudentModel'
+
+// ─── Badge statut ────────────────────────────────────────────────────────
+const StatusBadge = ({ statut, parCompensation }) => {
+  if (statut === 'Validé') return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold
+      ${parCompensation ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+      <FontAwesomeIcon icon={faCheckCircle} className="w-3 h-3" />
+      {parCompensation ? 'Validé (comp.)' : 'Validé'}
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200">
+      <FontAwesomeIcon icon={faTimesCircle} className="w-3 h-3" />
+      Non validé
+    </span>
+  )
+}
+
+// ─── Barre de note ───────────────────────────────────────────────────────
+const NoteBar = ({ value, max = 20 }) => {
+  const pct = Math.min((value / max) * 100, 100)
+  const color = value >= 14 ? 'bg-emerald-500' : value >= 10 ? 'bg-blue-500' : 'bg-red-500'
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`text-sm font-bold w-12 text-right ${value >= 10 ? 'text-slate-800' : 'text-red-600'}`}>
+        {value?.toFixed(2) ?? '—'}
+      </span>
+      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] text-slate-400 w-6">/20</span>
+    </div>
+  )
+}
 
 const NotesView = () => {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  const [student, setStudent] = useState(null)
-  const [grades, setGrades] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [moyenneGenerale, setMoyenneGenerale] = useState(0)
-  const [credits, setCredits] = useState(0)
-  const [totalModules, setTotalModules] = useState(0)
-  const [modulesValides, setModulesValides] = useState(0)
-  const [semestre, setSemestre] = useState('')
+  const [student,  setStudent]  = useState(null)
+  const [semestres, setSemestres] = useState({})   // { "S1": [notes], "S2": [notes], ... }
+  const [activeTab, setActiveTab] = useState(null)
+  const [stats,    setStats]    = useState({ moyenneGenerale: 0, credits: 0, totalModules: 0, modulesValides: 0 })
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState(null)
 
   useEffect(() => {
-    const loadNotes = async () => {
-      if (!isAuthenticated || !user || user.role !== 'ETUDIANT') {
-        navigate('/login-etudiant')
-        return
-      }
-
+    if (!isAuthenticated || !user || user.role !== 'ETUDIANT') {
+      navigate('/login-etudiant'); return
+    }
+    const load = async () => {
       try {
-        setLoading(true)
-        setError(null)
+        const data = await getMesNotes()
+        if (!data.success) { setError(data.error || 'Erreur lors du chargement'); return }
 
-        const notesData = await getMesNotes()
+        setStats({
+          moyenneGenerale: data.moyenneGenerale || 0,
+          credits:         data.credits || 0,
+          totalModules:    data.totalModules || 0,
+          modulesValides:  data.modulesValides || 0,
+        })
 
-        if (notesData.success) {
-          setGrades(notesData.notes || [])
-          setMoyenneGenerale(notesData.moyenneGenerale || 0)
-          setCredits(notesData.credits || 0)
-          setTotalModules(notesData.totalModules || 0)
-          setModulesValides(notesData.modulesValides || 0)
-          setSemestre(notesData.semestre || '')
-
-          const studentData = localStorage.getItem('student')
-          if (studentData) {
-            const parsed = JSON.parse(studentData)
-            setStudent(new StudentModel({
-              ...parsed,
-              moyenneGenerale: notesData.moyenneGenerale || parsed.moyenneGenerale || 0,
-              credits: notesData.credits || parsed.credits || 0,
-              totalModules: notesData.totalModules || parsed.totalModules || 0,
-              semestre: notesData.semestre || parsed.semestre || ''
-            }))
-          } else {
-            setStudent(new StudentModel({
-              id: user.id,
-              email: user.email,
-              nom: user.nom || '',
-              prenom: user.prenom || '',
-              moyenneGenerale: notesData.moyenneGenerale || 0,
-              credits: notesData.credits || 0,
-              totalModules: notesData.totalModules || 0,
-              semestre: notesData.semestre || ''
-            }))
-          }
-        } else {
-          setError(notesData.error || 'Erreur lors du chargement des notes')
+        // Grouper les notes par semestre
+        const notes = data.notes || []
+        const grouped = {}
+        for (const n of notes) {
+          const sem = n.semestre || data.semestre || 'S1'
+          if (!grouped[sem]) grouped[sem] = []
+          grouped[sem].push(n)
         }
-      } catch (err) {
-        console.error('Erreur lors du chargement des notes:', err)
-        setError(err.message || 'Erreur lors du chargement des notes')
+
+        // Si les notes n'ont pas de champ semestre, mettre tout dans le semestre API
+        if (notes.length > 0 && Object.keys(grouped).length === 1 && grouped[Object.keys(grouped)[0]] === notes) {
+          // OK
+        }
+
+        setSemestres(grouped)
+
+        // Onglet actif = semestre le plus récent (ex: S2 > S1)
+        const keys = Object.keys(grouped).sort()
+        setActiveTab(keys[keys.length - 1] || null)
+
+        // Charger le StudentModel depuis localStorage
+        const stored = localStorage.getItem('student')
+        if (stored) {
+          const p = JSON.parse(stored)
+          setStudent(new StudentModel({ ...p, moyenneGenerale: data.moyenneGenerale || p.moyenneGenerale || 0 }))
+        }
+      } catch (e) {
+        setError(e.message || 'Erreur')
       } finally {
         setLoading(false)
       }
     }
-
-    loadNotes()
+    load()
   }, [isAuthenticated, user, navigate])
 
-  const handlePrint = () => {
-    window.print()
-  }
+  // ── Calculs semestre actif ─────────────────────────────────────────────
+  const notesTab = activeTab ? (semestres[activeTab] || []) : []
+  const moyTab   = notesTab.length
+    ? notesTab.reduce((s, n) => s + (n.moyenne || 0) * (n.coefficient || 1), 0) /
+      notesTab.reduce((s, n) => s + (n.coefficient || 1), 0)
+    : 0
+  const creditsTab = notesTab.reduce((s, n) => s + (n.statut === 'Validé' ? (n.credit || 0) : 0), 0)
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Sidebar />
-        <div className="lg:ml-64 min-h-screen">
-          <Header studentName="Chargement..." />
-          <main className="p-6 pt-24 flex items-center justify-center">
-            <LoadingSpinner size="lg" text="Chargement de vos notes..." />
-          </main>
-        </div>
-      </div>
-    )
-  }
+  const rankText = student?.rangClasse
+    ? `${student.rangClasse}${student.rangClasse === 1 ? 'er' : 'ème'} / ${student.totalStudentsInClass || '—'}`
+    : '—'
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Sidebar />
-        <div className="lg:ml-64 min-h-screen">
-          <Header studentName="Erreur" />
-          <main className="p-6 pt-24">
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              <strong className="font-bold">Erreur!</strong>
-              <span className="block sm:inline"> {error}</span>
-            </div>
-          </main>
-        </div>
+  if (loading) return (
+    <StudentLayout>
+      <div className="flex items-center justify-center py-24">
+        <FontAwesomeIcon icon={faSpinner} spin className="text-3xl text-blue-600 mr-3" />
+        <span className="text-slate-500">Chargement des notes…</span>
       </div>
-    )
-  }
+    </StudentLayout>
+  )
 
-  if (!student) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Sidebar />
-        <div className="lg:ml-64 min-h-screen">
-          <Header studentName="Erreur" />
-          <main className="p-6 pt-24">
-            <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
-              <strong className="font-bold">Avertissement!</strong>
-              <span className="block sm:inline"> Aucune information d'étudiant trouvée.</span>
-            </div>
-          </main>
-        </div>
+  if (error) return (
+    <StudentLayout>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex items-start gap-3">
+        <FontAwesomeIcon icon={faExclamationCircle} className="text-red-400 mt-0.5" />
+        <p className="text-red-700 text-sm">{error}</p>
       </div>
-    )
-  }
+    </StudentLayout>
+  )
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar />
-      <div className="lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName || `${student.nom} ${student.prenom}`} />
+    <StudentLayout studentName={student?.fullName} studentPhoto={student?.photo}>
 
-        <main className="p-6 pt-24">
-          {/* Header */}
-          <div className="flex justify-between items-start mb-6">
+      {/* ── Résumé global ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {[
+          { label: 'Moyenne générale',  value: `${stats.moyenneGenerale.toFixed(2)}/20`, icon: faChartBar,      color: 'bg-blue-500' },
+          { label: 'Crédits validés',   value: `${stats.credits} cr.`,                   icon: faMedal,          color: 'bg-violet-500' },
+          { label: 'Modules inscrits',  value: stats.totalModules,                        icon: faBook,           color: 'bg-amber-500' },
+          { label: 'Modules validés',   value: stats.modulesValides,                      icon: faCheckCircle,    color: 'bg-emerald-500' },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${s.color}`}>
+              <FontAwesomeIcon icon={s.icon} className="text-white" />
+            </div>
             <div>
-              <h1 className="text-3xl font-bold text-slate-800 mb-2">Mes Notes</h1>
-              <p className="text-slate-600">
-                {semestre || student.semestre || 'Semestre'} - Année académique 2025-2026
+              <p className="text-xl font-bold text-slate-800 leading-none">{s.value}</p>
+              <p className="text-xs text-slate-500 mt-1">{s.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Onglets semestres ─────────────────────────────────────────── */}
+      {Object.keys(semestres).length > 0 ? (
+        <>
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+            {Object.keys(semestres).sort().map(sem => (
+              <button key={sem} onClick={() => setActiveTab(sem)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors flex-shrink-0
+                  ${activeTab === sem
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300 hover:text-blue-600'}`}>
+                {sem}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Résumé du semestre sélectionné ─────────────────────── */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 flex flex-wrap gap-4">
+            <div>
+              <p className="text-xs text-slate-500">Moyenne {activeTab}</p>
+              <p className={`text-2xl font-bold ${moyTab >= 10 ? 'text-slate-800' : 'text-red-600'}`}>
+                {moyTab.toFixed(2)}<span className="text-base font-normal text-slate-400">/20</span>
               </p>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handlePrint}
-                className="flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50"
-              >
-                <FontAwesomeIcon icon={faPrint} className="mr-2" />
+            <div className="w-px bg-slate-100 self-stretch" />
+            <div>
+              <p className="text-xs text-slate-500">Crédits acquis</p>
+              <p className="text-2xl font-bold text-slate-800">
+                {creditsTab}<span className="text-base font-normal text-slate-400"> cr.</span>
+              </p>
+            </div>
+            <div className="w-px bg-slate-100 self-stretch" />
+            <div>
+              <p className="text-xs text-slate-500">Rang classe</p>
+              <p className="text-2xl font-bold text-slate-800">{rankText}</p>
+            </div>
+            <div className="ml-auto self-center">
+              <span className={`px-3 py-1.5 rounded-lg text-xs font-bold
+                ${moyTab >= 10 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {moyTab >= 10 ? '✓ Semestre validé' : '✗ Non validé'}
+              </span>
+            </div>
+          </div>
+
+          {/* ── Tableau des notes ──────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">
+                Détail des notes — {activeTab} ({notesTab.length} module{notesTab.length > 1 ? 's' : ''})
+              </h2>
+              <button onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                <FontAwesomeIcon icon={faDownload} className="w-3 h-3" />
                 Imprimer
               </button>
-              <button
-                onClick={handlePrint}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
-              >
-                <FontAwesomeIcon icon={faDownload} className="mr-2" />
-                Télécharger PDF
-              </button>
-            </div>
-          </div>
-
-          {/* Statistiques */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <p className="text-sm text-slate-600 mb-1">Moyenne générale</p>
-              <p className="text-3xl font-bold text-slate-800">{moyenneGenerale.toFixed(2)}/20</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <p className="text-sm text-slate-600 mb-1">Crédits validés</p>
-              <p className="text-3xl font-bold text-slate-800">{credits}/60</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <p className="text-sm text-slate-600 mb-1">Total modules</p>
-              <p className="text-3xl font-bold text-slate-800">{totalModules}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
-              <p className="text-sm text-slate-600 mb-1">Modules validés</p>
-              <p className="text-3xl font-bold text-slate-800">{modulesValides}</p>
-            </div>
-          </div>
-
-          {/* Tableau des notes */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-semibold text-slate-800">Détails des notes</h2>
-              <p className="text-sm text-slate-600 mt-1">Toutes les notes et évaluations du semestre</p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Module</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Évaluations</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700">Moyenne</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700">Crédit</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700">Statut</th>
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Module</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Évaluations</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Moy.</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Coef.</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Crédits</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Statut</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {grades.map((grade, index) => (
-                    <tr
-                      key={grade.id}
-                      className={`border-b border-slate-200 hover:bg-slate-50 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
-                        }`}
-                    >
+                <tbody className="divide-y divide-slate-50">
+                  {notesTab.map((g, i) => (
+                    <tr key={g.id || i} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-4">
+                        <p className="text-sm font-semibold text-slate-800">{g.module || g.nom || '—'}</p>
+                        {g.code && <p className="text-xs text-slate-400 mt-0.5">{g.code}</p>}
+                        {g.ue  && <p className="text-xs text-slate-400">UE : {g.ue}</p>}
+                      </td>
                       <td className="px-4 py-4">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">{grade.module}</p>
-                          <p className="text-xs text-slate-500">{grade.code}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.evaluations?.length > 0
+                            ? g.evaluations.map((ev, j) => (
+                                <div key={j} className="flex flex-col items-center bg-slate-100 rounded px-2 py-1 min-w-[48px]">
+                                  <span className="text-[9px] text-slate-400 uppercase font-bold leading-tight">{ev.name}</span>
+                                  <span className="text-sm font-bold text-slate-700">{ev.valeur}</span>
+                                </div>
+                              ))
+                            : <span className="text-xs text-slate-400 italic">—</span>
+                          }
                         </div>
                       </td>
-                      <td className="px-4 py-4 min-w-[200px]">
-                        <div className="flex flex-wrap gap-2">
-                          {grade.evaluations && grade.evaluations.length > 0 ? (
-                            grade.evaluations.map((evalu, i) => (
-                              <div key={i} className="flex flex-col items-center bg-slate-100 rounded px-2 py-1 min-w-[50px]">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase leading-tight">{evalu.name}</span>
-                                <span className="text-sm font-semibold text-slate-700">{evalu.valeur}/20</span>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-slate-400 italic text-xs">Aucune note</span>
-                          )}
-                        </div>
+                      <td className="px-4 py-4">
+                        <NoteBar value={g.moyenne} />
                       </td>
-                      <td className="px-4 py-4 text-center text-sm font-bold text-slate-800">
-                        {grade.moyenne ? grade.moyenne.toFixed(2) : '0.00'}/20
-                      </td>
-                      <td className="px-4 py-4 text-center text-sm text-slate-700">{grade.credit}</td>
+                      <td className="px-4 py-4 text-center text-sm text-slate-600">{g.coefficient ?? '—'}</td>
                       <td className="px-4 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium ${grade.statut === 'Validé'
-                            ? 'bg-green-50 text-green-700 border border-green-200'
-                            : 'bg-red-50 text-red-700 border border-red-200'
-                            }`}
-                        >
-                          {grade.statut === 'Validé' ? (
-                            <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                          ) : (
-                            <FontAwesomeIcon icon={faTimesCircle} className="mr-1" />
-                          )}
-                          {grade.statut}
+                        <span className={`text-sm font-bold ${g.statut === 'Validé' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {g.statut === 'Validé' ? (g.credit || 0) : 0}
+                          <span className="text-xs font-normal text-slate-400"> / {g.credit || 0}</span>
                         </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <StatusBadge statut={g.statut} parCompensation={g.parCompensation} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {notesTab.map((g, i) => (
+                <div key={g.id || i} className="px-4 py-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{g.module || '—'}</p>
+                      {g.code && <p className="text-xs text-slate-400">{g.code}</p>}
+                    </div>
+                    <StatusBadge statut={g.statut} parCompensation={g.parCompensation} />
+                  </div>
+                  <NoteBar value={g.moyenne} />
+                  <div className="flex gap-4 mt-2 text-xs text-slate-500">
+                    <span>Coef. : <b className="text-slate-700">{g.coefficient ?? '—'}</b></span>
+                    <span>Crédits : <b className={g.statut === 'Validé' ? 'text-emerald-600' : 'text-slate-400'}>
+                      {g.statut === 'Validé' ? (g.credit || 0) : 0}/{g.credit || 0}
+                    </b></span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </main>
-      </div>
-    </div>
+
+          {/* Note de bas de page — compensation */}
+          {notesTab.some(n => n.parCompensation) && (
+            <div className="mt-3 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="mt-0.5 flex-shrink-0" />
+              <span>Les modules marqués <strong>Validé (comp.)</strong> ont été validés par compensation avec d'autres modules du même semestre.</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <FontAwesomeIcon icon={faBook} className="text-3xl text-slate-300 mb-3" />
+          <p className="text-slate-500 text-sm">Aucune note disponible pour le moment.</p>
+        </div>
+      )}
+
+    </StudentLayout>
   )
 }
 

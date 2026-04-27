@@ -2,23 +2,43 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faUser,
-  faEnvelope,
-  faPhone,
-  faMapMarkerAlt,
-  faCalendar,
-  faGraduationCap,
-  faIdCard
+  faUser, faEnvelope, faPhone, faMapMarkerAlt, faCalendar,
+  faGraduationCap, faIdCard, faSpinner, faShieldAlt, faUsers
 } from '@fortawesome/free-solid-svg-icons'
-import Sidebar from '../../components/common/Sidebar'
-import Header from '../../components/common/Header'
-import { StudentModel } from '../../models/StudentModel'
+import StudentLayout from '../../components/student/StudentLayout'
 import { useAuth } from '../../contexts/AuthContext'
 import { getMonProfilEtudiant } from '../../api/scolarite'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { StudentModel } from '../../models/StudentModel'
 import { useAlert } from '../../contexts/AlertContext'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
+// ─── Champ lecture seule ─────────────────────────────────────────────────
+const InfoField = ({ label, value, icon }) => (
+  <div>
+    <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-1.5">
+      {icon && <FontAwesomeIcon icon={icon} className="w-3 h-3" />}
+      {label}
+    </p>
+    <p className="text-sm font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 min-h-[36px] flex items-center">
+      {value || <span className="text-slate-400 font-normal italic">Non renseigné</span>}
+    </p>
+  </div>
+)
+
+// ─── Section carte ────────────────────────────────────────────────────────
+const Section = ({ title, icon, children }) => (
+  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
+      <FontAwesomeIcon icon={icon} className="text-blue-500 w-4 h-4" />
+      <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+    </div>
+    <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {children}
+    </div>
+  </div>
+)
 
 const ProfileView = () => {
   const navigate = useNavigate()
@@ -28,321 +48,166 @@ const ProfileView = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadStudentProfile = async () => {
-      if (!isAuthenticated || !user) {
-        navigate('/login-etudiant')
-        return
-      }
+    if (!isAuthenticated || !user) { navigate('/login-etudiant'); return }
+    if (user.role !== 'ETUDIANT') { navigate('/dashboard'); return }
 
-      if (user.role !== 'ETUDIANT') {
-        alertError('Accès refusé. Cette page est réservée aux étudiants.')
-        navigate('/dashboard')
-        return
-      }
-
+    const load = async () => {
       try {
-        setLoading(true)
-        const etudiantData = await getMonProfilEtudiant()
+        const d = await getMonProfilEtudiant()
         setStudent(new StudentModel({
-          ...etudiantData,
-          credits: etudiantData.nbrCredits || etudiantData.credits || 0,
-          totalModules: etudiantData.totalModules || 0,
-          rangClasse: etudiantData.rangClasse || 0,
-          classe: etudiantData.classe || '',
-          semestre: etudiantData.semestreActuel || etudiantData.semestre || '',
-          niveauDetail: etudiantData.niveauNom || etudiantData.niveau,
-          anneeInscription: etudiantData.anneeAcademique ? etudiantData.anneeAcademique.split('-')[0] : '',
-          contactParent: etudiantData.parents && etudiantData.parents.length > 0 ? etudiantData.parents[0] : null
+          ...d,
+          credits: d.nbrCredits || d.credits || 0,
+          totalModules: d.totalModules || 0,
+          rangClasse: d.rangClasse || 0,
+          classe: d.classe || '',
+          semestre: d.semestreActuel || d.semestre || '',
+          niveauDetail: d.niveauNom || d.niveau,
+          anneeInscription: d.anneeAcademique ? d.anneeAcademique.split('-')[0] : '',
+          contactParent: d.parents?.length > 0 ? d.parents[0] : null,
         }))
-      } catch (error) {
-        console.error('Erreur lors du chargement du profil:', error)
-        alertError(error.message || 'Erreur lors du chargement du profil')
+      } catch (e) {
+        alertError(e.message || 'Erreur lors du chargement du profil')
       } finally {
         setLoading(false)
       }
     }
-
-    loadStudentProfile()
+    load()
   }, [isAuthenticated, user?.id])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Sidebar />
-        <div className="lg:ml-64 min-h-screen">
-          <Header studentName="Chargement..." />
-          <main className="p-6 pt-24 flex items-center justify-center">
-            <LoadingSpinner size="lg" text="Chargement de votre profil..." />
-          </main>
-        </div>
+  if (loading) return (
+    <StudentLayout>
+      <div className="flex items-center justify-center py-24">
+        <FontAwesomeIcon icon={faSpinner} spin className="text-3xl text-blue-600 mr-3" />
+        <span className="text-slate-500">Chargement du profil…</span>
       </div>
-    )
-  }
+    </StudentLayout>
+  )
 
-  if (!student) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Sidebar />
-        <div className="lg:ml-64 min-h-screen">
-          <Header studentName="Erreur" />
-          <main className="p-6 pt-24">
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              <strong className="font-bold">Erreur!</strong>
-              <span className="block sm:inline"> Impossible de charger votre profil.</span>
-            </div>
-          </main>
-        </div>
+  if (!student) return (
+    <StudentLayout>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700 text-sm">
+        Impossible de charger votre profil.
       </div>
-    )
-  }
+    </StudentLayout>
+  )
+
+  const photoSrc = student.photo
+    ? (student.photo.startsWith('http') ? student.photo : `${BACKEND_URL}${student.photo}`)
+    : null
+
+  const moyenne = student.moyenneGenerale ?? 0
+  const moyenneColor = moyenne >= 14 ? 'text-emerald-600' : moyenne >= 10 ? 'text-blue-600' : 'text-red-600'
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar />
-      <div className="lg:ml-64 min-h-screen">
-        <Header studentName={student.fullName} />
+    <StudentLayout studentName={student.fullName} studentPhoto={student.photo}>
 
-        <main className="p-6 pt-24">
-          {/* Titre */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">Mon profil</h1>
-            <p className="text-slate-600">Informations personnelles et académiques</p>
-          </div>
+      {/* ── Bannière profil ─────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-5">
+        <div className="flex items-start gap-5">
 
-          {/* Carte principale du profil */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
-            <div className="flex items-start gap-6">
-              {/* Photo */}
-              <div className="w-24 h-24 rounded-lg bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {student.photo ? (
-                  <img
-                    src={student.photo.startsWith('http') ? student.photo : `${BACKEND_URL}${student.photo}`}
-                    alt={student.fullName}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.style.display = 'none'
-                      e.target.nextSibling.style.display = 'flex'
-                    }}
-                  />
-                ) : null}
-                <FontAwesomeIcon
-                  icon={faUser}
-                  className="text-4xl text-slate-400"
-                  style={{ display: student.photo ? 'none' : 'flex' }}
-                />
-              </div>
-
-              {/* Informations */}
-              <div className="flex-1">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">{student.fullName}</h2>
-                <p className="text-slate-600 mb-4">{student.programme || 'INPTIC 2025'}</p>
-
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <span className="px-3 py-1 bg-slate-100 text-slate-700 text-sm rounded border border-slate-200">
-                    {student.niveauDetail || student.niveau}
-                  </span>
-                  <span className="px-3 py-1 bg-green-50 text-green-700 text-sm rounded border border-green-200">
-                    Étudiant actif
-                  </span>
-                  {student.semestre && (
-                    <span className="px-3 py-1 bg-slate-100 text-slate-700 text-sm rounded border border-slate-200">
-                      {student.semestre}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center text-slate-600">
-                    <FontAwesomeIcon icon={faEnvelope} className="mr-2 text-slate-400" />
-                    {student.email}
-                  </div>
-                  {student.telephone && (
-                    <div className="flex items-center text-slate-600">
-                      <FontAwesomeIcon icon={faPhone} className="mr-2 text-slate-400" />
-                      {student.telephone}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Moyenne */}
-              <div className="bg-slate-100 rounded-lg p-6 text-center border border-slate-200">
-                <p className="text-sm text-slate-600 mb-2">Moyenne générale</p>
-                <p className="text-4xl font-bold text-slate-800">{student.moyenneGenerale}/20</p>
-              </div>
+          {/* Photo */}
+          <div className="flex-shrink-0">
+            <div className="w-20 h-20 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center ring-4 ring-white shadow-md">
+              {photoSrc
+                ? <img src={photoSrc} alt={student.fullName} className="w-full h-full object-cover"
+                       onError={e => e.target.style.display = 'none'} />
+                : <FontAwesomeIcon icon={faUser} className="text-3xl text-slate-400" />
+              }
             </div>
           </div>
 
-          {/* Grille d'informations */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Informations personnelles */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4 pb-3 border-b border-slate-200">
-                Informations personnelles
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Nom</label>
-                  <input
-                    type="text"
-                    value={student.nom}
-                    readOnly
-                    className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Prénom</label>
-                  <input
-                    type="text"
-                    value={student.prenom}
-                    readOnly
-                    className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={student.email}
-                    readOnly
-                    className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Téléphone</label>
-                  <input
-                    type="text"
-                    value={student.telephone || 'Non renseigné'}
-                    readOnly
-                    className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Adresse</label>
-                  <input
-                    type="text"
-                    value={student.adresse || 'Non renseigné'}
-                    readOnly
-                    className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Date de naissance</label>
-                  <input
-                    type="text"
-                    value={student.dateNaissance || 'Non renseigné'}
-                    readOnly
-                    className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                  />
-                </div>
-              </div>
-            </div>
+          {/* Identité */}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-slate-800 truncate">{student.fullName}</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{student.programme || 'INPTIC'}</p>
 
-            {/* Colonne droite */}
-            <div className="space-y-6">
-              {/* Informations académiques */}
-              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 pb-3 border-b border-slate-200">
-                  Informations académiques
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Matricule</label>
-                    <input
-                      type="text"
-                      value={student.matricule}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Filière</label>
-                    <input
-                      type="text"
-                      value={student.filiere || student.programme?.split(' ')[0] || ''}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Niveau</label>
-                    <input
-                      type="text"
-                      value={student.niveau}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Semestre</label>
-                    <input
-                      type="text"
-                      value={student.semestre || 'N/A'}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Année d'inscription</label>
-                    <input
-                      type="text"
-                      value={student.anneeInscription || 'N/A'}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Statut</label>
-                    <input
-                      type="text"
-                      value={student.estActif ? 'Actif' : 'Inactif'}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Contact parent/tuteur */}
-              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 pb-3 border-b border-slate-200">
-                  Contact Parent / Tuteur
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Nom complet</label>
-                    <input
-                      type="text"
-                      value={student.contactParent?.nom || 'Non renseigné'}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Téléphone</label>
-                    <input
-                      type="text"
-                      value={student.contactParent?.telephone || 'Non renseigné'}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={student.contactParent?.email || 'Non renseigné'}
-                      readOnly
-                      className="w-full px-3 py-2 border border-slate-200 rounded bg-slate-50 text-slate-800 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full border border-slate-200">
+                #{student.matricule}
+              </span>
+              {student.classe && (
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-100">
+                  {student.classe}
+                </span>
+              )}
+              {student.semestre && (
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full border border-slate-200">
+                  {student.semestre}
+                </span>
+              )}
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full border border-emerald-100">
+                {student.estActif ? 'Actif' : 'Inactif'}
+              </span>
+              {student.estBoursier && (
+                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-100">
+                  Boursier
+                </span>
+              )}
             </div>
           </div>
-        </main>
+
+          {/* Moyenne (visible desktop) */}
+          <div className="hidden sm:flex flex-col items-center flex-shrink-0 bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
+            <p className="text-xs text-slate-500 mb-1">Moyenne</p>
+            <p className={`text-3xl font-bold ${moyenneColor}`}>{moyenne.toFixed(2)}</p>
+            <p className="text-xs text-slate-400">/20</p>
+          </div>
+        </div>
+
+        {/* Moyenne mobile */}
+        <div className="sm:hidden mt-4 flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+          <p className="text-sm text-slate-500">Moyenne générale</p>
+          <p className={`ml-auto text-xl font-bold ${moyenneColor}`}>{moyenne.toFixed(2)}/20</p>
+        </div>
       </div>
-    </div>
+
+      {/* ── Sections ─────────────────────────────────────────────────── */}
+      <div className="space-y-4">
+
+        {/* Infos personnelles */}
+        <Section title="Informations personnelles" icon={faUser}>
+          <InfoField label="Nom"         value={student.nom}           icon={faUser} />
+          <InfoField label="Prénom"      value={student.prenom} />
+          <InfoField label="Email"       value={student.email}         icon={faEnvelope} />
+          <InfoField label="Téléphone"   value={student.telephone}     icon={faPhone} />
+          <InfoField label="Adresse"     value={student.adresse}       icon={faMapMarkerAlt} />
+          <InfoField label="Date de naissance"
+            value={student.dateNaissance
+              ? new Date(student.dateNaissance).toLocaleDateString('fr-FR')
+              : null}
+            icon={faCalendar}
+          />
+        </Section>
+
+        {/* Infos académiques */}
+        <Section title="Informations académiques" icon={faGraduationCap}>
+          <InfoField label="Matricule"       value={student.matricule}        icon={faIdCard} />
+          <InfoField label="Filière"         value={student.filiere || student.programme} />
+          <InfoField label="Niveau"          value={student.niveauDetail || student.niveau} />
+          <InfoField label="Classe"          value={student.classe} />
+          <InfoField label="Semestre actuel" value={student.semestre} />
+          <InfoField label="Année d'inscription" value={student.anneeInscription} />
+          <InfoField label="Crédits validés"
+            value={student.credits ? `${student.credits} crédits` : null}
+            icon={faShieldAlt}
+          />
+          <InfoField label="Statut"
+            value={student.estActif ? 'Actif' : 'Inactif'}
+          />
+        </Section>
+
+        {/* Contact parent */}
+        {student.contactParent && (
+          <Section title="Contact Parent / Tuteur" icon={faUsers}>
+            <InfoField label="Nom complet"  value={student.contactParent.nom}       icon={faUser} />
+            <InfoField label="Téléphone"    value={student.contactParent.telephone}  icon={faPhone} />
+            <InfoField label="Email"        value={student.contactParent.email}      icon={faEnvelope} />
+            <InfoField label="Lien"         value={student.contactParent.lien} />
+          </Section>
+        )}
+
+      </div>
+    </StudentLayout>
   )
 }
 

@@ -242,7 +242,7 @@ app.use('/api/student', studentRoutes)
 app.use('/api/dep', depRoutes)
 app.use('/api/admin-systeme', adminSystemeRoutes)
 app.use('/api/notifications', notificationsRoutes)
-
+ 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'API is running' })

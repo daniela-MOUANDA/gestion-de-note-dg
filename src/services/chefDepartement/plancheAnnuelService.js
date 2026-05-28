@@ -38,7 +38,7 @@ function mentionFromMoyenneAnnuelle(moy) {
 }
 
 /** Année de Licence en cours d’après le 1er semestre de la paire (S1/S2→L1, S3/S4→L2, S5/S6→L3). */
-function licenceAnneeEnCours(semestreA) {
+export function licenceAnneeEnCours(semestreA) {
     const s = String(semestreA || '').toUpperCase()
     if (s === 'S1' || s === 'S2') return 1
     if (s === 'S3' || s === 'S4') return 2
@@ -54,7 +54,42 @@ function licenceAnneeEnCours(semestreA) {
  *
  * @returns {{ text: string, kind: 'ADMIS' | 'REDOUBLE' | 'PASSAGE_CONDITIONNEL' }}
  */
-function decisionAnnuelleDetails(totalCreditsAnnuel, semestreA) {
+/**
+ * Décisions jury pour L2/L3 selon la phase du conseil :
+ *
+ * - Avant soutenance  → admissibilité au stage
+ *     ≥ 60 cr  : "Admis en stage"
+ *     < 60 cr  : "Non admis en stage"
+ *
+ * - Après soutenance (résultats annuels)
+ *     L2 : ≥ 60 cr (L2)               → "Diplômé admis en Licence 3" / sinon "Redouble la Licence 2"
+ *     L3 : 180 cr cumulés (L1+L2+L3)  → "Diplôme Licence"            / sinon "Redouble la Licence 3"
+ *
+ * @param {number}  creditsAnnuelCourant  Crédits de l'année en cours (L2 ou L3)
+ * @param {'avant_soutenance'|'apres_soutenance'} phase
+ * @param {'L2'|'L3'} niveauCode
+ * @param {number}  totalCreditsAll  Crédits cumulés toutes années (pour L3 après soutenance)
+ * @returns {{ text: string, kind: 'ADMIS' | 'REDOUBLE' }}
+ */
+export function decisionPhaseL2L3(creditsAnnuelCourant, phase, niveauCode, totalCreditsAll = 0) {
+    if (phase === 'avant_soutenance') {
+        return creditsAnnuelCourant >= 60
+            ? { text: 'Admis en stage', kind: 'ADMIS' }
+            : { text: 'Non admis en stage', kind: 'REDOUBLE' }
+    }
+    // après soutenance
+    if (niveauCode === 'L2') {
+        return creditsAnnuelCourant >= 60
+            ? { text: 'Diplômé admis en Licence 3', kind: 'ADMIS' }
+            : { text: 'Redouble la Licence 2', kind: 'REDOUBLE' }
+    }
+    // L3 : 180 crédits cumulés L1+L2+L3 requis
+    return totalCreditsAll >= 180
+        ? { text: 'Diplôme Licence', kind: 'ADMIS' }
+        : { text: 'Redouble la Licence 3', kind: 'REDOUBLE' }
+}
+
+export function decisionAnnuelleDetails(totalCreditsAnnuel, semestreA) {
     const annee = licenceAnneeEnCours(semestreA)
     const suivante = annee < 3 ? annee + 1 : null
 

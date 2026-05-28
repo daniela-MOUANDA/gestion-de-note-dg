@@ -78,7 +78,10 @@ import { buildBulletinVerificationPublicUrl } from '../services/bulletinVerifyTo
 import { generatePlanchePDF } from '../services/planchePDFGenerator.js'
 import { generatePlancheAnnuelPDF } from '../services/plancheAnnuelPDFGenerator.js'
 import { generatePlancheExcel, generateAnnualExcel } from '../services/plancheExcelGenerator.js'
+import { generateNotesTemplateExcel } from '../services/notesTemplateExcelGenerator.js'
+import { generateConseilExcel } from '../services/conseilExcelGenerator.js'
 import { getAnnualPlancheData } from '../../src/services/chefDepartement/plancheAnnuelService.js'
+import { getConseilClasseData, getClassesForConseil } from '../../src/services/chefDepartement/conseilService.js'
 import {
   listCoordinateursPedagogiques,
   createCoordinateurPedagogique,
@@ -523,10 +526,130 @@ router.delete('/modules/:id', async (req, res) => {
   }
 })
 
+/** Télécharger le template Excel de saisie des notes pour un module/classe/semestre */
+router.get('/notes/template-excel', async (req, res) => {
+  try {
+    const departementId = req.user?.departementId
+    if (!departementId) return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+
+    const { classeId, moduleId, semestre } = req.query
+    if (!classeId || !moduleId || !semestre) {
+      return res.status(400).json({ success: false, error: 'classeId, moduleId et semestre sont requis' })
+    }
+
+    // Infos classe
+    const { data: classe } = await supabaseAdmin
+      .from('classes')
+      .select('id, nom, filieres(nom, code), niveaux(code), formations(code, nom)')
+      .eq('id', classeId)
+      .single()
+
+    if (!classe) return res.status(404).json({ success: false, error: 'Classe introuvable' })
+
+    // Infos module
+    const { data: module } = await supabaseAdmin
+      .from('modules')
+      .select('id, nom, code, enseignants(nom, prenom)')
+      .eq('id', moduleId)
+      .single()
+
+    // Promotion dominante via inscriptions
+    const { data: promoRow } = await supabaseAdmin
+      .from('inscriptions')
+      .select('promotions(annee)')
+      .eq('classe_id', classeId)
+      .eq('statut', 'INSCRIT')
+      .limit(1)
+      .single()
+    const anneeAcad = promoRow?.promotions?.annee || '—'
+
+    // Étudiants inscrits dans la classe
+    const { data: inscriptions } = await supabaseAdmin
+      .from('inscriptions')
+      .select('etudiants(id, nom, prenom, matricule)')
+      .eq('classe_id', classeId)
+      .eq('statut', 'INSCRIT')
+      .order('etudiants(nom)', { ascending: true })
+
+    const etudiants = (inscriptions || [])
+      .map(i => i.etudiants)
+      .filter(Boolean)
+      .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
+
+    // Paramètres de notation (pour les colonnes)
+    const { data: params } = await supabaseAdmin
+      .from('parametres_notation')
+      .select('*')
+      .eq('module_id', moduleId)
+      .eq('semestre', semestre)
+      .maybeSingle()
+
+    let evalCols
+    if (params?.evaluations?.length) {
+      let colIdx = 1
+      evalCols = params.evaluations.flatMap(ev => {
+        return Array.from({ length: ev.nombreEvaluations || 1 }, () => {
+          const label = `Note ${colIdx++} (/${ev.noteMax || 20})`
+          return label
+        })
+      })
+    } else {
+      evalCols = ['Note 1 (/20)', 'Note 2 (/20)']
+    }
+
+    const enseignantObj = Array.isArray(module?.enseignants) ? module.enseignants[0] : module?.enseignants
+    const enseignant = enseignantObj
+      ? `${enseignantObj.nom || ''} ${enseignantObj.prenom || ''}`.trim()
+      : '—'
+
+    const classeNom = classe.nom || ''
+    const moduleNom = module ? `${module.code} – ${module.nom}` : '—'
+
+    const tempDir = path.join(process.cwd(), 'temp')
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
+    const outputPath = path.join(tempDir, `template_notes_${classeId}_${moduleId}_${Date.now()}.xlsx`)
+
+    await generateNotesTemplateExcel({
+      classeNom,
+      moduleNom,
+      anneeAcad,
+      enseignant,
+      semestre,
+      effectif: etudiants.length,
+      noteColumns: evalCols,
+      etudiants
+    }, outputPath)
+
+    const filename = `Template_Notes_${classeNom.replace(/\s+/g, '_')}_${module?.code || ''}_${semestre}.xlsx`
+    res.download(outputPath, filename, (err) => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+    })
+  } catch (error) {
+    console.error('❌ Erreur template notes Excel:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
 router.get('/classes', async (req, res) => {
   try {
     const departementId = req.user.departementId
     if (!departementId) return res.status(403).json({ success: false, error: "Aucun département associé" });
+
+    if (req.query.conseil === '1') {
+      const { promotionId, promotionAnnee, formationId, formationCode, filiereId, niveauId, niveauCode } =
+        req.query
+      const result = await getClassesForConseil(departementId, {
+        promotionId,
+        promotionAnnee,
+        formationId,
+        formationCode,
+        filiereId,
+        niveauId,
+        niveauCode
+      })
+      if (!result.success) return res.status(400).json(result)
+      return res.json(result)
+    }
 
     const result = await getClassesByDepartement(departementId)
     if (!result.success) return res.status(400).json(result)
@@ -1453,6 +1576,101 @@ router.get('/releves/annual/:classeId', async (req, res) => {
     const result = await getAnnualPlancheData(classeId, departementId)
     res.json(result)
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/** Conseil — classes filtrées (aligné requête SQL : promo + formation + filière + niveau) */
+router.get('/conseil/classes', async (req, res) => {
+  try {
+    const departementId = req.user.departementId
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const { promotionId, promotionAnnee, formationId, formationCode, filiereId, niveauId, niveauCode } =
+      req.query
+
+    const result = await getClassesForConseil(departementId, {
+      promotionId,
+      promotionAnnee,
+      formationId,
+      formationCode,
+      filiereId,
+      niveauId,
+      niveauCode
+    })
+
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+/** Conseil de classe — évolution académique et statistiques de passage */
+router.get('/conseil/classe/:classeId', async (req, res) => {
+  try {
+    const { classeId } = req.params
+    const departementId = req.user.departementId
+    const phase = req.query.phase || null   // 'avant_soutenance' | 'apres_soutenance' | null
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getConseilClasseData(classeId, departementId, phase)
+    if (!result.success) return res.status(400).json(result)
+    res.json(result)
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+router.get('/conseil/classe/:classeId/excel', async (req, res) => {
+  let tmpPath = null
+  try {
+    const { classeId } = req.params
+    const departementId = req.user.departementId
+    const phase = req.query.phase || null
+
+    if (!departementId) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé' })
+    }
+
+    const result = await getConseilClasseData(classeId, departementId, phase)
+    if (!result.success) return res.status(400).json(result)
+
+    const classe    = result.meta?.classe
+    const annee     = result.meta?.anneeAcademique || ''
+    const classeNom = classe?.nom || classeId
+    const niveau    = result.meta?.niveauCode || ''
+
+    const safeName  = classeNom.replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 40)
+    const filename  = `Conseil_${safeName}_${niveau}_${annee || 'N/A'}.xlsx`
+    tmpPath = path.join(process.cwd(), 'tmp', `conseil_${classeId}_${Date.now()}.xlsx`)
+
+    if (!fs.existsSync(path.join(process.cwd(), 'tmp'))) {
+      fs.mkdirSync(path.join(process.cwd(), 'tmp'), { recursive: true })
+    }
+
+    await generateConseilExcel(result, tmpPath)
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`)
+    res.sendFile(path.resolve(tmpPath), (err) => {
+      if (tmpPath && fs.existsSync(tmpPath)) {
+        try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+      }
+      if (err && !res.headersSent) {
+        res.status(500).json({ success: false, error: 'Erreur lors de l\'envoi du fichier' })
+      }
+    })
+  } catch (error) {
+    if (tmpPath && fs.existsSync(tmpPath)) {
+      try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+    }
+    console.error('Erreur export conseil Excel:', error)
     res.status(500).json({ success: false, error: error.message })
   }
 })

@@ -248,6 +248,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'API is running' })
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Serveur API démarré sur http://localhost:${PORT}`)
+})
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} déjà utilisé. Arrêtez l'autre instance et relancez.`)
+    process.exit(1)
+  } else {
+    throw err
+  }
 })

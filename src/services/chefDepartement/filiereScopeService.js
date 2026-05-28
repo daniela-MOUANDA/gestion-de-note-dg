@@ -58,6 +58,12 @@ export const getScopedFiliereIdsForDepartement = async (departementId) => {
     .map((f) => f.id)
 }
 
+/** Liste des classes : inclut aussi les filières « groupe » (ex. MMI) si des classes y sont rattachées en base. */
+export const getFiliereIdsForClassesListing = async (departementId) => {
+  const filieres = await getScopedFilieresForDepartement(departementId)
+  return filieres.map((f) => f.id)
+}
+
 export const isFiliereInDepartementScope = async (departementId, filiereId) => {
   const ids = await getScopedFiliereIdsForDepartement(departementId)
   return ids.includes(filiereId)

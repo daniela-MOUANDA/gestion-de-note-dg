@@ -20,7 +20,8 @@ import {
     faHistory,
     faShieldAlt,
     faLock,
-    faUserFriends
+    faUserFriends,
+    faGavel
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -145,6 +146,7 @@ export const ROLE_MENUS = {
         { path: '/chef/releves', icon: faFileAlt, label: 'Relevé de notes' },
         { path: '/chef/bulletins', icon: faClipboardList, label: 'Bulletins' },
         { path: '/chef/planches', icon: faUsers, label: 'Planches' },
+        { path: '/chef/conseil', icon: faGavel, label: 'Conseil' },
         { path: '/chef/statistiques', icon: faChartLine, label: 'Statistiques' },
         { path: '/admin/profil', icon: faUser, label: 'Profil' },
         { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },
@@ -162,6 +164,7 @@ export const ROLE_MENUS = {
         { path: '/chef/releves', icon: faFileAlt, label: 'Relevé de notes' },
         { path: '/chef/bulletins', icon: faClipboardList, label: 'Bulletins' },
         { path: '/chef/planches', icon: faUsers, label: 'Planches' },
+        { path: '/chef/conseil', icon: faGavel, label: 'Conseil' },
         { path: '/chef/statistiques', icon: faChartLine, label: 'Statistiques' },
         { path: '/admin/profil', icon: faUser, label: 'Profil' },
         { path: '/admin/parametres', icon: faCog, label: 'Paramètres' },

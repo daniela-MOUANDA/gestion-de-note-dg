@@ -17,9 +17,10 @@ export function moduleEstProjetStage(m) {
     return false
 }
 
-export const getBulletinData = async (classeId, semestre, departementId) => {
+export const getBulletinData = async (classeId, semestre, departementId, options = {}) => {
     try {
-        console.log('DEBUG: getBulletinData v4 START', { classeId, semestre, departementId })
+        const { allowCrossNiveauSemestre = false } = options
+        console.log('DEBUG: getBulletinData v4 START', { classeId, semestre, departementId, allowCrossNiveauSemestre })
 
         // 1. Récupérer la classe pour obtenir sa filière et son niveau
         const { data: classe, error: classeError } = await supabaseAdmin
@@ -51,7 +52,10 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         }
 
         const semestresAutorises = correspondanceNiveauSemestre[niveauCode] || []
-        if (!semestresAutorises.includes(semestre)) {
+        const useEtudiantsNotesScope =
+            allowCrossNiveauSemestre && !semestresAutorises.includes(semestre)
+
+        if (!allowCrossNiveauSemestre && !semestresAutorises.includes(semestre)) {
             console.log(`⚠️ Semestre ${semestre} non autorisé pour niveau ${niveauCode}`)
             return {
                 success: false,
@@ -256,13 +260,20 @@ export const getBulletinData = async (classeId, semestre, departementId) => {
         // IMPORTANT: PostgREST limite les résultats (1000 lignes par défaut).
         // On pagine pour récupérer TOUTES les notes de la classe/semestre.
         while (true) {
-            const { data: notesPage, error: errorNotes } = await supabaseAdmin
+            let notesQuery = supabaseAdmin
                 .from('notes')
                 .select('*, modules(id, code, nom, filiere_id)')
                 .eq('semestre', semestre)
-                .eq('classe_id', classeId)
                 .in('etudiant_id', etudiantIds)
-                .range(pageStart, pageStart + pageSize - 1)
+
+            if (!useEtudiantsNotesScope) {
+                notesQuery = notesQuery.eq('classe_id', classeId)
+            }
+
+            const { data: notesPage, error: errorNotes } = await notesQuery.range(
+                pageStart,
+                pageStart + pageSize - 1
+            )
 
             if (errorNotes) {
                 console.error('DEBUG: Notes error', errorNotes)

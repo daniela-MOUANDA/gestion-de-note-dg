@@ -477,6 +477,54 @@ export const getAnnualBulletinData = async (classeId) => {
   return request(`/releves/annual/${classeId}`)
 }
 
+export const getConseilClasseData = async (classeId, phase = null) => {
+  const url = phase
+    ? `/conseil/classe/${classeId}?phase=${encodeURIComponent(phase)}`
+    : `/conseil/classe/${classeId}`
+  return request(url)
+}
+
+export const exportConseilExcel = async (classeId, phase = null) => {
+  const token = localStorage.getItem('token')
+  const qs = phase ? `?phase=${encodeURIComponent(phase)}` : ''
+  const url = `${API_BASE_URL}/conseil/classe/${classeId}/excel${qs}`
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  if (!response.ok) {
+    let msg = 'Impossible d\'exporter le conseil'
+    try {
+      const data = await response.json()
+      if (data?.error) msg = data.error
+    } catch {
+      const text = await response.text()
+      if (text) msg = text.slice(0, 200)
+    }
+    throw new Error(msg)
+  }
+  return response.blob()
+}
+
+export const getConseilClasses = async ({
+  promotionId,
+  promotionAnnee,
+  formationId,
+  formationCode,
+  filiereId,
+  niveauId,
+  niveauCode
+}) => {
+  const params = new URLSearchParams({ conseil: '1' })
+  if (promotionId) params.set('promotionId', promotionId)
+  if (promotionAnnee) params.set('promotionAnnee', promotionAnnee)
+  if (formationId) params.set('formationId', formationId)
+  if (formationCode) params.set('formationCode', formationCode)
+  if (filiereId) params.set('filiereId', filiereId)
+  if (niveauId) params.set('niveauId', niveauId)
+  if (niveauCode) params.set('niveauCode', niveauCode)
+  return request(`/classes?${params.toString()}`)
+}
+
 export const updateEmploiDuTempsId = async (id, data) => {
   return request(`/emploi-du-temps/${id}`, {
     method: 'PUT',

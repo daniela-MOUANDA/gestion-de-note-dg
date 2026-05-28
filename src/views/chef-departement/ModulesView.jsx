@@ -689,11 +689,6 @@ const ModulesView = () => {
                   {promotions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.annee}
-                      {pickPromotionForCurrentAcademicYear(promotions)?.id === p.id
-                        ? ' (année acad. calendrier)'
-                        : p.statut === 'EN_COURS'
-                          ? ' (EN_COURS)'
-                          : ''}
                     </option>
                   ))}
                 </select>

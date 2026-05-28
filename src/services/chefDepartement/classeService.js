@@ -1,10 +1,13 @@
 import { supabaseAdmin } from '../../lib/supabase.js'
-import { getScopedFiliereIdsForDepartement, isFiliereInDepartementScope } from './filiereScopeService.js'
+import {
+  getFiliereIdsForClassesListing,
+  isFiliereInDepartementScope
+} from './filiereScopeService.js'
 
 // Obtenir toutes les classes d'un département
 export const getClassesByDepartement = async (departementId) => {
   try {
-    const filiereIds = await getScopedFiliereIdsForDepartement(departementId)
+    const filiereIds = await getFiliereIdsForClassesListing(departementId)
 
     if (filiereIds.length === 0) {
       return { success: true, classes: [] }
@@ -18,17 +21,44 @@ export const getClassesByDepartement = async (departementId) => {
 
     if (error) throw error
 
-    const promotionIds = [...new Set((classes || []).map((c) => c.promotion_id).filter(Boolean))]
-    let promotionsById = new Map()
+    const classeIds = (classes || []).map((c) => c.id)
+    const promotionDominanteParClasse = new Map()
 
-    if (promotionIds.length > 0) {
-      const { data: promotionsData, error: promotionsError } = await supabaseAdmin
-        .from('promotions')
-        .select('id, annee, statut')
-        .in('id', promotionIds)
+    if (classeIds.length > 0) {
+      const { data: insPromoRows, error: insPromoError } = await supabaseAdmin
+        .from('inscriptions')
+        .select('classe_id, promotion_id, promotions(id, annee, statut)')
+        .in('classe_id', classeIds)
+        .eq('statut', 'INSCRIT')
+        .not('promotion_id', 'is', null)
 
-      if (!promotionsError && Array.isArray(promotionsData)) {
-        promotionsById = new Map(promotionsData.map((p) => [p.id, p]))
+      if (!insPromoError && Array.isArray(insPromoRows)) {
+        const tally = new Map()
+        for (const row of insPromoRows) {
+          const cid = row.classe_id
+          const pid = row.promotion_id
+          if (!cid || !pid) continue
+          if (!tally.has(cid)) tally.set(cid, new Map())
+          const counts = tally.get(cid)
+          counts.set(pid, (counts.get(pid) || 0) + 1)
+        }
+
+        for (const [classeId, pidCounts] of tally) {
+          let bestPid = null
+          let bestCount = 0
+          for (const [pid, count] of pidCounts) {
+            if (count > bestCount) {
+              bestCount = count
+              bestPid = pid
+            }
+          }
+          const sample = insPromoRows.find(
+            (r) => r.classe_id === classeId && r.promotion_id === bestPid
+          )
+          const promoEmbed = sample?.promotions
+          const promo = Array.isArray(promoEmbed) ? promoEmbed[0] : promoEmbed
+          if (promo) promotionDominanteParClasse.set(classeId, promo)
+        }
       }
     }
 
@@ -44,19 +74,24 @@ export const getClassesByDepartement = async (departementId) => {
         .select('*', { count: 'exact', head: true })
         .eq('classe_id', classe.id)
 
-      const promotion = promotionsById.get(classe.promotion_id)
+      const filiereEmbed = Array.isArray(classe.filieres) ? classe.filieres[0] : classe.filieres
+      const niveauEmbed = Array.isArray(classe.niveaux) ? classe.niveaux[0] : classe.niveaux
+      const formationEmbed = Array.isArray(classe.formations) ? classe.formations[0] : classe.formations
+
+      const promotion = promotionDominanteParClasse.get(classe.id) || null
+      const promotionId = promotion?.id || null
 
       return {
         id: classe.id,
         code: classe.code,
         nom: classe.nom,
-        niveau: classe.niveaux?.code,
-        filiere: classe.filieres?.code,
-        filieres: classe.filieres
+        niveau: niveauEmbed?.code,
+        filiere: filiereEmbed?.code,
+        filieres: filiereEmbed
           ? {
-              id: classe.filieres.id,
-              nom: classe.filieres.nom,
-              code: classe.filieres.code
+              id: filiereEmbed.id,
+              nom: filiereEmbed.nom,
+              code: filiereEmbed.code
             }
           : null,
         effectif: classe.effectif,
@@ -64,11 +99,14 @@ export const getClassesByDepartement = async (departementId) => {
         filiereId: classe.filiere_id,
         niveauId: classe.niveau_id,
         formationId: classe.formation_id,
-        formation: classe.formations ? {
-          id: classe.formations.id,
-          code: classe.formations.code,
-          nom: classe.formations.nom
-        } : null,
+        formation: formationEmbed
+          ? {
+              id: formationEmbed.id,
+              code: formationEmbed.code,
+              nom: formationEmbed.nom
+            }
+          : null,
+        promotion_id: promotionId,
         promotion: promotion
           ? {
               id: promotion.id,

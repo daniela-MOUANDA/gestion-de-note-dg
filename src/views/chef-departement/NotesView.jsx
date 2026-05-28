@@ -37,6 +37,7 @@ const NotesView = () => {
   const [notes, setNotes] = useState({}) // { etudiantId: { evaluationId: note } }
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [showParametresModal, setShowParametresModal] = useState(false)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -637,50 +638,70 @@ const NotesView = () => {
 
   const handleDownloadTemplate = () => {
     if (!etudiants.length || !parametres) return
+    _downloadTemplateFromServer()
+  }
 
-    // 1. Préparer les en-têtes
-    const headers = ['Matricule', 'Nom', 'Prénom']
-    const evalIds = []
-
-    parametres.evaluations.forEach(evaluation => {
-      const typeLabel = typesEvaluation.find(t => t.value === evaluation.type)?.label || evaluation.type
-      for (let i = 1; i <= evaluation.nombreEvaluations; i++) {
-        headers.push(`${typeLabel} ${i} (/${evaluation.noteMax})`)
-        evalIds.push(`${evaluation.id}_${i}`) // Stocker l'ID pour le mapping inverse si besoin
+  const _downloadTemplateFromServer = async () => {
+    if (!selectedClasse || !selectedModule || !selectedSemestre) return
+    try {
+      setDownloadingTemplate(true)
+      const token = localStorage.getItem('token')
+      const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/chef-departement'
+      const params = new URLSearchParams({ classeId: selectedClasse, moduleId: selectedModule, semestre: selectedSemestre })
+      const response = await fetch(`${apiBase}/notes/template-excel?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        showAlert(err.error || 'Erreur lors du téléchargement', 'error')
+        return
       }
-    })
+      const blob = await response.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      const classeObj = classes.find(c => c.id === selectedClasse)
+      const moduleObj = modules.find(m => m.id === selectedModule)
+      const modKey = moduleObj?.code || 'Module'
+      const classeKey = (classeObj?.nom || 'Classe').replace(/\s+/g, '_')
+      a.href     = url
+      a.download = `Template_Notes_${classeKey}_${modKey}_${selectedSemestre}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      showAlert('Erreur réseau lors du téléchargement', 'error')
+    } finally {
+      setDownloadingTemplate(false)
+    }
+  }
 
-    // 2. Préparer les données
-    const data = etudiants.map(etudiant => {
-      const row = {
-        'Matricule': etudiant.matricule,
-        'Nom': etudiant.nom,
-        'Prénom': etudiant.prenom
+  const handleDownloadStandardTemplate = async () => {
+    if (!selectedClasse || !selectedModule || !selectedSemestre) {
+      showAlert('Sélectionnez une classe, un module et un semestre', 'warning')
+      return
+    }
+
+    // Auto-configurer les paramètres standard si pas encore fait
+    if (!parametres) {
+      setDownloadingTemplate(true)
+      const standardEvaluations = [
+        { id: Date.now(),     type: 'CONTROLE', noteMax: 20, nombreEvaluations: 1, coefficient: 0.4 },
+        { id: Date.now() + 1, type: 'EXAMEN',   noteMax: 20, nombreEvaluations: 1, coefficient: 0.6 }
+      ]
+      const result = await saveParametresNotation({
+        moduleId: selectedModule,
+        semestre: selectedSemestre,
+        evaluations: standardEvaluations
+      })
+      setDownloadingTemplate(false)
+      if (!result.success) {
+        showAlert(result.error || 'Erreur lors de la configuration des paramètres', 'error')
+        return
       }
-      // Initialiser les colonnes de notes à vide
-      headers.slice(3).forEach(h => row[h] = '')
-      return row
-    })
+      setParametres({ evaluations: standardEvaluations })
+      showAlert('Paramètres configurés : Note 1 (40%) + Note 2 (60%)', 'success')
+    }
 
-    // 3. Créer le workbook
-    const ws = XLSX.utils.json_to_sheet(data, { header: headers })
-
-    // Ajuster la largeur des colonnes
-    const wscols = [
-      { wch: 15 }, // Matricule
-      { wch: 20 }, // Nom
-      { wch: 20 }, // Prénom
-      ...headers.slice(3).map(() => ({ wch: 15 })) // Colonnes de notes
-    ]
-    ws['!cols'] = wscols
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Notes")
-
-    // 4. Télécharger
-    const classeObj = classes.find(c => c.id === selectedClasse)
-    const modKey = modules.find(m => m.id === selectedModule)?.code || selectedModule
-    XLSX.writeFile(wb, buildNotesExportFilename(classeObj, modKey, selectedSemestre, 'xlsx'))
+    await _downloadTemplateFromServer()
   }
 
   const processExcelData = (jsonData) => {
@@ -729,7 +750,9 @@ const NotesView = () => {
     const noteColumns = allColumns.filter(col => {
       const colLower = col.toLowerCase().trim()
       return colLower !== 'matricule' && colLower !== 'nom' && colLower !== 'prenom' &&
-        colLower !== 'prénom' && colLower !== 'matricule ' && colLower !== 'nom ' && colLower !== 'prenom '
+        colLower !== 'prénom' && colLower !== 'matricule ' && colLower !== 'nom ' && colLower !== 'prenom ' &&
+        colLower !== 'n°' && colLower !== 'no' && colLower !== '#' && colLower !== 'num' &&
+        colLower !== 'numéro' && colLower !== 'numero' && colLower !== 'n°'
     })
 
     console.log('📊 Colonnes de notes trouvées dans Excel:', noteColumns)
@@ -920,7 +943,23 @@ const NotesView = () => {
         const wb = XLSX.read(bstr, { type: 'binary' })
         const wsname = wb.SheetNames[0]
         const ws = wb.Sheets[wsname]
-        const data = XLSX.utils.sheet_to_json(ws)
+
+        // Détecter la ligne d'en-tête : chercher la cellule contenant "Matricule"
+        let headerRowIdx = 0
+        if (ws['!ref']) {
+          const wsRange = XLSX.utils.decode_range(ws['!ref'])
+          outer: for (let r = wsRange.s.r; r <= Math.min(wsRange.e.r, 12); r++) {
+            for (let c = wsRange.s.c; c <= Math.min(wsRange.e.c, 5); c++) {
+              const cell = ws[XLSX.utils.encode_cell({ r, c })]
+              if (cell && String(cell.v).trim().toLowerCase() === 'matricule') {
+                headerRowIdx = r
+                break outer
+              }
+            }
+          }
+        }
+
+        const data = XLSX.utils.sheet_to_json(ws, { range: headerRowIdx, defval: '' })
         processExcelData(data)
       } catch (error) {
         console.error('Erreur lecture Excel:', error)
@@ -943,7 +982,7 @@ const NotesView = () => {
             </div>
             <div className="flex gap-2">
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-[#0f2744] text-white rounded-lg hover:bg-[#1a3a5c] transition-colors flex items-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed"
                 onClick={handleSaveAll}
                 disabled={saving || !selectedClasse}
               >
@@ -1027,13 +1066,26 @@ const NotesView = () => {
             </div>
 
             {selectedClasse && selectedModule && selectedSemestre && (
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 flex flex-wrap gap-2 justify-end">
+                <button
+                  onClick={handleDownloadStandardTemplate}
+                  disabled={downloadingTemplate || loading}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  title="Télécharge le template avec l'entête de la classe et 2 colonnes (CC 40% + Examen 60%)"
+                >
+                  {downloadingTemplate ? (
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                  ) : (
+                    <FontAwesomeIcon icon={faFileExcel} />
+                  )}
+                  {downloadingTemplate ? 'Génération...' : 'Télécharger Template'}
+                </button>
                 <button
                   onClick={handleConfigurer}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 border border-slate-400 text-slate-700 bg-white rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
                 >
                   <FontAwesomeIcon icon={faCog} />
-                  {parametres ? 'Modifier les paramètres de notation' : 'Configurer les paramètres de notation'}
+                  {parametres ? 'Modifier les paramètres' : 'Configurer les paramètres'}
                 </button>
               </div>
             )}
@@ -1139,7 +1191,10 @@ const NotesView = () => {
                     <table className="w-full">
                       <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase sticky left-0 bg-slate-50">
+                          <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 sticky left-0 bg-slate-50 w-10">
+                            #
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase bg-slate-50">
                             Étudiant
                           </th>
                           {(parametres.evaluations || []).map((evaluation, evalIndex) => (
@@ -1176,7 +1231,7 @@ const NotesView = () => {
                           if (etudiants.length === 0) {
                             return (
                               <tr>
-                                <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3}
+                                <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 4}
                                   className="px-6 py-12 text-center text-slate-500">
                                   Aucun étudiant trouvé dans cette classe.
                                 </td>
@@ -1187,7 +1242,7 @@ const NotesView = () => {
                           if (etudiantsFiltres.length === 0) {
                             return (
                               <tr>
-                                <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 3}
+                                <td colSpan={parametres.evaluations.reduce((sum, e) => sum + e.nombreEvaluations, 0) + 4}
                                   className="px-6 py-12 text-center text-slate-500">
                                   Aucun étudiant ne correspond à la recherche "{searchQuery}".
                                 </td>
@@ -1195,20 +1250,16 @@ const NotesView = () => {
                             )
                           }
 
-                          return etudiantsFiltres.map((etudiant) => {
+                          return etudiantsFiltres.map((etudiant, rowIdx) => {
                             const moyenne = calculerMoyenne(etudiant.id)
                             return (
                               <tr key={etudiant.id} className="hover:bg-slate-50">
-                                <td className="px-4 py-3 whitespace-nowrap sticky left-0 bg-white">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                      <FontAwesomeIcon icon={faGraduationCap} className="text-blue-600 text-sm" />
-                                    </div>
-                                    <div>
-                                      <p className="font-semibold text-sm text-slate-800">{etudiant.nom} {etudiant.prenom}</p>
-                                      <p className="text-xs text-slate-500">{etudiant.matricule}</p>
-                                    </div>
-                                  </div>
+                                <td className="px-3 py-3 text-center text-xs font-medium text-slate-400 sticky left-0 bg-white w-10">
+                                  {rowIdx + 1}
+                                </td>
+                                <td className="px-4 py-3 bg-white">
+                                  <p className="font-semibold text-sm text-slate-800 leading-tight">{etudiant.nom} {etudiant.prenom}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">{etudiant.matricule}</p>
                                 </td>
                                 {(parametres.evaluations || []).map((evaluation, evalIndex) => (
                                   Array.from({ length: evaluation.nombreEvaluations || 0 }).map((_, i) => {
@@ -1218,8 +1269,7 @@ const NotesView = () => {
                                     return (
                                       <td key={`${etudiant.id}_${evalId}`} className="px-4 py-3 text-center">
                                         {note !== undefined && note !== null && note !== '' ? (
-                                          <span className={`inline-block px-3 py-1 rounded text-sm font-semibold ${noteSur20 >= 10 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                            }`}>
+                                          <span className={`text-sm font-semibold ${noteSur20 >= 10 ? 'text-green-700' : 'text-red-500'}`}>
                                             {parseFloat(note).toFixed(2)}/{evaluation.noteMax}
                                           </span>
                                         ) : (
@@ -1231,7 +1281,7 @@ const NotesView = () => {
                                 ))}
                                 <td className="px-4 py-3 text-center bg-blue-50">
                                   {moyenne ? (
-                                    <span className={`inline-block px-3 py-1.5 rounded-lg text-sm font-bold ${parseFloat(moyenne) >= 10 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                                    <span className={`inline-block px-3 py-1.5 rounded-lg text-sm font-bold ${parseFloat(moyenne) >= 10 ? 'bg-green-500 text-white' : 'bg-red-400 text-white'
                                       }`}>
                                       {moyenne}/20
                                     </span>
